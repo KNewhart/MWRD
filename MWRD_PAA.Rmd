@@ -41,6 +41,77 @@ scaled.boxplot.png <- function(data, filename, lines = seq(round(ncol(data)/5),n
 }
 ```
 
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+plotTimeseries <- function(data1) {
+
+label1 <- colnames(data1)
+
+r1 <- range(index(data1)[which(!is.na(data1))])[1]
+r2 <- range(index(data1)[which(!is.na(data1))])[2]
+
+data2plot <- na.omit(data1)[paste0(r1,"/",r2)]
+data2plot <- data.frame(data2plot, row.names = as.character(index(data2plot)))
+data2plot <- cbind(data2plot, as.numeric(difftime(as.POSIXct(rownames(data2plot)), as.POSIXct(rownames(data2plot)[1]),units = "days")))
+
+par(mar=c(3.1,4.1,2.1,2.1))
+plot(x = data2plot[,ncol(data2plot)], y = data2plot[,1], type = "p", pch = 20, col = "black", xaxt = "n", xlab = "", ylab = "", yaxt="n")
+axis(side = 2)
+mtext(side = 2, label1, line = 2.5)
+
+# x-axis
+axis.ticks <- seq(0,round(data2plot[nrow(data2plot),ncol(data2plot)]), by = 10)
+axis.labels <- sapply(axis.ticks, function(x) which(x > data2plot[,ncol(data2plot)]))
+axis.labels <- sapply(axis.labels, function(x) x[length(x)])
+axis.labels[[1]] <- 1
+axis.labels <- as.numeric(unlist(axis.labels))
+axis(side = 1, at = axis.ticks, labels = format(as.POSIXct(rownames(data2plot)[axis.labels]), "%m/%d"))
+}
+
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+plotTwo <- function(data1,data2) {
+# data1 <- log(n.paa.grab[,6]) 
+# data2 <- nsec.online[,which(colnames(nsec.online) == "NSEC Effluent NO5")]
+
+label1 <- colnames(data1)
+label2 <- colnames(data2)
+
+if (range(index(data1)[which(!is.na(data1))])[1] < range(index(data2)[which(!is.na(data2))])[1]) {
+  r1 <- range(index(data2)[which(!is.na(data2))])[1]
+} else {
+  r1 <- range(index(data1)[which(!is.na(data1))])[1]
+}
+if (range(index(data1)[which(!is.na(data1))])[2] > range(index(data2)[which(!is.na(data2))])[2]) {
+  r2 <- range(index(data2)[which(!is.na(data2))])[2]
+} else {
+  r2 <- range(index(data1)[which(!is.na(data1))])[2]
+}
+
+data2plot <- na.omit(data1)[paste0(r1,"/",r2)]
+data2plot <- merge(data2plot, data2[paste0(r1,"/",r2)])
+data2plot <- data2plot[-which(duplicated(index(data2plot))),]
+data2plot <- data.frame(data2plot, row.names = as.character(index(data2plot)))
+data2plot <- cbind(data2plot, as.numeric(difftime(as.POSIXct(rownames(data2plot)), as.POSIXct(rownames(data2plot)[1]),units = "days")))
+
+par(mar=c(5.1,4.1,2.1,4.1))
+plot(x = data2plot[,3], y = data2plot[,1], type = "p", pch = 20, col = "black", xaxt = "n", xlab = "", ylab = "", yaxt="n")
+axis(side = 2)
+mtext(side = 2, label1, line = 2.5)
+
+par(new = TRUE)
+plot(x = data2plot[,3], y = data2plot[,2], type = "p", pch = 20, col = "red", xaxt = "n", xlab = "", yaxt="n", ylab = "")
+axis(side = 4, col.axis = "red")
+mtext(side = 4, label2, line = 2.5, col = "red")
+# x-axis
+axis.ticks <- seq(0,round(data2plot[nrow(data2plot),3]), by = 10)
+axis.labels <- sapply(axis.ticks, function(x) which(x > data2plot[,3]))
+axis.labels <- sapply(axis.labels, function(x) x[length(x)])
+axis.labels[[1]] <- 1
+axis.labels <- as.numeric(unlist(axis.labels))
+axis(side = 1, at = axis.ticks, labels = format(as.POSIXct(rownames(data2plot)[axis.labels]), "%m/%d"))
+}
+```
 
 # Introduction
 The Robert W. Hite Treatment Facility, operated by the Metro Wastewater Reclamation District (MWRD) of Denver, CO, treats ~130 million gallons per day (MGD) of wastewater produced by ~2 million people from the Denver-metro area and is the largest wastewater treatment facility in the Rocky Mountain west. In an effort to reduce the cost of disinfection, a peracetic acid (PAA) system was installed to replace the existing chloramine system. However, due to variable influent *E. coli* concentrations to the disinfection system, it has been difficult to optimize the dosing of PAA to keep below *E. coli* limits of 126 (most probable number [MPN])/100 mL based on a 30-day geometric mean and 252 MPN/100 mL based on a 7-day geometric mean. In practice, PAA is overdosed to ensure that MWRD is meeting it's discharge limit. The goal of this work is to identify correlations between upstream operating conditions in the secondary activated sludge system, *E. coli* concentrations, and PAA dosing. 
@@ -149,8 +220,9 @@ kable(df[,-3])
 
 
 # Data cleaning
-
 If the distribution of each variable is assumed to be univariate normal and scaled (i.e., zero mean, unit variance), boxplots can be constructed to visualize the range of observations in the dataset. The existance of numerous outliers, heavily shifted on either side of the variable's median (Figures S1-S3) indicate that the majority of water quality variables are not normally distributed. 
+
+To achieve the goal of predicting *E. coli*, a log-transformed pre-disinfection *E. coli* grab data was merged with a reduced North secondary dataset (Figure 1) and data from a visual spectrum analyzer (Figure 2).
 
 ```{r NSEC Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 ## North secondary online
@@ -206,7 +278,7 @@ nsec.online <- nsec.online["2018-06-01/2018-12-01"] # Effluent NO5 invalid prior
 nsec.online$`NSEC Effluent TSS`[which(nsec.online$`NSEC Effluent TSS` < 0)] <- 0 # Remove negative values
 nsec.online$`NSEC Effluent NO5`[which(nsec.online$`NSEC Effluent NO5` <55)]
 
-nsec.online <- nsec.online["2018-11-04/2018-12-01"] # Effluent NO5 invalid prior to June
+# nsec.online <- nsec.online["2018-11-04/2018-12-01"]
 cols2remove <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3","GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
 
 data2plot <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec.online) == x))]
@@ -283,6 +355,7 @@ colnames(n.paa.grab) <- c("PAA Dosing Pump Total Flow (gpm)", #1
                                   "CuT (mg/L*min)", #14
                                   "Ambient Temperature")#15
 rm(process.data)
+n.paa.grab <- n.paa.grab["2018-06-01/2018-12-01"]
 
 data2plot <- n.paa.grab
 data2plot[,6] <- log(data2plot[,6])
@@ -295,19 +368,8 @@ sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col 
 # plot.xts(data2plot[,c(6,12)], type = "p", pch = 20, cex = 0.8,  col = c("black", "red"), grid.col = NA, main = NA, yaxis.right = FALSE, legend.loc = "bottomleft", format.labels ="%m/%d", minor.ticks = NULL)
 
 # Create boxplots
-# labs <- colnames(n.paa.grab)
-# png("MWRD_npaa_grab_boxplots.png", units = "in", res = 200, width = 2*6.5, height = 2*4)
-# par(mar = c(10,4.5,2,2)+.1)
-# boxplot.data <- sapply(data.frame(nsec.online), function(x) scale(na.omit(x)))
-# boxplot(boxplot.data, xaxt="n", xlab="", ylab = "Standard Deviations")
-# text(x=seq_along(labs), y=par("usr")[3] - 1, srt=45, adj = 1, labels= labs, xpd=TRUE)
-# dev.off()
 scaled.boxplot.png(n.paa.grab, "MWRD_npaa_grab_boxplots.png", margins = c(12,6.5,0.5,0.5)+.1)
 ```
-
-
-To achieve the goal of predicting *E. coli*, a log-transformed pre-disinfection *E. coli* grab data was merged with a reduced North secondary dataset (Figure 1). For simplicity, sensors monitoring SRT and effluent water quality of the North secondary system were used.<div custom-style="SpanCol">However, the residence time is need to appropriately merge datasets.</div>
-
 
 ```{r Merge NSEC/NPAA, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # Combine Pre. disinfection *E. coli* with North secondary effluent parameters
@@ -344,81 +406,167 @@ for(i in 1:(length(all.data.index)-1)) {
     }
 }
 #new.data <- new.data[which(!is.na(new.data[,2])),-which(is.na(new.data[1,]))]
-new.data <- na.omit(new.data)
+
 colnames(new.data) <- c("Pre-disinf E. coli (LOG MPN/100mL)", cols2keep)
-scaled.boxplot.png(new.data, "MWRD_Ecoli_nseconline_boxplots.png", margins = c(12.5,6.5,0.5,0.5)+.1)
+
+new.data <- na.omit(new.data)
+
+nsec.online.ecoli.data <- new.data
+
+scaled.boxplot.png(new.data[,-1], "MWRD_Ecoli_nseconline_boxplots.png", margins = c(7.5,4.5,0.5,0.5)+.1)
 ```
 <div custom-style="FigureCenter">
 ![](MWRD_Ecoli_nseconline_boxplots.png)
 </div>
-**Figure 1.** Boxplots of water quality variables used to predict *E. coli*
+**Figure 1.** Boxplots of water quality variables from North secondary used to predict *E. coli* from 2018-06-01 / 2018-12-01.
+
+```{r Vis/Ecoli, message=FALSE, warning=FALSE, eval=FALSE, include=FALSE, paged.print=FALSE}
+# Add Vis data?
+vis.data <- read_excel("NNE Carbovis Data2.xlsx",
+    sheet = "Inst DL Data", col_types = c("date",
+        "text", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "skip", "numeric", "skip",
+        "skip", "skip", "numeric", "skip",
+        "skip", "skip", "skip", "numeric",
+        "skip", "skip", "skip", "numeric",
+        "skip"), skip = 6)
+vis.data <- vis.data[which(vis.data[,2] == "Valid"),-2]
+colnames(vis.data) <- c("Time", "CODto (mg/L)", "CODto (V)",
+                        "TSS (mg/L)", "TSS (V)",
+                        "UVT (%)", "UVT (V)",
+                        "CODds (mg/L)", "CODds (V)",
+                        "SACto (1/m)", "SACto (V)")
+vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])[,1], format = "%Y-%m-%d %H-%M-%S"))
+
+# Combine Pre. disinfection *E. coli* with North Carbovis parameters
+data1 <- vis.data
+# # From PCA analysis, these variables do not impact PC1 (i.e., E.coli) and are only present on PC2
+# cols2remove <- c("GTE Flow", "AB-10 MLSS",
+#                  "NSEC CaRRB-3 Centrate Flow",
+#                  "NSEC CaRRB-1 Centrate Flow",
+#                  "NSEC Influent COD", 
+#                  "NSEC Influent Flow", "NSEC Influent Temp", "NSEC Influent NH3", "NSEC Influent TSS")
+# cols2remove <- sapply(cols2remove, function(x) which(colnames(data1) == x))
+# data1 <- data1[,-cols2remove]
+# cols2keep <- c("NSEC Aerobic SRT", "NSEC Effluent NH3", "NSEC Effluent OP", "NSEC Effluent NO3","NSEC Effluent TSS","NSEC Effluent NO5",
+#                "NSEC Influent Flow","NSEC Effluent Flow", "AB-10 Influent Flow", "AB-10 RAS Flow", "AB-10 MLR Flow", "Quad 4 RAS Flow")
+# data1 <- data1[,cols2keep]
+
+# During initial analysis, a log transformation of pre-disinfection *E. coli* was found to improve the results of PCA, PLS, and GAM modeling. 
+data2 <- log(n.paa.grab[,6])
+
+label1 <- colnames(data1)
+label2 <- colnames(data2)
+
+all.data <- merge(data2, data1)
+all.data.index <- which(!is.na(all.data[,1]))
+for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if (i == 1) {
+        new.data <- data.frame(data.locf[nrow(data.locf),])
+    }
+    if (i != 1) {
+        new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+    }
+}
+#new.data <- new.data[which(!is.na(new.data[,2])),-which(is.na(new.data[1,]))]
+new.data <- na.omit(new.data)
+
+vis.ecoli.data <- xts(new.data, order.by = as.POSIXct(rownames(new.data)))
+
+colnames(vis.ecoli.data) <- c("Pre-disinf E. coli (LOG MPN/100mL)", "CODto (mg/L)", "CODto (V)",
+                        "TSS (mg/L)", "TSS (V)",
+                        "UVT (%)", "UVT (V)",
+                        "CODds (mg/L)", "CODds (V)",
+                        "SACto (1/m)", "SACto (V)")
+
+cols2remove <- c("CODto (V)","TSS (V)","UVT (V)","CODds (V)","SACto (V)")
+cols2remove <- sapply(cols2remove, function(x) which(colnames(vis.ecoli.data) == x))
+vis.ecoli.data <- vis.ecoli.data[,-cols2remove]
+
+scaled.boxplot.png(vis.ecoli.data[,-1], "MWRD_Ecoli_vis_boxplots.png", margins = c(8,4.5,0.5,0.5)+.1)
+
+# # From plots, only truly "clean" data is is June and December
+# vis.ecoli.data.june <- vis.ecoli.data["2018-06-01/2018-06-30"]
+# vis.ecoli.data.dec <- vis.ecoli.data["2018-12-01/2018-12-31"]
+
+# pdf("MWRD_Ecoli_vis_timeseries.pdf", paper = "letter")
+# # png("MWRD_Ecoli_vis_timeseries.png")
+# par(mfrow=c(4,1))
+# for(i in 1:ncol(vis.ecoli.data.dec)) {
+#   plotTimeseries(vis.ecoli.data.dec[,i])
+# }
+# dev.off()
+# plotTwo(vis.ecoli.data.dec[,1], vis.ecoli.data.dec[,5])
+```
+<div custom-style="FigureCenter">
+![](MWRD_Ecoli_vis_boxplots.png)
+</div>
+**Figure 2.** Boxplots of water quality variables immediately upstream of PAA dosing used to predict *E. coli* from 2018-06-01 / 2018-12-01.
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Methods
 ## Regression Models
 ```{r Linear regression, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-colnames(new.data) <- make.names(colnames(new.data))
-
-lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,3] + new.data[,4] + new.data[,5] + new.data[,6] + new.data[,7] + new.data[,8] + new.data[,9] + new.data[,10] + new.data[,11] + new.data[,12] + new.data[,13])
-summary(lm.new.data)
-
-lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,3] + new.data[,4] + new.data[,5] + new.data[,6] + new.data[,7] + new.data[,9] + new.data[,11] + new.data[,12] + new.data[,13])
-summary(lm.new.data)
-which(summary.lm(lm.new.data)$coefficients[,4] == max(summary.lm(lm.new.data)$coefficients[,4]))
-
-
-# Residuals:
-#      Min       1Q   Median       3Q      Max 
-# -1.29737 -0.42672 -0.09845  0.31344  2.19729 
+runLinearRegression <- function(data) {
+  data1 <- data
+  colnames(data1) <- make.names(colnames(data1))
+  
+  fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
+  
+  lm.data1 <- lm(fmla, data = data1)
+  
+  col2remove <- which(summary.lm(lm.data1)$coefficients[,4] == max(summary.lm(lm.data1)$coefficients[,4]))
+  
+  while (summary.lm(lm.data1)$coefficients[,4][col2remove] > 0.1) {
+    data1 <- data1[,-col2remove]
+      fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
+    lm.data1 <- lm(fmla, data = data1)
+    col2remove <- which(summary.lm(lm.data1)$coefficients[,4] == max(summary.lm(lm.data1)$coefficients[,4]))
+  }
+  
+  return(lm.data1)
+  # summary(lm.data1)
+  
+  
+#   lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,3] + new.data[,4] + new.data[,5] + new.data[,6] + new.data[,7] + new.data[,9] + new.data[,11] + new.data[,12] + new.data[,13])
+# summary(lm.new.data)
+# which(summary.lm(lm.new.data)$coefficients[,4] == max(summary.lm(lm.new.data)$coefficients[,4]))
 # 
-# Coefficients:
-#                 Estimate Std. Error t value Pr(>|t|)    
-# (Intercept)     5.955621   1.317663   4.520 9.27e-06 ***
-# new.data[, 2]   0.023255   0.024729   0.940    0.348    
-# new.data[, 3]  -0.020961   0.018343  -1.143    0.254    
-# new.data[, 4]  -0.049539   0.058173  -0.852    0.395    
-# new.data[, 5]   0.008722   0.020318   0.429    0.668    
-# new.data[, 6]   0.005328   0.005858   0.910    0.364    
-# new.data[, 7]  -0.003048   0.002069  -1.473    0.142    
-# new.data[, 8]  -0.002595   0.006276  -0.413    0.680    
-# new.data[, 9]  -0.008060   0.006861  -1.175    0.241    
-# new.data[, 10]  0.112161   0.054901   2.043    0.042 *  
-# new.data[, 11] -0.101265   0.089733  -1.129    0.260    
-# new.data[, 12]  0.018478   0.043241   0.427    0.669    
-# new.data[, 13]  0.102015   0.012201   8.361 3.34e-15 ***
-# ---
-# Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-# 
-# Residual standard error: 0.5925 on 270 degrees of freedom
-# Multiple R-squared:  0.4395,	Adjusted R-squared:  0.4146 
-# F-statistic: 17.64 on 12 and 270 DF,  p-value: < 2.2e-16
 
-# Model optimized by removing largest p-value until R-squared declined
-# lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,4] + new.data[,5] + new.data[,7] + new.data[,8])
-lm.new.data <- lm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Effluent.NO5 + Quad.4.RAS.Flow + AB.10.Influent.Flow, data=new.data)
-summary(lm.new.data)
+ 
+}
 
-# Residuals:
-#      Min       1Q   Median       3Q      Max 
-# -1.30175 -0.40165 -0.08242  0.31687  2.27927 
-# 
-# Coefficients:
-#                      Estimate Std. Error t value Pr(>|t|)    
-# (Intercept)          6.279084   0.428650  14.649  < 2e-16 ***
-# NSEC.Effluent.NO5   -0.003394   0.001658  -2.048  0.04154 *  
-# Quad.4.RAS.Flow      0.097714   0.010917   8.951  < 2e-16 ***
-# AB.10.Influent.Flow  0.035839   0.013487   2.657  0.00833 ** 
-# ---
-# Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-# 
-# Residual standard error: 0.5904 on 279 degrees of freedom
-# Multiple R-squared:  0.4249,	Adjusted R-squared:  0.4187 
-# F-statistic:  68.7 on 3 and 279 DF,  p-value: < 2.2e-16
+data1 <- data.frame(vis.ecoli.data)
+lm <- runLinearRegression(data1)
 
-# tiff("MWRD_Ecoli_nseconline_lm.tiff", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 8, compression = "none")
-# par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
-# plot(x = new.data[,1], y = fitted(lm.new.data), xlim=c(8,11), ylim=c(8,11), xlab="Actal Log(N)", ylab="Predicted Log(N)", pch=20)
-# abline(a=0,b=1,col="blue", lwd=2)
-# dev.off()
+png("MWRD_Ecoli_vis_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+plot(x = data1[,1], y = fitted(lm), 
+     xlim=c(8,11), ylim=c(8,11), 
+     xlab="Actal Log(N)", ylab="Predicted Log(N)", pch=20)
+abline(a=0,b=1,col="blue", lwd=2)
+text(x=min(data1[,1]),y=max(fitted(lm)),labels="(a)", font=2)
+dev.off()
+
 
 png("MWRD_Ecoli_nseconline_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
 par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
@@ -1437,49 +1585,7 @@ south.daily <- south.process.data
 
 
 
-```{r eval=FALSE, include=FALSE}
-# Add Vis data?
-vis.data <- read_excel("NNE Carbovis Data2.xlsx",
-    sheet = "Inst DL Data", col_types = c("date",
-        "text", "numeric", "skip", "skip",
-        "skip", "numeric", "skip", "skip",
-        "skip", "numeric", "skip", "skip",
-        "skip", "numeric", "skip", "skip",
-        "skip", "numeric", "skip", "skip",
-        "skip", "numeric", "skip", "skip",
-        "skip", "skip", "numeric", "skip",
-        "skip", "skip", "numeric", "skip",
-        "skip", "skip", "skip", "numeric",
-        "skip", "skip", "skip", "numeric",
-        "skip"), skip = 6)
-vis.data <- vis.data[which(vis.data[,2] == "Valid"),-2]
-colnames(vis.data) <- c("Time", "CODto (mg/L)", "CODto (V)",
-                        "TSS (mg/L)", "TSS (V)",
-                        "UVT (%)", "UVT (V)",
-                        "CODds (mg/L)", "CODds (V)",
-                        "SACto (1/m)", "SACto (V)")
-vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])[,1], format = "%Y-%m-%d %H-%M-%S"))
-# vis.data <- vis.data[paste0(range(index(process.data.oct))[1],"/",range(index(process.data.oct))[2])]
-```
 
-
-```{r eval=FALSE, include=FALSE}
-# Merge Vis and PAA data
-all.data <- merge(xts(plot.this.data, order.by = as.POSIXct(rownames(plot.this.data), tz="UTC")), vis.data)
-all.data.index <- which(!is.na(all.data[,1]))
-for(i in 1:(length(all.data.index)-1)) {
-    row.start <- all.data.index[i]
-    row.stop <- all.data.index[i+1]
-    data.locf <- na.locf(all.data[(row.start+1):row.stop,])
-    if (i == 1) {
-        new.data <- data.frame(data.locf[nrow(data.locf),])
-    }
-    if (i != 1) {
-        new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
-    }
-}
-new.data <- na.omit(new.data)
-```
 
 
 
