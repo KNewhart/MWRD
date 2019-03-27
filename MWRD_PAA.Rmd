@@ -1,24 +1,34 @@
 ---
 title: "MWRD PAA"
 author: "Kathryn B. Newhart"
-date: "2/13/2019-3/16/2019"
+date: "3/28/2019"
 output:
   word_document:
     reference_docx: MWRD_PAA_style.docx
 ---
 
-```{r include=FALSE}
-# Functions
-library(knitr) 
-library(readxl)
-library(xts)
-## Plotting
+```{r Preliminary declarations, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+rm(list=ls())
+
+# Load required packages
+packageLoad <- function(packName){ #packName - package name as a character string, e.g. "quantmod"
+  if(!require(packName,character.only = TRUE)){ #If the package is not available, install it
+    install.packages(packName,dependencies=TRUE,repos="http://cran.r-project.org")
+  }
+  library(packName, character.only = TRUE) # load package
+}
+
+sapply(c("knitr", "readxl", "xts", "visreg", "mgcv", "factoextra", "pls", "plsdepot", "ggplot2", "randomForest", "e1071"), function(x) packageLoad(x))
+
+# User-defined functions
 windowsFonts(A = windowsFont("Times New Roman"))
+
 default.par <- par()
+
 scaled.boxplot.png <- function(data, filename, lines = seq(round(ncol(data)/5),ncol(data)-1, by = round(ncol(data)/5)) + .5, margins = c(9,3.5,0.5,0.5)+.1) {
   labs <- colnames(data)
   windowsFonts(A = windowsFont("Times New Roman"))
-  png(filename, units = "in", res = 200, width = 2*6.5, height = 2*4, family="A", pointsize = 16)
+  png(filename, units = "in", res = 200, width = 6.5, height = 4, family="A", pointsize = 8)
   par(mar = margins)
   boxplot.data <- sapply(data.frame(data), function(x) scale(na.omit(x)))
   boxplot(boxplot.data, xaxt="n", xlab="")
@@ -29,12 +39,11 @@ scaled.boxplot.png <- function(data, filename, lines = seq(round(ncol(data)/5),n
   dev.off()
   suppressWarnings(par(default.par))
 }
-
 ```
 
 
 # Introduction
-The Robert W. Hite Treatment Facility, operated by the Metro Wastewater Reclamation District (MWRD) of Denver, CO, treats ~130 million gallons per day (MGD) of wastewater produced by ~2 million people from the Denver-metro area and is the largest wastewater treatment facility in the Rocky Mountain west. In an effort to reduce the cost of disinfection, a peracetic acid (PAA) system was installed to replace the existing chloramine system. However, due to variable influent *E. coli* concentrations to the disinfection system, it has been difficult to optimize the dosing of PAA. In practice, PAA is overdosed to ensure that MWRD is meeting it's discharge limit. The goal of this work is to identify correlations between upstream operating conditions in the secondary activated sludge system, *E. coli* concentrations, and PAA dosing. 
+The Robert W. Hite Treatment Facility, operated by the Metro Wastewater Reclamation District (MWRD) of Denver, CO, treats ~130 million gallons per day (MGD) of wastewater produced by ~2 million people from the Denver-metro area and is the largest wastewater treatment facility in the Rocky Mountain west. In an effort to reduce the cost of disinfection, a peracetic acid (PAA) system was installed to replace the existing chloramine system. However, due to variable influent *E. coli* concentrations to the disinfection system, it has been difficult to optimize the dosing of PAA to keep below *E. coli* limits of 126 (most probable number [MPN])/100 mL based on a 30-day geometric mean and 252 MPN/100 mL based on a 7-day geometric mean. In practice, PAA is overdosed to ensure that MWRD is meeting it's discharge limit. The goal of this work is to identify correlations between upstream operating conditions in the secondary activated sludge system, *E. coli* concentrations, and PAA dosing. 
 
 # Goals
 Design a PAA disinfection dosing system that account for:
@@ -135,7 +144,7 @@ df <- rbind(df,data.frame(
   "Variables" = "COD, OP"
 ))
 
-knitr::kable(df[,-3])
+kable(df[,-3])
 ```
 
 
@@ -143,7 +152,7 @@ knitr::kable(df[,-3])
 
 If the distribution of each variable is assumed to be univariate normal and scaled (i.e., zero mean, unit variance), boxplots can be constructed to visualize the range of observations in the dataset. The existance of numerous outliers, heavily shifted on either side of the variable's median (Figures S1-S3) indicate that the majority of water quality variables are not normally distributed. 
 
-```{r include=FALSE}
+```{r NSEC Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 ## North secondary online
 nsec.online <- as.data.frame(suppressWarnings(read_excel("North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
     col_types = c("date", "numeric", "numeric", 
@@ -193,10 +202,15 @@ colnames(nsec.online) <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Infl
 nsec.online$`NSEC Influent Flow`[which(nsec.online$`NSEC Influent Flow` < 0)] <- 0 # Remove negative values
 nsec.online$`NSEC Influent NH3`[which(nsec.online$`NSEC Influent NH3` > 100)] <- 100 # Sensor error
 nsec.online <- nsec.online["2018-01-16/2018-12-01"] # NSEC Influent COD and TSS values stop after December 1st
+nsec.online <- nsec.online["2018-06-01/2018-12-01"] # Effluent NO5 invalid prior to June
 nsec.online$`NSEC Effluent TSS`[which(nsec.online$`NSEC Effluent TSS` < 0)] <- 0 # Remove negative values
+nsec.online$`NSEC Effluent NO5`[which(nsec.online$`NSEC Effluent NO5` <55)]
 
-# data2plot <- nsec.online
-# sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col = NA, yaxis.right = FALSE, format.labels ="%m/%d"))
+nsec.online <- nsec.online["2018-11-04/2018-12-01"] # Effluent NO5 invalid prior to June
+cols2remove <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3","GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
+
+data2plot <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec.online) == x))]
+sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col = NA, yaxis.right = FALSE, format.labels ="%m/%d"))
 
 # Create boxplots
 # labs <- colnames(nsec.online)
@@ -213,7 +227,7 @@ nsec.online$`NSEC Effluent TSS`[which(nsec.online$`NSEC Effluent TSS` < 0)] <- 0
 scaled.boxplot.png(nsec.online, "MWRD_nsec_online_boxplots.png")
 ```
 
-```{r include=FALSE}
+```{r NPAA Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # ## North disinfection online
 # Because the PAA analyzers stop functioning ater July 1st, the dataset is concatenated. Also, PAA analyzer CL17-1 appears to have more outliers, but CL17-2 has more noise. Both will be analyzed for prediction accuracy before determining which will be used for modelling. 
 n.paa.online <- as.data.frame(read_excel("North Secondary and Disinfection Process Data_20190215.xlsx", 
@@ -245,7 +259,7 @@ n.paa.online <- n.paa.online["2018-01-16/2018-07-01"]
 scaled.boxplot.png(n.paa.online, "MWRD_npaa_online_boxplots.png", margins = c(13,6.5,0.5,0.5)+.1)
 ```
 
-```{r include=FALSE}
+```{r NPAA Grab, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 ## North disinfection - grab
 delta <- intToUtf8(0x0394)
 # Daily data
@@ -292,9 +306,10 @@ scaled.boxplot.png(n.paa.grab, "MWRD_npaa_grab_boxplots.png", margins = c(12,6.5
 ```
 
 
-To achieve the goal of predicting *E. coli*, a log-transformed pre-disinfection *E. coli* grab data was merged with a reduced North secondary dataset (Figure 1). For simplicity, sensors monitoring SRT and effluent water quality of the North secondary system were used. 
+To achieve the goal of predicting *E. coli*, a log-transformed pre-disinfection *E. coli* grab data was merged with a reduced North secondary dataset (Figure 1). For simplicity, sensors monitoring SRT and effluent water quality of the North secondary system were used.<div custom-style="SpanCol">However, the residence time is need to appropriately merge datasets.</div>
 
-```{r include=FALSE}
+
+```{r Merge NSEC/NPAA, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # Combine Pre. disinfection *E. coli* with North secondary effluent parameters
 data1 <- nsec.online
 # # From PCA analysis, these variables do not impact PC1 (i.e., E.coli) and are only present on PC2
@@ -305,7 +320,8 @@ data1 <- nsec.online
 #                  "NSEC Influent Flow", "NSEC Influent Temp", "NSEC Influent NH3", "NSEC Influent TSS")
 # cols2remove <- sapply(cols2remove, function(x) which(colnames(data1) == x))
 # data1 <- data1[,-cols2remove]
-cols2keep <- c("NSEC Aerobic SRT", "NSEC Effluent NH3", "NSEC Effluent OP", "NSEC Effluent NO3","NSEC Effluent TSS","NSEC Effluent NO5","NSEC Effluent Flow")
+cols2keep <- c("NSEC Aerobic SRT", "NSEC Effluent NH3", "NSEC Effluent OP", "NSEC Effluent NO3","NSEC Effluent TSS","NSEC Effluent NO5",
+               "NSEC Influent Flow","NSEC Effluent Flow", "AB-10 Influent Flow", "AB-10 RAS Flow", "AB-10 MLR Flow", "Quad 4 RAS Flow")
 data1 <- data1[,cols2keep]
 
 # During initial analysis, a log transformation of pre-disinfection *E. coli* was found to improve the results of PCA, PLS, and GAM modeling. 
@@ -330,66 +346,109 @@ for(i in 1:(length(all.data.index)-1)) {
 #new.data <- new.data[which(!is.na(new.data[,2])),-which(is.na(new.data[1,]))]
 new.data <- na.omit(new.data)
 colnames(new.data) <- c("Pre-disinf E. coli (LOG MPN/100mL)", cols2keep)
-scaled.boxplot.png(new.data, "MWRD_Ecoli_nseconline_boxplots.png", margins = c(13,6.5,0.5,0.5)+.1)
+scaled.boxplot.png(new.data, "MWRD_Ecoli_nseconline_boxplots.png", margins = c(12.5,6.5,0.5,0.5)+.1)
 ```
+<div custom-style="FigureCenter">
 ![](MWRD_Ecoli_nseconline_boxplots.png)
+</div>
 **Figure 1.** Boxplots of water quality variables used to predict *E. coli*
 
 # Methods
 ## Regression Models
-```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+```{r Linear regression, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 colnames(new.data) <- make.names(colnames(new.data))
-# [1] "Pre-disinf E. coli (LOG MPN/100mL)"
-# [2] "NSEC Aerobic SRT"                  
-# [3] "NSEC Effluent NH3"                 
-# [4] "NSEC Effluent OP"                  
-# [5] "NSEC Effluent NO3"                 
-# [6] "NSEC Effluent TSS"                 
-# [7] "NSEC Effluent NO5"                 
-# [8] "NSEC Effluent Flow"
 
-# lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,3] + new.data[,4] + new.data[,5] + new.data[,6] + new.data[,7] + new.data[,8])
-# summary(lm.new.data)
+lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,3] + new.data[,4] + new.data[,5] + new.data[,6] + new.data[,7] + new.data[,8] + new.data[,9] + new.data[,10] + new.data[,11] + new.data[,12] + new.data[,13])
+summary(lm.new.data)
 
-# Model optimized by removing largest p-value until R-squared declined
-lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,4] + new.data[,5] + new.data[,7] + new.data[,8])
-lm.new.data <- lm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=new.data)
-# summary(lm.new.data) 
+lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,3] + new.data[,4] + new.data[,5] + new.data[,6] + new.data[,7] + new.data[,9] + new.data[,11] + new.data[,12] + new.data[,13])
+summary(lm.new.data)
+which(summary.lm(lm.new.data)$coefficients[,4] == max(summary.lm(lm.new.data)$coefficients[,4]))
+
+
+# Residuals:
+#      Min       1Q   Median       3Q      Max 
+# -1.29737 -0.42672 -0.09845  0.31344  2.19729 
 # 
 # Coefficients:
-#                Estimate Std. Error t value Pr(>|t|)    
-# (Intercept)    9.395790   0.233048  40.317   <2e-16 ***
-# new.data[, 2]  0.055783   0.026385   2.114   0.0354 *  
-# new.data[, 4] -0.077740   0.058613  -1.326   0.1858    
-# new.data[, 5] -0.033610   0.019956  -1.684   0.0933 .  
-# new.data[, 7] -0.012828   0.001438  -8.920   <2e-16 ***
-# new.data[, 8]  0.002372   0.002069   1.146   0.2526    
+#                 Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)     5.955621   1.317663   4.520 9.27e-06 ***
+# new.data[, 2]   0.023255   0.024729   0.940    0.348    
+# new.data[, 3]  -0.020961   0.018343  -1.143    0.254    
+# new.data[, 4]  -0.049539   0.058173  -0.852    0.395    
+# new.data[, 5]   0.008722   0.020318   0.429    0.668    
+# new.data[, 6]   0.005328   0.005858   0.910    0.364    
+# new.data[, 7]  -0.003048   0.002069  -1.473    0.142    
+# new.data[, 8]  -0.002595   0.006276  -0.413    0.680    
+# new.data[, 9]  -0.008060   0.006861  -1.175    0.241    
+# new.data[, 10]  0.112161   0.054901   2.043    0.042 *  
+# new.data[, 11] -0.101265   0.089733  -1.129    0.260    
+# new.data[, 12]  0.018478   0.043241   0.427    0.669    
+# new.data[, 13]  0.102015   0.012201   8.361 3.34e-15 ***
 # ---
-# Signif. codes:  
-# 0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 # 
-# Residual standard error: 0.6605 on 279 degrees of freedom
-# Multiple R-squared:  0.2825,	Adjusted R-squared:  0.2696 
-# F-statistic: 21.96 on 5 and 279 DF,  p-value: < 2.2e-16
+# Residual standard error: 0.5925 on 270 degrees of freedom
+# Multiple R-squared:  0.4395,	Adjusted R-squared:  0.4146 
+# F-statistic: 17.64 on 12 and 270 DF,  p-value: < 2.2e-16
 
-png("MWRD_Ecoli_nseconline_lm.png", units = "in", res = 200, width = 2*3, height = 2*3, family="A", pointsize = 16)
-par(mar=c(4,4,.5,.5))
-plot(x = new.data[,1], y = fitted(lm.new.data), xlim=c(8,11), ylim=c(8,11), xlab="Actal Log(N)", ylab="Predicted Log(N)")
+# Model optimized by removing largest p-value until R-squared declined
+# lm.new.data <- lm(new.data[,1] ~ new.data[,2] + new.data[,4] + new.data[,5] + new.data[,7] + new.data[,8])
+lm.new.data <- lm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Effluent.NO5 + Quad.4.RAS.Flow + AB.10.Influent.Flow, data=new.data)
+summary(lm.new.data)
+
+# Residuals:
+#      Min       1Q   Median       3Q      Max 
+# -1.30175 -0.40165 -0.08242  0.31687  2.27927 
+# 
+# Coefficients:
+#                      Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)          6.279084   0.428650  14.649  < 2e-16 ***
+# NSEC.Effluent.NO5   -0.003394   0.001658  -2.048  0.04154 *  
+# Quad.4.RAS.Flow      0.097714   0.010917   8.951  < 2e-16 ***
+# AB.10.Influent.Flow  0.035839   0.013487   2.657  0.00833 ** 
+# ---
+# Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+# 
+# Residual standard error: 0.5904 on 279 degrees of freedom
+# Multiple R-squared:  0.4249,	Adjusted R-squared:  0.4187 
+# F-statistic:  68.7 on 3 and 279 DF,  p-value: < 2.2e-16
+
+# tiff("MWRD_Ecoli_nseconline_lm.tiff", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 8, compression = "none")
+# par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+# plot(x = new.data[,1], y = fitted(lm.new.data), xlim=c(8,11), ylim=c(8,11), xlab="Actal Log(N)", ylab="Predicted Log(N)", pch=20)
+# abline(a=0,b=1,col="blue", lwd=2)
+# dev.off()
+
+png("MWRD_Ecoli_nseconline_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+plot(x = new.data[,1], y = fitted(lm.new.data), xlim=c(8,11), ylim=c(8,11), xlab="Actal Log(N)", ylab="Predicted Log(N)", pch=20)
 abline(a=0,b=1,col="blue", lwd=2)
+text(x=min(new.data[,1]),y=max(fitted(lm.new.data)),labels="(a)", font=2)
 dev.off()
 
-png("MWRD_Ecoli_nseconline_lm-srt.png", units = "in", res = 200, width = 2*3, height = 2*3, family="A", pointsize = 16)
-par(mar=c(4,4,.5,.5))
-visreg::visreg(fit=lm.new.data, xvar="NSEC.Aerobic.SRT", plot=TRUE, xlab = "North Secondary Aerobic SRT (d)", ylab = "Pre-disinf E. coli (LOG MPN/100mL)", points.par=c(col="black"), line.par=c(col="blue"))
+
+png("MWRD_Ecoli_nseconline_lm-ras.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+visreg::visreg(fit=lm.new.data, xvar="Quad.4.RAS.Flow", plot=TRUE, xlab = "Quad 4 RAS Flow (MGD)", ylab = "Pre-disinf E. coli (LOG MPN/100mL)", points.par=c(col="black"), line.par=c(col="blue"))
+text(x=4,y=max(fitted(lm.new.data)),labels="(b)", font=2)
 dev.off()
-# 
-# visreg2d(fit=lm.new.data, "NSEC.Aerobic.SRT", "NSEC.Effluent.NO5", plot.type="image")
+
+png("MWRD_Ecoli_nseconline_lm-no5.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+visreg::visreg(fit=lm.new.data, xvar="NSEC.Effluent.NO5", plot=TRUE, xlab = "North Secondary Effluent NO5 (mg/L-N)", ylab = "Pre-disinf E. coli (LOG MPN/100mL)", points.par=c(col="black"), line.par=c(col="blue"))
+text(x=4,y=max(fitted(lm.new.data)),labels="(b)", font=2)
+dev.off()
+
+visreg(fit=lm.new.data, points.par=c(col="black"), line.par=c(col="blue"))
+visreg2d(fit=lm.new.data, "Quad.4.RAS.Flow", "NSEC.Effluent.NO5", plot.type="image")
 ```
-![](MWRD_Ecoli_nseconline_lm.png)
-**Figure .** Multiple linear regression model fit for pre-disinfection *E. coli*. Black circles represent actual observations (x-axis) plotted against the prediction (y-axis). Blue line represents perfect model fit.
+<div custom-style="FigureCenter">
+![](MWRD_Ecoli_nseconline_lm.png)![](MWRD_Ecoli_nseconline_lm-ras.png)
+</div>
 
-![](MWRD_Ecoli_nseconline_lm-srt.png)
-**Figure .** Multiple linear regression model predicting pre-disinfection *E. coli*.
+**Figure 2.** Multiple linear regression model fit for pre-disinfection *E. coli*. Black circles represent actual observations. (a) Predicted pre-disinfection *E.coli* is plotted against actual observations. The blue line represents a perfect model fit. (b) Variation of predicted pre-disinfection *E. coli* given a range of aerobic solid retention times (SRTs) for north secondary.
+
 
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 glm.new.data <- glm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=new.data)
@@ -399,7 +458,6 @@ visreg(glm.new.data)
 
 ## Non-Regression Model
 ```{r include=FALSE}
-library(visreg)
 par(default.par)
 
 rf.new.data <- randomForest::randomForest(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=new.data)
@@ -429,7 +487,6 @@ dev.off()
 
 ## Generalized Additive Models
 ```{r include=FALSE}
-library(mgcv)
 gam.new.data <- gam(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=new.data)
 summary(gam.new.data)
 ```
@@ -449,7 +506,7 @@ knitr::kable(df.model.compare, digits = 2)
 ## Principal Component Analysis
 ```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # PCA
-library(factoextra)
+
 windowsFonts(A = windowsFont("Times New Roman"))
 pca.new.data <- prcomp(new.data, scale=TRUE)
 
@@ -471,13 +528,13 @@ pca.new.data.summary <- factoextra::get_pca_var(pca.new.data)
 ## Partial Least Squares
 ```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # PLS
-library(pls)
+
 pls.new.data <- plsr(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=new.data, scale = TRUE, validation = "CV")
 summary(pls.new.data)
 plot(pls.new.data)
 validationplot(pls.new.data, val.type = "MSEP")
 
-library(plsdepot)
+
 pls.reg.fit <- plsreg1(predictors = new.data[,2:8], response = new.data[,1], comps = 3, crosval = TRUE)
 plot(pls.reg.fit)
 
@@ -876,18 +933,18 @@ apply(new.data, 2, function(x) length(which(!is.na(x)))/nrow(new.data))[order(-a
 new.data <- new.data[,order(-apply(new.data, 2, function(x) length(which(!is.na(x)))/nrow(new.data)))[1:10]]
 new.data <- na.omit(new.data)
 
-# library(pls)
+
 # pls.fit <- plsr(new.data[,1] ~ new.data[,2] + new.data[,3] + new.data[,4], scale = TRUE, validation = "CV")
 # summary(pls.fit)
 # plot(pls.fit)
 # validationplot(pls.fit, val.type = "MSEP")
 # 
-# library(plsdepot)
+
 # pls.reg.fit <- plsreg1(predictors = new.data[,2:4], response = new.data[,1], comps = 3, crosval = TRUE)
 # plot(pls.reg.fit)
 # plot(new.data[,1], pls.reg.fit$y.pred, log = 'yx')
 
-library(mgcv)
+
 mod_gam_nsec_eff <- gam(new.data[,1] ~ new.data[,2] + new.data[,5]  + new.data[,6] + new.data[,9])
 summary(mod_gam_nsec_eff)
 ```
