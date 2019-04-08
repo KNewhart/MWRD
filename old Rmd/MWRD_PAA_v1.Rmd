@@ -4,7 +4,7 @@ author: "Kate Newhart"
 date: "3/28/2019"
 output:
   word_document:
-    reference_docx: MWRD_PAA_style.docx
+    reference_docx: images/MWRD_PAA_style.docx
 ---
 
 ```{r Preliminary declarations, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
@@ -114,7 +114,7 @@ axis(side = 1, at = axis.ticks, labels = format(as.POSIXct(rownames(data2plot)[a
 ```
 
 # Introduction
-The Robert W. Hite Treatment Facility, operated by the Metro Wastewater Reclamation District (MWRD) of Denver, CO, treats ~130 million gallons per day (MGD) of wastewater produced by ~2 million people from the Denver-metro area and is the largest wastewater treatment facility in the Rocky Mountain west. In an effort to reduce the cost of disinfection, a peracetic acid (PAA) system was installed to replace the existing chloramine system. However, due to variable influent *E. coli* concentrations to the disinfection system, it has been difficult to optimize the dosing of PAA to keep below *E. coli* limits of 126 (most probable number [MPN])/100 mL based on a 30-day geometric mean and 252 MPN/100 mL based on a 7-day geometric mean. In practice, PAA is overdosed to ensure that MWRD is meeting it's discharge limit. The goal of this work is to identify correlations between upstream operating conditions in the secondary activated sludge system, *E. coli* concentrations, and PAA dosing. 
+The Robert W. Hite Treatment Facility, operated by the Metro Wastewater Reclamation District (MWRD) of Denver, CO, treats ~130 million gallons per day (MGD) of wastewater produced by ~2 million people from the Denver-metro area and is the largest wastewater treatment facility in the Rocky Mountain west. In an effort to reduce the cost of disinfection, a peracetic acid (PAA) system was installed to replace the existing chloramine system. However, due to variable influent *E. coli* concentrations to the disinfection system, it has been difficult to optimize the dosing of PAA to keep below *E. coli* limits of 126 (most probable number [MPN])/100 mL based on a 30-day geometric mean and 252 MPN/100 mL based on a 7-day geometric mean. In practice, PAA is overdosed to ensure that images/MWRD is meeting it's discharge limit. The goal of this work is to identify correlations between upstream operating conditions in the secondary activated sludge system, *E. coli* concentrations, and PAA dosing. 
 
 # Goals
 Design a PAA disinfection dosing system that accounst for:
@@ -232,7 +232,7 @@ To achieve the goal of predicting *E. coli*, a log-transformed pre-disinfection 
 
 ```{r NSEC Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 ## North secondary online
-nsec.online <- as.data.frame(suppressWarnings(read_excel("North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
+nsec.online <- as.data.frame(suppressWarnings(read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
     col_types = c("date", "numeric", "numeric", 
         "numeric", "numeric", "numeric", 
         "numeric", "numeric", "numeric", 
@@ -275,7 +275,7 @@ colnames(nsec.online) <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Infl
 # north.secondary.effluent <- nsec.online[,n]
 
 # sapply(nsec.online, function(x) plot(x, main = colnames(x)))
-scaled.boxplot.png(nsec.online, "MWRD_nsec_online_boxplots_01.png")
+scaled.boxplot.png(nsec.online, "images/MWRD_nsec_online_boxplots_01.png")
 
 # Remove outliers, such as negative flows, unrealistic sensor values, and missing values (Influnet COD/TSS, effluent NO5)
 nsec.online$`NSEC Influent Flow`[which(nsec.online$`NSEC Influent Flow` < 0)] <- 0 # Remove negative values
@@ -285,7 +285,7 @@ nsec.online <- nsec.online["2018-06-01/2018-12-01"] # Effluent NO5 invalid prior
 nsec.online$`NSEC Effluent TSS`[which(nsec.online$`NSEC Effluent TSS` < 0)] <- 0 # Remove negative values
 nsec.online$`NSEC Effluent NO5`[which(nsec.online$`NSEC Effluent NO5` <55)]
 
-scaled.boxplot.png(nsec.online, "MWRD_nsec_online_boxplots_02.png")
+scaled.boxplot.png(nsec.online, "images/MWRD_nsec_online_boxplots_02.png")
 
 
 # nsec.online <- nsec.online["2018-11-04/2018-12-01"]
@@ -300,7 +300,7 @@ sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col 
 # Create boxplots
 # labs <- colnames(nsec.online)
 # windowsFonts(A = windowsFont("Times New Roman"))
-# png("MWRD_nsec_online_boxplots.png", units = "in", res = 200, width = 2*6.5, height = 2*4, family="A", pointsize = 16)
+# png("images/MWRD_nsec_online_boxplots.png", units = "in", res = 200, width = 2*6.5, height = 2*4, family="A", pointsize = 16)
 # par(mar = c(9,3.5,.5,.5)+.1)
 # boxplot.data <- sapply(data.frame(nsec.online), function(x) scale(na.omit(x)))
 # boxplot(boxplot.data, xaxt="n", xlab="")
@@ -309,13 +309,13 @@ sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col 
 # text(x=seq_along(labs), y=par("usr")[3] - 2, srt=45, adj = 1, labels= labs, xpd=TRUE)
 # abline(v=c(5.5,10.5,15.5,20.5,25.5,30.5), lty = 2,col = "darkgrey")
 # dev.off()
-scaled.boxplot.png(nsec.online, "MWRD_nsec_online_boxplots.png")
+scaled.boxplot.png(nsec.online, "images/MWRD_nsec_online_boxplots.png")
 ```
 
 ```{r NPAA Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # ## North disinfection online
 # Because the PAA analyzers stop functioning ater July 1st, the dataset is concatenated. Also, PAA analyzer CL17-1 appears to have more outliers, but CL17-2 has more noise. Both will be analyzed for prediction accuracy before determining which will be used for modelling. 
-n.paa.online <- as.data.frame(read_excel("North Secondary and Disinfection Process Data_20190215.xlsx", 
+n.paa.online <- as.data.frame(read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", 
     sheet = "North PAA Online Data", col_names = FALSE, 
     col_types = c("date", "numeric", "numeric","numeric","numeric","numeric","numeric","numeric","numeric"), skip = 3))
 colnames(n.paa.online) <- c("Date", "North PAA Upstream Residual (CL17-1)", "North PAA Upstream Residual (CL17-2)", "North PAA Upstream Residual",
@@ -327,12 +327,12 @@ n.paa.online <- xts(n.paa.online[,-1], order.by = n.paa.online[,1])
 # Plot all original data
 data2plot <- n.paa.online[,-3]
 # sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col = NA, yaxis.right = FALSE, format.labels ="%m/%d"))
-scaled.boxplot.png(n.paa.online, "MWRD_npaa_online_boxplots_01.png", margins = c(13,6.5,0.5,0.5)+.1)
+scaled.boxplot.png(n.paa.online, "images/MWRD_npaa_online_boxplots_01.png", margins = c(13,6.5,0.5,0.5)+.1)
 # Subset to only include times when PAA analyzers CL17-1 & CL17-2 are online
 n.paa.online <- n.paa.online["2018-01-16/2018-07-01"]
 # Subset to only include costant PAA setpoint
 # n.paa.online <- n.paa.online[which(n.paa.online$`North PAA Dose Setpoint` < 1.200001),]
-scaled.boxplot.png(n.paa.online, "MWRD_npaa_online_boxplots_02.png", margins = c(13,6.5,0.5,0.5)+.1)
+scaled.boxplot.png(n.paa.online, "images/MWRD_npaa_online_boxplots_02.png", margins = c(13,6.5,0.5,0.5)+.1)
 # Compare PAA analyzers
 # par(mfrow=(c(2,1)))
 # plot(n.paa.online[,1], main = colnames(n.paa.online)[1])
@@ -341,14 +341,14 @@ scaled.boxplot.png(n.paa.online, "MWRD_npaa_online_boxplots_02.png", margins = c
 # plot.xts(n.paa.online[,1:2], type = "p", pch = 20, cex = 0.8,  col = c("black", "red"), grid.col = NA, main = NA, yaxis.right = FALSE, legend.loc = "topleft", format.labels ="%m/%d", minor.ticks = NULL)
 
 # Create boxplots
-scaled.boxplot.png(n.paa.online, "MWRD_npaa_online_boxplots.png", margins = c(13,6.5,0.5,0.5)+.1)
+scaled.boxplot.png(n.paa.online, "images/MWRD_npaa_online_boxplots.png", margins = c(13,6.5,0.5,0.5)+.1)
 ```
 
 ```{r NPAA Grab, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 ## North disinfection - grab
 delta <- intToUtf8(0x0394)
 # Daily data
-process.data <- read_excel("Copy of PAA Process Data Clean KN.xlsx", 
+process.data <- read_excel("data/Copy of PAA Process Data Clean KN.xlsx", 
     sheet = "Process Data", skip = 1)
 process.data <- process.data[-1,]
 n.paa.grab <- xts(apply(process.data[,c(12:17,19:27)], 2, function(x) as.numeric(x)), order.by =  as.POSIXct(as.data.frame(process.data[,18])[,1], format = "%Y-%m-%d %H:%M:%S"))
@@ -369,7 +369,7 @@ colnames(n.paa.grab) <- c("PAA Dosing Pump Total Flow (gpm)", #1
                                   "Ambient Temperature")#15
 rm(process.data)
 
-scaled.boxplot.png(n.paa.grab, "MWRD_npaa_grab_boxplots_01.png", margins = c(12,6.5,0.5,0.5)+.1)
+scaled.boxplot.png(n.paa.grab, "images/MWRD_npaa_grab_boxplots_01.png", margins = c(12,6.5,0.5,0.5)+.1)
 
 n.paa.grab <- n.paa.grab["2018-06-01/2018-12-01"]
 
@@ -383,9 +383,9 @@ sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col 
 # par(default.par)
 # plot.xts(data2plot[,c(6,12)], type = "p", pch = 20, cex = 0.8,  col = c("black", "red"), grid.col = NA, main = NA, yaxis.right = FALSE, legend.loc = "bottomleft", format.labels ="%m/%d", minor.ticks = NULL)
 
-scaled.boxplot.png(n.paa.grab, "MWRD_npaa_grab_boxplots_02.png", margins = c(12,6.5,0.5,0.5)+.1)
+scaled.boxplot.png(n.paa.grab, "images/MWRD_npaa_grab_boxplots_02.png", margins = c(12,6.5,0.5,0.5)+.1)
 # Create boxplots
-scaled.boxplot.png(n.paa.grab, "MWRD_npaa_grab_boxplots.png", margins = c(12,6.5,0.5,0.5)+.1)
+scaled.boxplot.png(n.paa.grab, "images/MWRD_npaa_grab_boxplots.png", margins = c(12,6.5,0.5,0.5)+.1)
 ```
 
 ```{r Merge NSEC/NPAA, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
@@ -429,27 +429,27 @@ colnames(new.data) <- c("Pre-disinf E. coli (LOG MPN/100mL)", cols2keep)
 new.data <- na.omit(new.data)
 
 nsec.online.ecoli.data <- new.data
-scaled.boxplot.png(nsec.online.ecoli.data[,-1], "MWRD_nsec_online_boxplots_03.png", margins = c(7.5,4.5,0.5,0.5)+.1)
-scaled.boxplot.png(nsec.online.ecoli.data[,-1], "MWRD_Ecoli_nseconline_boxplots.png", margins = c(7.5,4.5,0.5,0.5)+.1)
+scaled.boxplot.png(nsec.online.ecoli.data[,-1], "images/MWRD_nsec_online_boxplots_03.png", margins = c(7.5,4.5,0.5,0.5)+.1)
+scaled.boxplot.png(nsec.online.ecoli.data[,-1], "images/MWRD_Ecoli_nseconline_boxplots.png", margins = c(7.5,4.5,0.5,0.5)+.1)
 ```
 <div custom-style="FigureCenter">
-![](MWRD_nsec_online_boxplots_01.png)
+![](images/MWRD_nsec_online_boxplots_01.png)
 </div>
 **Figure 1a.** Raw north secondary data.
 
 <div custom-style="FigureCenter">
-![](MWRD_nsec_online_boxplots_02.png)
+![](images/MWRD_nsec_online_boxplots_02.png)
 </div>
 **Figure 1b.** Cleaned north secondary dataset from 2018-06-01 / 2018-12-01.Removed outliers (such as negative flows and unrealistic sensor values) and missing values (such as influnet COD/TSS and effluent NO5). 
 
 <div custom-style="FigureCenter">
-![](MWRD_nsec_online_boxplots_03.png)
+![](images/MWRD_nsec_online_boxplots_03.png)
 </div>
 **Figure 1c.** Final data after filtering for values <15 minutes from *E coli* sampling time.
 
 ```{r Vis/Ecoli, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # Add Vis data?
-vis.data <- read_excel("NNE Carbovis Data2.xlsx",
+vis.data <- read_excel("data/NNE Carbovis Data2.xlsx",
     sheet = "Inst DL Data", col_types = c("date",
         "text", "numeric", "skip", "skip",
         "skip", "numeric", "skip", "skip",
@@ -518,14 +518,14 @@ cols2remove <- c("CODto (V)","TSS (V)","UVT (V)","CODds (V)","SACto (V)")
 cols2remove <- sapply(cols2remove, function(x) which(colnames(vis.ecoli.data) == x))
 vis.ecoli.data <- vis.ecoli.data[,-cols2remove]
 
-scaled.boxplot.png(vis.ecoli.data[,-1], "MWRD_Ecoli_vis_boxplots.png", margins = c(8,4.5,0.5,0.5)+.1)
+scaled.boxplot.png(vis.ecoli.data[,-1], "images/MWRD_Ecoli_vis_boxplots.png", margins = c(8,4.5,0.5,0.5)+.1)
 
 # # From plots, only truly "clean" data is is June and December
 # vis.ecoli.data.june <- vis.ecoli.data["2018-06-01/2018-06-30"]
 # vis.ecoli.data.dec <- vis.ecoli.data["2018-12-01/2018-12-31"]
 
-# pdf("MWRD_Ecoli_vis_timeseries.pdf", paper = "letter")
-# # png("MWRD_Ecoli_vis_timeseries.png")
+# pdf("images/MWRD_Ecoli_vis_timeseries.pdf", paper = "letter")
+# # png("images/MWRD_Ecoli_vis_timeseries.png")
 # par(mfrow=c(4,1))
 # for(i in 1:ncol(vis.ecoli.data.dec)) {
 #   plotTimeseries(vis.ecoli.data.dec[,i])
@@ -534,7 +534,7 @@ scaled.boxplot.png(vis.ecoli.data[,-1], "MWRD_Ecoli_vis_boxplots.png", margins =
 # plotTwo(vis.ecoli.data.dec[,1], vis.ecoli.data.dec[,5])
 ```
 <div custom-style="FigureCenter">
-![](MWRD_Ecoli_vis_boxplots.png)
+![](images/MWRD_Ecoli_vis_boxplots.png)
 </div>
 **Figure 2.** Boxplots of water quality variables immediately upstream of PAA dosing used to predict *E. coli* from 2018-06-01 / 2018-12-01.
 
@@ -577,7 +577,7 @@ In simple linear regression, a model is constructed of a response variable (**Y*
 data1 <- data.frame(vis.ecoli.data)
 lm <- lm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ CODds..mg.L.,data = data1)
 
-png("MWRD_Ecoli_vis_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+png("images/MWRD_Ecoli_vis_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
 par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
 plot(x = data1[,1], y = fitted(lm), 
      xlim=c(8,11), ylim=c(8,11),
@@ -587,7 +587,7 @@ text(x=8,y=11,labels="(a)", font=2)
 dev.off()
 
 
-png("MWRD_Ecoli_vis_lm-COD.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+png("images/MWRD_Ecoli_vis_lm-COD.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
 par(mar=c(3,3.5,.5,.5), mgp=c(1.75,.5,0))
 visreg::visreg(fit=lm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ CODds..mg.L.,data = data1), xvar="CODds..mg.L.", plot=TRUE, xlab = "CODds (mg/L)", ylab = "", points.par=c(col="black"), line.par=c(col="blue"))
 text(x=1,y=11,labels="(a)", font=2)
@@ -613,7 +613,7 @@ lm <- lm.test
 
 
 
-png("MWRD_Ecoli_nseconline_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+png("images/MWRD_Ecoli_nseconline_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
 par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
 plot(x = data1[,1], y = fitted(lm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ Quad.4.RAS.Flow, data = data1)), 
      xlim=c(8,11), ylim=c(8,11),
@@ -623,7 +623,7 @@ text(x=8,y=11,labels="(a)", font=2)
 dev.off()
 
 
-png("MWRD_Ecoli_nseconline_lm-ras.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+png("images/MWRD_Ecoli_nseconline_lm-ras.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
 par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
 visreg::visreg(fit=lm, xvar="Quad.4.RAS.Flow", plot=TRUE, xlab = "Quad 4 RAS Flow (MGD)", ylab = "", points.par=c(col="black"), line.par=c(col="blue"))
 text(x=min(data1$Quad.4.RAS.Flow),y=11,labels="(b)", font=2)
@@ -631,7 +631,7 @@ text(x=max(data1$Quad.4.RAS.Flow),y=8.1,labels=round(summary.lm(lm)$r.squared,3)
 mtext(side=2, line = 2, "Pre-disinf E. coli (LOG MPN/100mL)")
 dev.off()
 
-# png("MWRD_Ecoli_nseconline_lm-no5.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+# png("images/MWRD_Ecoli_nseconline_lm-no5.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
 # par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
 # visreg::visreg(fit=lm.new.data, xvar="NSEC.Effluent.NO5", plot=TRUE, xlab = "North Secondary Effluent NO5 (mg/L-N)", ylab = "Pre-disinf E. coli (LOG MPN/100mL)", points.par=c(col="black"), line.par=c(col="blue"))
 # text(x=4,y=max(fitted(lm.new.data)),labels="(b)", font=2)
@@ -641,8 +641,8 @@ dev.off()
 # visreg2d(fit=lm.new.data, "Quad.4.RAS.Flow", "NSEC.Effluent.NO5", plot.type="image")
 ```
 <div custom-style="FigureCenter">
-![](MWRD_Ecoli_vis_lm-COD.png)
-![](MWRD_Ecoli_nseconline_lm-ras.png)
+![](images/MWRD_Ecoli_vis_lm-COD.png)
+![](images/MWRD_Ecoli_nseconline_lm-ras.png)
 </div>
 
 **Figure 2.** Multiple linear regression model fit for pre-disinfection *E. coli*. Black circles represent actual observations. R-squared value in lower right. (a) Variation of predicted pre-disinfection *E. coli* given a range of CODds measured by a sensor near the sampling point (b) Variation of predicted pre-disinfection *E. coli* given a range of RAS flows for Quad 4 which provides influent to the disinfection basin.
@@ -659,7 +659,7 @@ The general linear model (LM) requires that the response variable follows the no
 ```{r GLM, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 glm.nsec.online.ecoli <- glm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=data.frame(nsec.online.ecoli.data))
 
-png("MWRD_Ecoli_nseconline_glm.png", units = "in", res = 200, width = 6, height = 3*2.5, family="A", pointsize = 10)
+png("images/MWRD_Ecoli_nseconline_glm.png", units = "in", res = 200, width = 6, height = 3*2.5, family="A", pointsize = 10)
 par(mar=c(5,5,.5,.5), mfrow=c(3, 2))
 visreg::visreg(glm.nsec.online.ecoli, ylab="Pre-disinf E. coli (LOG MPN/100mL)")
 dev.off()
@@ -668,18 +668,18 @@ data <- data.frame(vis.ecoli.data)
 fmla <- as.formula(paste0(colnames(data)[1],"~", paste(colnames(data)[2:length(colnames(data))], collapse= "+")))
 glm.vis.ecoli.data <- glm(fmla, data=data)
 
-png("MWRD_Ecoli_vis_glm.png", units = "in", res = 200, width = 6, height = 3*2.5, family="A", pointsize = 10)
+png("images/MWRD_Ecoli_vis_glm.png", units = "in", res = 200, width = 6, height = 3*2.5, family="A", pointsize = 10)
 par(mar=c(5,5,.5,.5), mfrow=c(3, 2))
 visreg::visreg(glm.vis.ecoli.data, ylab="Pre-disinf E. coli (LOG MPN/100mL)")
 dev.off()
 ```
 <div custom-style="FigureCenter">
-![](MWRD_Ecoli_vis_glm.png)
+![](images/MWRD_Ecoli_vis_glm.png)
 </div>
 **Figure 3a.** GLM model constructed for visual spectrum data.
 
 <div custom-style="FigureCenter">
-![](MWRD_Ecoli_nseconline_glm.png)
+![](images/MWRD_Ecoli_nseconline_glm.png)
 </div>
 **Figure 3b.** GLM model constructed for north secondary process data. 
 
@@ -703,7 +703,7 @@ rf.test <- randomForest::randomForest(fmla, data = data1)
 
 svm.nsec.online.ecoli <- e1071::svm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=data1)
 
-png("MWRD_Ecoli_nseconline_rf_svm.png", units = "in", res = 200, width = 2*2*3, height = 2*3, family="A", pointsize = 16)
+png("images/MWRD_Ecoli_nseconline_rf_svm.png", units = "in", res = 200, width = 2*2*3, height = 2*3, family="A", pointsize = 16)
 par(mfrow=c(1,2), mar=c(4.5,4,.5,2))
 visreg(fit=rf.test, xvar="NSEC.Effluent.Flow", plot=TRUE, xlab = "North Secondary Effluent Flow", ylab = "Pre-disinf E. coli (LOG MPN/100mL)", points.par=c(col="black"), line.par=c(col="blue"), 
        xlim=c(20,100),
@@ -716,16 +716,16 @@ visreg(fit=svm.test, xvar="NSEC.Effluent.Flow", plot=TRUE, xlab = "North Seconda
 text(x=20,y=11,labels="(b)", font=2)
 dev.off()
 
-png("MWRD_Ecoli_nseconline_svm.png", units = "in", res = 200, width = 2*3, height = 2*3, family="A")
+png("images/MWRD_Ecoli_nseconline_svm.png", units = "in", res = 200, width = 2*3, height = 2*3, family="A")
 par(mar=c(4.5,4.5,3,.5), cex.main = 1)
 visreg2d(fit=svm.test, "NSEC.Effluent.Flow", "NSEC.Effluent.NO5", plot.type="image", xlab = "North Secondary Effluent Flow", ylab = "North Secondary Effluent NO5", main = "Pre-disinf E. coli (LOG MPN/100mL)")
 dev.off()
 ```
-![](MWRD_Ecoli_nseconline_rf_svm.png)
+![](images/MWRD_Ecoli_nseconline_rf_svm.png)
 **Figure 4.** Comparison of (a) random forest model and (b) support vector machine model for predicting *E. coli* into the PAA disinfection basin
 
 <div custom-style="FigureCenter">
-![](MWRD_Ecoli_nseconline_svm.png)
+![](images/MWRD_Ecoli_nseconline_svm.png)
 </div>
 
 **Figure 5.** Support vector machine model for predicting *E. coli* into the PAA disinfection basin
@@ -740,7 +740,7 @@ dev.off()
 # PCA
 pca.nsec.online.ecoli <- prcomp(data.frame(nsec.online.ecoli.data), scale=TRUE)
 
-png("MWRD_Ecoli_nseconline_pca.png", units = "in", res = 200, width = 6.5, height = 6.5, family="A", pointsize = 24)
+png("images/MWRD_Ecoli_nseconline_pca.png", units = "in", res = 200, width = 6.5, height = 6.5, family="A", pointsize = 24)
 
 fviz_pca_var(pca.nsec.online.ecoli, labelsize = 5,
              col.var = "contrib",
@@ -755,7 +755,7 @@ pca.nsec.online.ecoli.summary <- factoextra::get_pca_var(pca.nsec.online.ecoli)
 
 pca.vis.ecoli <- prcomp(data.frame(vis.ecoli.data), scale=TRUE)
 
-png("MWRD_Ecoli_vis_pca.png", units = "in", res = 200, width = 6.5, height = 6.5, family="A", pointsize = 24)
+png("images/MWRD_Ecoli_vis_pca.png", units = "in", res = 200, width = 6.5, height = 6.5, family="A", pointsize = 24)
 
 fviz_pca_var(pca.vis.ecoli, labelsize = 5,
              col.var = "contrib",
@@ -769,14 +769,14 @@ pca.vis.ecoli.summary <- factoextra::get_pca_var(pca.vis.ecoli)
 
 ```
 <div custom-style="FigureCenter">
-![](MWRD_Ecoli_nseconline_pca.png)
+![](images/MWRD_Ecoli_nseconline_pca.png)
 </div>
 **Figure 6.** PCA variable loading for effluent of north secondary
 
 #####
 
 <div custom-style="FigureCenter">
-![](MWRD_Ecoli_vis_pca.png)
+![](images/MWRD_Ecoli_vis_pca.png)
 </div>
 **Figure 7.** PCA variable loading for effluent of north secondary
 
@@ -791,14 +791,14 @@ plot.gam(gam.nsec.online.ecoli)
 
 # Supplementary Information
 ## Figures
-![](MWRD_nsec_online_boxplots.png)
-**Figure S1.** Centered and scaled boxplots of north secondary online data from MWRD
+![](images/MWRD_nsec_online_boxplots.png)
+**Figure S1.** Centered and scaled boxplots of north secondary online data from images/MWRD
 
-![](MWRD_npaa_online_boxplots.png)
-**Figure S2.** Centered and scaled boxplots of north disinfection online data from MWRD
+![](images/MWRD_npaa_online_boxplots.png)
+**Figure S2.** Centered and scaled boxplots of north disinfection online data from images/MWRD
 
-![](MWRD_npaa_grab_boxplots.png)
-**Figure S3.** Centered and scaled boxplots of north disinfection grab sample data from MWRD
+![](images/MWRD_npaa_grab_boxplots.png)
+**Figure S3.** Centered and scaled boxplots of north disinfection grab sample data from images/MWRD
 
 #####
 
