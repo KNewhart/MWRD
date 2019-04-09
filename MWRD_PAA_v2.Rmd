@@ -514,31 +514,16 @@ dev.off()
 
 ```{r GLM, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 data <- data.frame(vis.paa.mlr.data)
-# fmla <- as.formula(paste0(colnames(data)[2],"~", paste(colnames(data)[c(1,3:length(colnames(data)))], collapse= "+")))
-fmla <- as.formula(paste0(colnames(data[2]),"~", paste(c("Initial.PAA.dose..mg.L.", "UVT....", "CODds..mg.L."), collapse="+")))
+fmla <- as.formula(paste0(colnames(data)[2],"~", paste(colnames(data)[c(1,3:length(colnames(data)))], collapse= "+")))
 glm.vis.paa.data <- glm(fmla, data=data)
 
-png("figures/MWRD_residual_vis_glm.png", units = "in", res = 200, width = 6.5, height = 2.5, family="A", pointsize = 10)
-par(mar=c(5,5,.5,.5), mfrow=c(1, 3))
-visreg::visreg(glm.vis.paa.data, "Initial.PAA.dose..mg.L.", ylab="Upstream Residual PAA (mg/L)", xlab = "Initial PAA dose (mg/L)")
-visreg::visreg(glm.vis.paa.data, "UVT....", ylab="Upstream Residual PAA (mg/L)", xlab = "UVT (%)")
-visreg::visreg(glm.vis.paa.data, "CODds..mg.L.", ylab="Upstream Residual PAA (mg/L)", xlab = "CODds (mg/L)")
-dev.off()
-
-xmax <- 3
-ymin <- 1
-png("figures/MWRD_residual_glm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
-par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
-plot(x = data[,2], y = glm.vis.paa.data$fitted.values, 
-     xlim=c(ymin,xmax), ylim=c(ymin,xmax),
-     xlab="Actal Residual PAA (mg/L)", ylab="Predicted Residual ~ Initial PAA + UVT + CODds", pch=20)
-abline(a=0,b=1,col="blue", lwd=2)
-# text(xmax,y=ymin,labels=round(summary.lm(lm)$r.squared,2), font=2, adj = 1)
-# text(x=ymin,y=xmax,labels="(b)", font=2)
+png("figures/MWRD_residual_vis_mlr_glm.png", units = "in", res = 200, width = 6.5, height = 2*2.5, family="A", pointsize = 10)
+par(mar=c(5,5,.5,.5), mfrow=c(4,2))
+visreg::visreg(glm.vis.paa.data, ylab=colnames(data)[2])
 dev.off()
 ```
 <div custom-style="FigureCenter">
-![](figures/MWRD_residual_vis_glm.png)
+![](figures/MWRD_residual_vis_mlr_glm.png)
 </div>
 **Figure 3.** GLM model constructed for upstream residual PAA concentration (mg/L) calculated from initial calculated PAA dose, UVT, and CODds.
 
