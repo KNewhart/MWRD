@@ -1,5 +1,6 @@
 ---
 title: "MWRD PAA - Preliminary Data Analysis"
+subtitle: "Version 2"
 author: "Kate Newhart"
 date: "4/9/2019"
 output:
@@ -21,9 +22,31 @@ packageLoad <- function(packName){ #packName - package name as a character strin
 sapply(c("knitr", "readxl", "xts", "visreg", "mgcv", "factoextra", "pls", "plsdepot", "ggplot2", "randomForest", "e1071"), function(x) packageLoad(x))
 
 # User-defined functions
-windowsFonts(A = windowsFont("Times New Roman"))
+PIdataImport <- function(fileLocation = "data/PIdata.xlsx") {
+  PIdata <- readxl::read_excel(fileLocation, skip = 1)
+  n <- ncol(PIdata)/2 # n = number of datasets to import
+  for (i in 1:n) {
+    remove.nas <- which(is.na(PIdata[,(i*2-1)]))
+    if (length(remove.nas) == 0) {
+          PIdata.sub <- xts::xts(PIdata[,(i*2)], order.by = as.POSIXct(data.frame(PIdata[,(i*2-1)])[[1]], format = "%Y-%m-%d %H:%M:%S"))
+    } else {
+          PIdata.sub <- xts::xts(PIdata[-remove.nas,(i*2)], order.by = as.POSIXct(data.frame(PIdata[-remove.nas,(i*2-1)])[[1]], format = "%Y-%m-%d %H:%M:%S"))
+    }
+    names(PIdata.sub) <- stringr::str_replace_all(names(PIdata.sub), c(" " = "." , "-" = "" ))
+    assign(as.character(names(PIdata.sub)), PIdata.sub, envir = .GlobalEnv)
+    if (i == 1) {
+      new.objects <- as.character(names(PIdata.sub))
+    } else {
+      new.objects <- c(new.objects, as.character(names(PIdata.sub)))
+    }
+  }
+  return(new.objects)
+}
+```
 
+```{r Plot functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 default.par <- par()
+windowsFonts(A = windowsFont("Times New Roman"))
 
 scaled.boxplot.png <- function(data, filename, lines = seq(round(ncol(data)/5),ncol(data)-1, by = round(ncol(data)/5)) + .5, margins = c(9,3.5,0.5,0.5)+.1) {
   labs <- colnames(data)
@@ -39,9 +62,7 @@ scaled.boxplot.png <- function(data, filename, lines = seq(round(ncol(data)/5),n
   dev.off()
   suppressWarnings(par(default.par))
 }
-```
 
-```{r Plot functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 plotTimeseries <- function(data1) {
 
 label1 <- colnames(data1)
@@ -111,126 +132,11 @@ axis(side = 1, at = axis.ticks, labels = format(as.POSIXct(rownames(data2plot)[a
 ```
 
 # Introduction
-Previous analysis (MWRD_PAA_v1, 2019-03-28) demonstrated no substantial link between *E. coli* concentrations entering the PAA disinfection system and other effluent water quality parameters measured online in the North Secondary system. 
+Previous analyses (version 1, 2019-03-28) demonstrated no substantial link between *E. coli* concentrations entering the PAA disinfection system and other effluent water quality parameters measured online in the North Secondary system. 
 
-In this work, online water quality parameters are used to predict PAA residual immediately post-dosing (i.e., "upstream residual"). The initial PAA concentration is calculated based on a flow-mass balance from the PAA dosing pump rate and influent disinfection basin flowrate. 
+In this document, online water quality parameters are used to predict PAA residual immediately post-dosing (i.e., "upstream residual"). The initial PAA concentration is calculated based on a flow-mass balance from the PAA dosing pump rate and influent disinfection basin flowrate. 
 
-Similar to previous analysis, very few of the measured water quality variables at the PAA dosing point (residual PAA, COD, TSS, UVT, and SAC) exhibit a normal distribution (**Figure S1**). This will be a source of error in many statistical methods. To minimize this error, a log transform of all variables was performed to better approximate a normal distribution (**Figure S1**). However, there limited improvement of the log transform in the distribution of each variable due to the highly skewed nature of the data (**Figure 1**). 
-
-<!-- V1 -->
-```{r NSEC Online, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-## North secondary online
-nsec.online <- as.data.frame(suppressWarnings(read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
-    col_types = c("date", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric", 
-        "numeric", "numeric", "numeric"), 
-    skip = 4)))
-nsec.online <- xts(nsec.online[,-1], order.by = nsec.online[,1])
-colnames(nsec.online) <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Influent NH3","NSEC Influent TSS","NSEC Influent COD",
-                           "NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3",
-                           "GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow",
-                           "AB-10 Influent Flow","AB-10 A-Pass Temp","AB-10 A-Pass pH","AB-10 A-Pass DO","AB-10 A-Pass NH3","AB-10 A-Pass NO3","AB-10 B-Pass DO","AB-10 C-Pass pH	AB-10","C-Pass DO","AB-10 C-Pass NH3","AB-10 C-Pass NO3","AB-10 MLSS","AB-10 MLR Flow","Quad 4 RAS Flow","Quad 4 Basins in Service","AB-10 RAS Flow","NSEC Aerobic SRT",
-                           "NSEC Effluent NH3","NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS","NSEC Effluent NO5","NSEC Effluent Flow")
-
-
-# cols <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Influent NH3","NSEC Influent TSS","NSEC Influent COD")
-# n <- as.numeric(sapply(cols, function(x) which(colnames(nsec.online) == x)))
-# north.secondary.influent <- nsec.online[,n]
-# 
-# cols <- c("AB-10 Influent Flow","AB-10 A-Pass Temp","AB-10 A-Pass pH","AB-10 A-Pass DO","AB-10 A-Pass NH3","AB-10 A-Pass NO3","AB-10 B-Pass DO","AB-10 C-Pass pH	AB-10","C-Pass DO","AB-10 C-Pass NH3","AB-10 C-Pass NO3","AB-10 MLSS","AB-10 MLR Flow","Quad 4 RAS Flow","Quad 4 Basins in Service","AB-10 RAS Flow", "NSEC Aerobic SRT")
-# n <- as.numeric(sapply(cols, function(x) which(colnames(nsec.online) == x)))
-# north.secondary <- nsec.online[,n]
-# 
-# cols <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3")
-# n <- as.numeric(sapply(cols, function(x) which(colnames(nsec.online) == x)))
-# north.secondary.carrb <- nsec.online[,n]
-# 
-# cols <- c("GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
-# n <- as.numeric(sapply(cols, function(x) which(colnames(nsec.online) == x)))
-# north.secondary.gte <- nsec.online[,n]
-# 
-# cols <- c("NSEC Effluent NH3","NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS","NSEC Effluent NO5","NSEC Effluent Flow")
-# n <- as.numeric(sapply(cols, function(x) which(colnames(nsec.online) == x)))
-# north.secondary.effluent <- nsec.online[,n]
-
-# sapply(nsec.online, function(x) plot(x, main = colnames(x)))
-# scaled.boxplot.png(nsec.online, "figures/MWRD_nsec_online_boxplots_01.png")
-
-# Remove outliers, such as negative flows, unrealistic sensor values, and missing values (Influnet COD/TSS, effluent NO5)
-nsec.online$`NSEC Influent Flow`[which(nsec.online$`NSEC Influent Flow` < 0)] <- 0 # Remove negative values
-nsec.online$`NSEC Influent NH3`[which(nsec.online$`NSEC Influent NH3` > 100)] <- 100 # Sensor error
-nsec.online <- nsec.online["2018-01-16/2018-12-01"] # NSEC Influent COD and TSS values stop after December 1st
-nsec.online <- nsec.online["2018-06-01/2018-12-01"] # Effluent NO5 invalid prior to June
-nsec.online$`NSEC Effluent TSS`[which(nsec.online$`NSEC Effluent TSS` < 0)] <- 0 # Remove negative values
-nsec.online$`NSEC Effluent NO5`[which(nsec.online$`NSEC Effluent NO5` <55)]
-
-# scaled.boxplot.png(nsec.online, "figures/MWRD_nsec_online_boxplots_02.png")
-
-
-# nsec.online <- nsec.online["2018-11-04/2018-12-01"]
-cols2remove <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3","GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
-
-data2plot <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec.online) == x))]
-# sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col = NA, yaxis.right = FALSE, format.labels ="%m/%d"))
-
-
-
-
-# Create boxplots
-# labs <- colnames(nsec.online)
-# windowsFonts(A = windowsFont("Times New Roman"))
-# png("MWRD_nsec_online_boxplots.png", units = "in", res = 200, width = 2*6.5, height = 2*4, family="A", pointsize = 16)
-# par(mar = c(9,3.5,.5,.5)+.1)
-# boxplot.data <- sapply(data.frame(nsec.online), function(x) scale(na.omit(x)))
-# boxplot(boxplot.data, xaxt="n", xlab="")
-# axis(1,at=seq(1,length(boxplot.data),by =1), labels = FALSE)
-# mtext("Standard Deviations", side = 2, line = 2)
-# text(x=seq_along(labs), y=par("usr")[3] - 2, srt=45, adj = 1, labels= labs, xpd=TRUE)
-# abline(v=c(5.5,10.5,15.5,20.5,25.5,30.5), lty = 2,col = "darkgrey")
-# dev.off()
-# scaled.boxplot.png(nsec.online, "figures/MWRD_nsec_online_boxplots.png")
-```
-
-```{r NPAA Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-# ## North disinfection online
-# Because the PAA analyzers stop functioning ater July 1st, the dataset is concatenated. Also, PAA analyzer CL17-1 appears to have more outliers, but CL17-2 has more noise. Both will be analyzed for prediction accuracy before determining which will be used for modelling. 
-n.paa.online <- as.data.frame(read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", 
-    sheet = "North PAA Online Data", col_names = FALSE, 
-    col_types = c("date", "numeric", "numeric","numeric","numeric","numeric","numeric","numeric","numeric"), skip = 3))
-colnames(n.paa.online) <- c("Date", "North PAA Upstream Residual (CL17-1)", "North PAA Upstream Residual (CL17-2)", "North PAA Upstream Residual",
-                            "North PAA Dosing Pump Flow", "North PAA Dose Setpoint", "North PAA HRT", "North PAA CT Target Dose", "North Disinfection Flow")
-
-
-n.paa.online <- xts(n.paa.online[,-1], order.by = n.paa.online[,1])
-
-# Plot all original data
-data2plot <- n.paa.online[,-3]
-# sapply(data2plot, function(x) plot.xts(na.omit(x), main = colnames(x), grid.col = NA, yaxis.right = FALSE, format.labels ="%m/%d"))
-# scaled.boxplot.png(n.paa.online, "figures/MWRD_npaa_online_boxplots_01.png", margins = c(13,6.5,0.5,0.5)+.1)
-# Subset to only include times when PAA analyzers CL17-1 & CL17-2 are online
-n.paa.online <- n.paa.online["2018-01-16/2018-07-01"]
-# Subset to only include costant PAA setpoint
-# n.paa.online <- n.paa.online[which(n.paa.online$`North PAA Dose Setpoint` < 1.200001),]
-# scaled.boxplot.png(n.paa.online, "figures/MWRD_npaa_online_boxplots_02.png", margins = c(13,6.5,0.5,0.5)+.1)
-# Compare PAA analyzers
-# par(mfrow=(c(2,1)))
-# plot(n.paa.online[,1], main = colnames(n.paa.online)[1])
-# plot(n.paa.online[,2], main = colnames(n.paa.online)[2])
-# par(default.par)
-# plot.xts(n.paa.online[,1:2], type = "p", pch = 20, cex = 0.8,  col = c("black", "red"), grid.col = NA, main = NA, yaxis.right = FALSE, legend.loc = "topleft", format.labels ="%m/%d", minor.ticks = NULL)
-
-# Create boxplots
-# scaled.boxplot.png(n.paa.online, "figures/MWRD_npaa_online_boxplots.png", margins = c(13,6.5,0.5,0.5)+.1)
-```
+Similar to previous analysis, very few of the measured water quality variables at the PAA dosing point (residual PAA, COD, TSS, UVT, and SAC) exhibit a normal distribution (**Figure S1**). This will be a source of error in many statistical methods. To minimize this error, a log transform of all variables was performed to better approximate a normal distribution (**Figure S1**). However, there limited improvement of the log transform in the distribution of each variable due to the highly skewed nature of the data (**Figure 1**). In future iterations of data analysis will include calculating the skewness and exploring additional transformations to account for the wide range of values for each process variable, or narrowing the range of values for each process variable to approximate a normal distribution.
 
 <!-- V1 -->
 ```{r NPAA Grab, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
@@ -308,21 +214,7 @@ vis.data <- vis.data[-which(vis.data$`CODto (mg/L` > 200),] # Remove bad COD dat
 
 
 
-# Combine Pre. disinfection *E. coli* with North Carbovis parameters
 data1 <- vis.data
-# # From PCA analysis, these variables do not impact PC1 (i.e., E.coli) and are only present on PC2
-# cols2remove <- c("GTE Flow", "AB-10 MLSS",
-#                  "NSEC CaRRB-3 Centrate Flow",
-#                  "NSEC CaRRB-1 Centrate Flow",
-#                  "NSEC Influent COD", 
-#                  "NSEC Influent Flow", "NSEC Influent Temp", "NSEC Influent NH3", "NSEC Influent TSS")
-# cols2remove <- sapply(cols2remove, function(x) which(colnames(data1) == x))
-# data1 <- data1[,-cols2remove]
-# cols2keep <- c("NSEC Aerobic SRT", "NSEC Effluent NH3", "NSEC Effluent OP", "NSEC Effluent NO3","NSEC Effluent TSS","NSEC Effluent NO5",
-#                "NSEC Influent Flow","NSEC Effluent Flow", "AB-10 Influent Flow", "AB-10 RAS Flow", "AB-10 MLR Flow", "Quad 4 RAS Flow")
-# data1 <- data1[,cols2keep]
-
-# Import PAA data
 data2 <- n.paa.grab[,c(2,4)] # PAA dose (calculated), Upstream residual
 
 label1 <- colnames(data1)
@@ -343,8 +235,9 @@ for(i in 1:(length(all.data.index)-1)) {
 }
 #new.data <- new.data[which(!is.na(new.data[,2])),-which(is.na(new.data[1,]))]
 new.data <- na.omit(new.data)
+new.data <- new.data[-which(is.na(as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))),]
 
-vis.paa.data <- xts(new.data, order.by = as.POSIXct(rownames(new.data)))
+vis.paa.data <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
 
 colnames(vis.paa.data) <- c("Initial PAA dose (mg/L)", "Upstream Residual PAA (mg/L)", "CODto (mg/L)", "CODto (V)",
                         "TSS (mg/L)", "TSS (V)",
@@ -373,6 +266,107 @@ sapply(vis.paa.data.log, function(x) plot(density(x), main = paste0("LOG(",colna
 dev.off()
 ```
 
+```{r GVT TSS, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+PIdataImport(fileLocation = "data/PIdata - GVT TSS.xlsx") 
+
+data1 <- xts(GVT2.TSS, order.by = lubridate::force_tz(index(GVT2.TSS), "UTC"))
+data2 <- xts(vis.paa.data, order.by = lubridate::force_tz(index(vis.paa.data), "UTC"))
+
+label1 <- colnames(data1)
+label2 <- colnames(data2)
+
+all.data <- merge(data2, data1)
+all.data.index <- which(!is.na(all.data[,1]))
+for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if (i == 1) {
+        new.data <- data.frame(data.locf[nrow(data.locf),])
+    }
+    if (i != 1) {
+        new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+    }
+}
+new.data <- na.omit(new.data)
+
+vis.paa.gvt.data <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+
+
+data1 <- xts(GVT4.TSS, order.by = lubridate::force_tz(index(GVT4.TSS), "UTC"))
+data2 <- xts(vis.paa.gvt.data, order.by = lubridate::force_tz(index(vis.paa.gvt.data), "UTC"))
+
+label1 <- colnames(data1)
+label2 <- colnames(data2)
+
+all.data <- merge(data2, data1)
+all.data.index <- which(!is.na(all.data[,1]))
+for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if (i == 1) {
+        new.data <- data.frame(data.locf[nrow(data.locf),])
+    }
+    if (i != 1) {
+        new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+    }
+}
+new.data <- na.omit(new.data)
+
+vis.paa.gvt.data <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+```
+
+```{r NSEC MLR, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+mlr.objects <- PIdataImport(fileLocation = "data/PIdata - NSEC MLR.xlsx") 
+
+data1 <- xts(NSEC.Quad.4.MLR.SVI, order.by = lubridate::force_tz(index(NSEC.Quad.4.MLR.SVI), "UTC"))
+data2 <- xts(vis.paa.data, order.by = lubridate::force_tz(index(vis.paa.data), "UTC"))
+
+label1 <- colnames(data1)
+label2 <- colnames(data2)
+
+all.data <- merge(data2, data1)
+all.data.index <- which(!is.na(all.data[,1]))
+for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if (i == 1) {
+        new.data <- data.frame(data.locf[nrow(data.locf),])
+    }
+    if (i != 1) {
+        new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+    }
+}
+new.data <- na.omit(new.data)
+
+vis.paa.mlr.data <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+
+
+data1 <- xts(NSEC.Quad.4.MLR.TSS, order.by = lubridate::force_tz(index(NSEC.Quad.4.MLR.TSS), "UTC"))
+data2 <- xts(vis.paa.mlr.data, order.by = lubridate::force_tz(index(vis.paa.mlr.data), "UTC"))
+
+label1 <- colnames(data1)
+label2 <- colnames(data2)
+
+all.data <- merge(data2, data1)
+all.data.index <- which(!is.na(all.data[,1]))
+for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if (i == 1) {
+        new.data <- data.frame(data.locf[nrow(data.locf),])
+    }
+    if (i != 1) {
+        new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+    }
+}
+new.data <- na.omit(new.data)
+
+vis.paa.mlr.data <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+```
 
 <div custom-style="FigureCenter">
 ![](figures/MWRD_paa_vis_density.png)
@@ -384,7 +378,6 @@ dev.off()
 # Methods
 
 ## Linear regression
-In simple linear regression, a model is constructed of a response variable (**Y**) that is a linear function of other variables (*x~i~*). The linear regression model assumes that **Y** is normally distributed, errors are normally distributed and independent, and **X** has constant variance. 
 
 <!-- V2 -->
 ```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
@@ -440,32 +433,48 @@ text(x=ymin,y=xmax,labels="(a)", font=2)
 dev.off()
 a <- round(summary.lm(lm)$r.squared,2)
 
-
-data <- data.frame(vis.paa.data.log)
+# MLR TSS & SVI
+data <- data.frame(vis.paa.mlr.data)
 fmla <- as.formula(paste0(colnames(data)[2],"~", paste(colnames(data)[c(1,3:length(colnames(data)))], collapse= "+"))) # All variables
-fmla <- as.formula(paste0(colnames(data)[2],"~", paste(c("Initial.PAA.dose..mg.L.","UVT....","CODds..mg.L."), collapse= "+"))) # Just sig vars
+# fmla <- as.formula(paste0(colnames(data)[2],"~", paste(c("Initial.PAA.dose..mg.L.","UVT....","CODds..mg.L."), collapse= "+"))) # Just sig vars
 lm <- lm(fmla, data = data)
 
 xmax <- max(data[,2])
 ymin <- min(fitted(lm))
-png("figures/MWRD_residual_log_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+png("figures/MWRD_residual_mlr_lm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
 par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
 plot(x = data[,2], y = fitted(lm), 
      xlim=c(ymin,xmax), ylim=c(ymin,xmax),
-     xlab="Actal Log Residual PAA (mg/L)", ylab="Predicted Log Residual ~ Log(Initial PAA + UVT + CODds)", pch=20)
+     xlab="Actal Residual PAA (mg/L)", ylab="Predicted Residual ~ CarboVis + MLR TSS + SVI", pch=20)
 abline(a=0,b=1,col="blue", lwd=2)
 text(xmax,y=ymin,labels=round(summary.lm(lm)$r.squared,2), font=2, adj = 1)
 text(x=ymin,y=xmax,labels="(b)", font=2)
 dev.off()
 b <- round(summary.lm(lm)$r.squared,2)
+
+
+# No improvement with GVT2 & GVT4 TSS data
+data <- data.frame(vis.paa.data)
+fmla <- as.formula(paste0(colnames(data)[2],"~", paste(colnames(data)[c(1,3:length(colnames(data)))], collapse= "+"))) # All variables
+lm <- lm(fmla, data = data)
+round(summary.lm(lm)$r.squared,2)
+
+data <- data.frame(vis.paa.gvt.data)
+fmla <- as.formula(paste0(colnames(data)[2],"~", paste(colnames(data)[c(1,3:length(colnames(data)))], collapse= "+"))) # All variables
+lm <- lm(fmla, data = data)
+round(summary.lm(lm)$r.squared,2)
 ```
-**Figure 2** shows a strong relationship between initial PAA dose and the upstream residual, but linear impacts of other online water quality variables are minimal. Ambient temperature was originally included, but did not provide any model fit benefit. Log transformed variables substanically worse for both linear model fit scenerios (from **Figure 2**, scenerio (a) r^2^ = `r a` and (b) r^2^ =`r b`)
+
+
+In a general linear model (LM), a model is constructed of a response variable (**Y**) that is a linear function of other variables (*x~i~*). The LM assumes that **Y** is normally distributed, errors are normally distributed and independent, and **X** has constant variance. 
+
+**Figure 2** shows a strong relationship between initial PAA dose and the upstream residual, but linear impacts of other online water quality variables are minimal. Ambient temperature, gravity thickener (GVT) 2 and 4 were included in the LM, but did not improve model fit. Log transformed variables performed substanically worse  (from **Figure 2**, scenerio (a) r^2^ = `r a`). LM fit was improved with the addition of North Secondary Quad 4 mixed liquor return (MLR) SVI and TSS. 
 
 <div custom-style="FigureCenter">
 ![](figures/MWRD_residual_paa_lm.png)
-![](figures/MWRD_residual_lm.png)
+![](figures/MWRD_residual_mlr_lm.png)
 </div>
-**Figure 2.** Linear model fit for upstream residual PAA given (a) the initial dosing concentration of PAA and (b) the initial dosing concentration of PAA, UV transmitance, and CODds. Black circles represent actual observations. Blue line represents a perfect model fit. R-squared value in lower right. 
+**Figure 2.** Linear model fit for upstream residual PAA given (a) the initial dosing concentration of PAA and (b) all variables. Black circles represent actual observations. Blue line represents a perfect model fit. R-squared value in lower right. 
 
 
 
@@ -473,12 +482,38 @@ b <- round(summary.lm(lm)$r.squared,2)
 
 
 ## Generalized Linear Model
-The general linear model (LM) requires that the response variable follows the normal distribution whilst the generalized linear model (GLM) is an extension of the LM that allows the specification of models whose response variable follows different distributions. 
+The LM requires that the response variable follows the normal distribution whilst the generalized linear model (GLM) is an extension of the LM that allows the specification of models whose response variable follows different distributions. 
 No difference was found between a LM fit with the initial calculated PAA dose, UVT, and CODds and a GLM fit with the same predictor variables. 
 
 <!-- V2 -->
-```{r GLM, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+```{r GLM, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 data <- data.frame(vis.paa.data)
+# fmla <- as.formula(paste0(colnames(data)[2],"~", paste(colnames(data)[c(1,3:length(colnames(data)))], collapse= "+")))
+fmla <- as.formula(paste0(colnames(data[2]),"~", paste(c("Initial.PAA.dose..mg.L.", "UVT....", "CODds..mg.L."), collapse="+")))
+glm.vis.paa.data <- glm(fmla, data=data)
+
+png("figures/MWRD_residual_vis_glm.png", units = "in", res = 200, width = 6.5, height = 2.5, family="A", pointsize = 10)
+par(mar=c(5,5,.5,.5), mfrow=c(1, 3))
+visreg::visreg(glm.vis.paa.data, "Initial.PAA.dose..mg.L.", ylab="Upstream Residual PAA (mg/L)", xlab = "Initial PAA dose (mg/L)")
+visreg::visreg(glm.vis.paa.data, "UVT....", ylab="Upstream Residual PAA (mg/L)", xlab = "UVT (%)")
+visreg::visreg(glm.vis.paa.data, "CODds..mg.L.", ylab="Upstream Residual PAA (mg/L)", xlab = "CODds (mg/L)")
+dev.off()
+
+xmax <- 3
+ymin <- 1
+png("figures/MWRD_residual_glm.png", units = "in", res = 200, width = 3, height = 3, family="A", pointsize = 10)
+par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+plot(x = data[,2], y = glm.vis.paa.data$fitted.values, 
+     xlim=c(ymin,xmax), ylim=c(ymin,xmax),
+     xlab="Actal Residual PAA (mg/L)", ylab="Predicted Residual ~ Initial PAA + UVT + CODds", pch=20)
+abline(a=0,b=1,col="blue", lwd=2)
+# text(xmax,y=ymin,labels=round(summary.lm(lm)$r.squared,2), font=2, adj = 1)
+# text(x=ymin,y=xmax,labels="(b)", font=2)
+dev.off()
+```
+
+```{r GLM, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+data <- data.frame(vis.paa.mlr.data)
 # fmla <- as.formula(paste0(colnames(data)[2],"~", paste(colnames(data)[c(1,3:length(colnames(data)))], collapse= "+")))
 fmla <- as.formula(paste0(colnames(data[2]),"~", paste(c("Initial.PAA.dose..mg.L.", "UVT....", "CODds..mg.L."), collapse="+")))
 glm.vis.paa.data <- glm(fmla, data=data)
