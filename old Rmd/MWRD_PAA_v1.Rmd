@@ -8,7 +8,9 @@ output:
 ---
 
 ```{r Preliminary declarations, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-rm(list=ls())
+# rm(list=ls())
+
+knitr::opts_knit$set(root.dir = "C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD")
 
 # Load required packages
 packageLoad <- function(packName){ #packName - package name as a character string, e.g. "quantmod"
@@ -232,6 +234,7 @@ To achieve the goal of predicting *E. coli*, a log-transformed pre-disinfection 
 
 ```{r NSEC Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 ## North secondary online
+setwd("C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD")
 nsec.online <- as.data.frame(suppressWarnings(read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
     col_types = c("date", "numeric", "numeric", 
         "numeric", "numeric", "numeric", 
@@ -330,8 +333,6 @@ data2plot <- n.paa.online[,-3]
 scaled.boxplot.png(n.paa.online, "images/MWRD_npaa_online_boxplots_01.png", margins = c(13,6.5,0.5,0.5)+.1)
 # Subset to only include times when PAA analyzers CL17-1 & CL17-2 are online
 n.paa.online <- n.paa.online["2018-01-16/2018-07-01"]
-# Subset to only include costant PAA setpoint
-# n.paa.online <- n.paa.online[which(n.paa.online$`North PAA Dose Setpoint` < 1.200001),]
 scaled.boxplot.png(n.paa.online, "images/MWRD_npaa_online_boxplots_02.png", margins = c(13,6.5,0.5,0.5)+.1)
 # Compare PAA analyzers
 # par(mfrow=(c(2,1)))
@@ -547,31 +548,37 @@ scaled.boxplot.png(vis.ecoli.data[,-1], "images/MWRD_Ecoli_vis_boxplots.png", ma
 In simple linear regression, a model is constructed of a response variable (**Y**) that is a linear function of other variables (*x~i~*). The linear regression model assumes that **Y** is normally distributed, errors are normally distributed and independent, and **X** has constant variance. 
 ```{r Linear regression, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 
-#   data1 <- data
-#   colnames(data1) <- make.names(colnames(data1))
-#   
-#   fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
-#   
-#   lm.data1 <- lm(fmla, data = data1)
-#   
-#   r2 <- summary.lm(lm.data1)$r.squared
-#   
-#   col2remove <- which(summary.lm(lm.data1)$coefficients[,4] == max(summary.lm(lm.data1)$coefficients[,4]))
-#   
-#   while ((summary.lm(lm.data1)$coefficients[,4][col2remove] > 0.5) &&  (ncol(data1) >2)) {
-#     data <- data1[,-col2remove]
-#     fmla <- as.formula(paste0(colnames(data)[1],"~", paste(colnames(data)[2:length(colnames(data))], collapse= "+")))
-#     lm.data <- lm(fmla, data = data)
-#     # if (summary.lm(lm.data)$r.squared < r2) {
-#     # break
-#     # } else {
-#       data1 <- data
-#       lm.data1 <- lm.data
-#       r2 <- summary.lm(lm.data1)$r.squared
-#       col2remove <- which(summary.lm(lm.data1)$coefficients[,4] == max(summary.lm(lm.data1)$coefficients[,4]))
-#     # }
-#   }
+lm.optimize <- function(data1) {
+  if(!is.data.frame(data1)) data1 <- data.frame(data1)
+  
+  colnames(data1) <- make.names(colnames(data1))
 
+  fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
+
+  lm.data1 <- lm(fmla, data = data1)
+
+  r2 <- summary.lm(lm.data1)$r.squared
+
+  col2remove <- which.max(summary.lm(lm.data1)$coefficients[,4])
+
+  while ((summary.lm(lm.data1)$coefficients[,4][col2remove] > 0.25) &&  (ncol(data1) >2)) {
+    data <- data1[,-col2remove]
+    fmla <- as.formula(paste0(colnames(data)[1],"~", paste(colnames(data)[2:length(colnames(data))], collapse= "+")))
+    lm.data <- lm(fmla, data = data)
+    # if (summary.lm(lm.data)$r.squared < r2) {
+    # break
+    # } else {
+      data1 <- data
+      lm.data1 <- lm.data
+      r2 <- summary.lm(lm.data1)$r.squared
+      col2remove <- which(summary.lm(lm.data1)$coefficients[,4] == max(summary.lm(lm.data1)$coefficients[,4]))
+    # }
+  }
+  
+  return(lm.data1)
+}
+
+lm.test <- lm.optimize(vis.ecoli.data)
 
 
 data1 <- data.frame(vis.ecoli.data)
@@ -596,6 +603,7 @@ mtext(side=2, line = 2.25, "Pre-disinf E. coli (LOG MPN/100mL)")
 dev.off()
 
 
+lm.test <- lm.optimize(nsec.online.ecoli.data)
 
 data1 <- data.frame(nsec.online.ecoli.data)
 fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
@@ -639,6 +647,17 @@ dev.off()
 # 
 # visreg(fit=lm.new.data, points.par=c(col="black"), line.par=c(col="blue"))
 # visreg2d(fit=lm.new.data, "Quad.4.RAS.Flow", "NSEC.Effluent.NO5", plot.type="image")
+
+
+data1 <- cbind(vis.paa.data[,2:ncol(vis.paa.data)],vis.paa.data[,1])
+lm.test <- lm.optimize(data1)
+
+png("images/PAA_lm.png", res = 2000, units = "in", width = 4, height = 4)
+par(mar=c(4,4,.5,.5))
+visreg::visreg(fit=lm(Upstream.Residual.PAA..mg.L. ~ Initial.PAA.dose..mg.L., data=data1))
+text(x=1.5, y=max(data1$Upstream.Residual.PAA..mg.L.), labels = "y = 0.6781x - 0.2107", adj = c(0, NA))
+text(x=max(data1$Initial.PAA.dose..mg.L.), y = min(data1$Upstream.Residual.PAA..mg.L.), labels = "R-squared = 0.55", adj = c(1, NA))
+dev.off()
 ```
 <div custom-style="FigureCenter">
 ![](images/MWRD_Ecoli_vis_lm-COD.png)
@@ -657,7 +676,45 @@ dev.off()
 ## Generalized Linear Model
 The general linear model (LM) requires that the response variable follows the normal distribution whilst the generalized linear model (GLM) is an extension of the LM that allows the specification of models whose response variable follows different distributions. 
 ```{r GLM, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-glm.nsec.online.ecoli <- glm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=data.frame(nsec.online.ecoli.data))
+glm.optimize <- function(data1) {
+  if(!is.data.frame(data1)) data1 <- data.frame(data1)
+  
+  colnames(data1) <- make.names(colnames(data1))
+
+  fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
+
+  glm.data1 <- glm(fmla, data = data1)
+
+  # r2 <- summary.glm(glm.data1)$r.squared
+
+  col2remove <- which.max(summary.glm(glm.data1)$coefficients[,4])
+
+  while ((summary.glm(glm.data1)$coefficients[,4][col2remove] > 0.25) &&  (ncol(data1) >2)) {
+    data <- data1[,-col2remove]
+    fmla <- as.formula(paste0(colnames(data)[1],"~", paste(colnames(data)[2:length(colnames(data))], collapse= "+")))
+    glm.data <- glm(fmla, data = data)
+    # if (summary.lm(lm.data)$r.squared < r2) {
+    # break
+    # } else {
+      data1 <- data
+      glm.data1 <- glm.data
+      # r2 <- summary.lm(lm.data1)$r.squared
+      col2remove <- which(summary.glm(glm.data1)$coefficients[,4] == max(summary.lm(glm.data1)$coefficients[,4]))
+    # }
+  }
+  
+  return(glm.data1)
+}
+
+glm.nsec.online.ecoli <- glm.optimize(nsec.online.ecoli.data)
+
+
+
+
+
+
+
+# glm.nsec.online.ecoli <- glm(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=data.frame(nsec.online.ecoli.data))
 
 png("images/MWRD_Ecoli_nseconline_glm.png", units = "in", res = 200, width = 6, height = 3*2.5, family="A", pointsize = 10)
 par(mar=c(5,5,.5,.5), mfrow=c(3, 2))
@@ -668,8 +725,10 @@ data <- data.frame(vis.ecoli.data)
 fmla <- as.formula(paste0(colnames(data)[1],"~", paste(colnames(data)[2:length(colnames(data))], collapse= "+")))
 glm.vis.ecoli.data <- glm(fmla, data=data)
 
+glm.vis.ecoli.data <- glm.optimize(vis.ecoli.data)
+
 png("images/MWRD_Ecoli_vis_glm.png", units = "in", res = 200, width = 6, height = 3*2.5, family="A", pointsize = 10)
-par(mar=c(5,5,.5,.5), mfrow=c(3, 2))
+par(mar=c(5,5,.5,.5), mfrow=c(1, 1))
 visreg::visreg(glm.vis.ecoli.data, ylab="Pre-disinf E. coli (LOG MPN/100mL)")
 dev.off()
 ```
@@ -688,12 +747,36 @@ dev.off()
 
 
 ## Non-Regression Model
-```{r Random Forest and SVM, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+```{r Random Forest and SVM, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 par(default.par)
 
+
+
+data1 <- data.frame(vis.ecoli.data)
+fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
+svm.test <- e1071::svm(fmla, data = data1)
+rf.test <- randomForest::randomForest(fmla, data = data1)
+
+sapply(colnames(data1)[2:length(colnames(data1))], function(x) visreg(fit=svm.test, xvar=x, plot=TRUE, xlab = x, ylab = "Pre-disinf E. coli (LOG MPN/100mL)", points.par=c(col="black"), line.par=c(col="blue"), 
+       # xlim=c(20,100),
+       ylim=c(8,11)))
+
+
+data1 <- cbind(vis.paa.data[,2:ncol(vis.paa.data)],vis.paa.data[,1])
+fmla <- as.formula(paste0(colnames(data1)[1],"~", paste(colnames(data1)[2:length(colnames(data1))], collapse= "+")))
+svm.test <- e1071::svm(fmla, data = data1)
+rf.test <- randomForest::randomForest(fmla, data = data1)
+
+sapply(colnames(data1)[2:length(colnames(data1))], function(x) visreg(fit=svm.test, xvar=x, plot=TRUE, xlab = x, ylab = colnames(data1)[1], points.par=c(col="black"), line.par=c(col="blue")))
+
+for(i in 2:length(colnames(data1))) {
+  x <- colnames(data1)[i]
+  visreg(fit=svm.test, xvar=x, plot=TRUE, xlab = x, ylab = colnames(data1)[1], points.par=c(col="black"), line.par=c(col="blue"))
+}
+
+
+
 rf.nsec.online.ecoli <- randomForest::randomForest(Pre.disinf.E..coli..LOG.MPN.100mL. ~ NSEC.Aerobic.SRT + NSEC.Effluent.OP + NSEC.Effluent.NO3 + NSEC.Effluent.NO5 + NSEC.Effluent.Flow, data=data.frame(nsec.online.ecoli.data))
-
-
 
 
 data1 <- data.frame(nsec.online.ecoli.data)
@@ -750,6 +833,34 @@ fviz_pca_var(pca.nsec.online.ecoli, labelsize = 5,
 )
 dev.off()
 
+# n.plots <- as.numeric(which(summary(pca.nsec.online.ecoli)$importance[3,] > .9)[1]) - 1
+# if((n.plots %% 2) == 1) n.plots <- n.plots + 1
+# png("images/MWRD_Ecoli_nseconline_pca_all.png", units = "in", res = 2000, width = 6.5, height = 6.5, family="A", pointsize = 24)
+# par(mfrow=c((n.plots/2),2))
+# # for(i in seq(1,n.plots,2)){
+#     fviz_pca_var(pca.nsec.online.ecoli, 
+#                axes = c(i, (i+1)),
+#                labelsize = 5,
+#              col.var = "contrib",
+#              gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+#              repel = TRUE
+#              # ,ggtheme = theme(text=element_text(family="A", size=16))
+#             )
+# # }
+# dev.off()
+data1 <- cbind(vis.paa.data[,2:ncol(vis.paa.data)],vis.paa.data[,1])
+
+# pca.data <- pca.nsec.online.ecoli
+pca.data <- prcomp(data.frame(data1), scale=TRUE)
+major.loadings <- apply(pca.data$rotation,2, function(x) which(abs(x) > .5))
+minor.loadings <- apply(pca.data$rotation,2,function(x) which((abs(x) > .25)))
+
+major.loadings <- data.frame(unlist(lapply(major.loadings, function(x) do.call(paste, c(as.list(names(x)), sep = ", ")))))
+major.minor.loadings <- data.frame(unlist(lapply(minor.loadings, function(x) do.call(paste, c(as.list(names(x)), sep = ", ")))))
+
+View(major.loadings)
+View(major.minor.loadings)
+
 pca.nsec.online.ecoli.summary <- factoextra::get_pca_var(pca.nsec.online.ecoli)
 
 
@@ -782,10 +893,37 @@ pca.vis.ecoli.summary <- factoextra::get_pca_var(pca.vis.ecoli)
 
 
 ## Generalized Additive Models
-```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-gam.nsec.online.ecoli <- gam(Pre.disinf.E..coli..LOG.MPN.100mL. ~ s(NSEC.Effluent.OP) +  s(NSEC.Effluent.Flow), data=data.frame(nsec.online.ecoli.data))
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+# data <- data.frame(nsec.online.ecoli.data)
+data <- cbind(vis.paa.data[,2:ncol(vis.paa.data)],vis.paa.data[,1])
+
+fmla <- as.formula(paste(colnames(data)[1],"~", do.call(paste, c(as.list(sapply(colnames(data)[2:length(colnames(data))], function(x) paste0("s(",x,")"))), sep = " + "))))
+
+gam.test <- gam(fmla, data=data, method="REML")
+summary(gam.test)
+plot.gam(gam.test, ylab=colnames(data)[1], residuals = TRUE, ylim=c(-2,2))
+
+fmla <- as.formula(paste(colnames(data)[1],"~", do.call(paste, c(as.list(sapply(colnames(data)[c(4,7)], function(x) paste0("s(",x,")"))), sep = " + "))))
+gam.test <- gam(fmla, data=data, method="REML")
+plot.gam(gam.test, ylab=colnames(data)[1], residuals = TRUE, ylim=c(-2,2))
+
+# data.test <- data
+# while(abs(e1071::skewness(data.test$UVT....)) > 0.5) {
+#   rows2remove <- c(min(data$UVT), max(data$UVT....))
+#   data.test <- data.test[-rows2remove,]
+# }
+# gam.test <- gam(fmla, data=data.test, method="REML")
+# plot.gam(gam.test, ylab=colnames(data.test)[1], residuals = TRUE, ylim=c(-2,2))
+
+
+
+data <- data.frame(vis.ecoli.data)
+fmla <- as.formula(paste(colnames(data)[1],"~", do.call(paste, c(as.list(sapply(colnames(data)[2:length(colnames(data))], function(x) paste0("s(",x,")"))), sep = " + "))))
+
+gam.nsec.online.ecoli <- gam(fmla, data=data, method="REML")
 summary(gam.nsec.online.ecoli)
-plot.gam(gam.nsec.online.ecoli)
+plot.gam(gam.nsec.online.ecoli, ylab=colnames(data)[1], ylim=c(0,2), residuals=TRUE)
+
 ```
 
 
