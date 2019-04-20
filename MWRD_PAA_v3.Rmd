@@ -264,16 +264,13 @@ Figure \@ref(fig:deltaPAANN) BOO YAH
 RMSE.NN.org <- RMSE.NN
 all.data <- mergeData(list.x = list(oct.paa,vis.data))
 all.data <- na.omit(all.data)
-remove.cols <- sapply(c("CODds..mg.L.", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample", "PAA...1.2.Basin.Sampling", "DPAA.Samples"), function(x) which(colnames(all.data) == x))
+remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample","PAA...1.2.Basin.Sampling", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.","TSS..V.", "UVT..V.", "UVT..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
 all.data <- all.data[,-remove.cols]
 
-for(i in 1:10) {
 
-# if(ncol(NN$weights[[1]][[1]]) == 2) cols2remove <- c(which(abs(NN$weights[[1]][[1]][,1]) == min(abs(NN$weights[[1]][[1]][,1]))), which(abs(NN$weights[[1]][[1]][,2]) == min(abs(NN$weights[[1]][[1]][,2]))))
-# if(ncol(NN$weights[[1]][[1]]) == 1) cols2remove <- which(abs(NN$weights[[1]][[1]][,1]) == min(abs(NN$weights[[1]][[1]][,1])))
-cols2remove <- apply(NN$weights[[1]][[1]],2,function(x) which(abs(x) == min(abs(x))))
-all.data <- all.data[,-cols2remove]
-predict.column <- which(colnames(all.data) == "Initial.PAA.Demand.or.Decay")
+predict.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples")
+predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) == x))
 
 ## Create training and test datasets
 set.seed(80)
@@ -292,7 +289,11 @@ scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
 library(neuralnet)
 training.NN <- scaled.data[training.index,]
 testing.NN <- scaled.data[-training.index,]
-fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~", paste(colnames(all.data)[-predict.column], collapse= "+")))
+
+for (predictor in 1:length(predict.cols)) {
+  
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
 
 for (i in 1:(ncol(all.data)-1)) {
   hidden.nodes <- (ncol(all.data)-i)
@@ -326,11 +327,14 @@ max.val <- max(c(testing.data[,predict.column], predict.NN))
 min.val <- min(c(testing.data[,predict.column], predict.NN))
 data2plot <- cbind(testing.data[,predict.column], predict.NN)
 
-png(paste0("images/PAA_NN_",i,".png"), units="in", res=2000, width = 4, height = 4)
-par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
-plot(x = data2plot[,1], y = data2plot[,2], 
-     # xlim=c(min.val,max.val), ylim=c(min.val,max.val),
-     xlab="Actal Initial PAA Demand", ylab="Predicted Initial PAA Demand", pch=20)
+png(paste0("images/PAA_NN_",colnames(all.data)[predict.cols[predictor]],".png"), units="in", res=2000, width = 4, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     # , xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = colnames(all.data)[predict.cols[predictor]]
+     )
 abline(a=0,b=1,col="blue", lwd=2)
 # text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
 legend("bottomright", 
@@ -343,9 +347,191 @@ legend("bottomright",
        xpd=NA,
        xjust = 1,
        text.font = 2)
+text(do.call(paste0, as.list(paste0(colnames(testing.data), "\n"))), x = max(data2plot[,1])+.015, y = 0.55, xpd=NA, pos=4, cex=.7)
 dev.off()
-
 }
+
+
+
+
+# for(i in 1:10) {
+# 
+# # if(ncol(NN$weights[[1]][[1]]) == 2) cols2remove <- c(which(abs(NN$weights[[1]][[1]][,1]) == min(abs(NN$weights[[1]][[1]][,1]))), which(abs(NN$weights[[1]][[1]][,2]) == min(abs(NN$weights[[1]][[1]][,2]))))
+# # if(ncol(NN$weights[[1]][[1]]) == 1) cols2remove <- which(abs(NN$weights[[1]][[1]][,1]) == min(abs(NN$weights[[1]][[1]][,1])))
+# cols2remove <- apply(NN$weights[[1]][[1]],2,function(x) which(abs(x) == min(abs(x))))
+# all.data <- all.data[,-cols2remove]
+# }
 
 ```
 
+```{r NSEC Online, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+## North secondary online
+setwd("C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD")
+nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
+    col_types = c("date", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric"), 
+    skip = 4)))
+nsec.online <- xts(nsec.online[,-1], order.by = nsec.online[,1])
+colnames(nsec.online) <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Influent NH3","NSEC Influent TSS","NSEC Influent COD",
+                           "NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3",
+                           "GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow",
+                           "AB-10 Influent Flow","AB-10 A-Pass Temp","AB-10 A-Pass pH","AB-10 A-Pass DO","AB-10 A-Pass NH3","AB-10 A-Pass NO3","AB-10 B-Pass DO","AB-10 C-Pass pH	AB-10","C-Pass DO","AB-10 C-Pass NH3","AB-10 C-Pass NO3","AB-10 MLSS","AB-10 MLR Flow","Quad 4 RAS Flow","Quad 4 Basins in Service","AB-10 RAS Flow","NSEC Aerobic SRT",
+                           "NSEC Effluent NH3","NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS","NSEC Effluent NO5","NSEC Effluent Flow")
+
+
+# nsec.online <- nsec.online["2018-11-04/2018-12-01"]
+cols2remove <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3","GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
+
+nsec.online <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec.online) == x))]
+
+
+```
+
+```{r Merge NSEC/NPAA, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+data1 <- nsec.online
+# # From PCA analysis, these variables do not impact PC1 (i.e., E.coli) and are only present on PC2
+# cols2remove <- c("GTE Flow", "AB-10 MLSS",
+#                  "NSEC CaRRB-3 Centrate Flow",
+#                  "NSEC CaRRB-1 Centrate Flow",
+#                  "NSEC Influent COD", 
+#                  "NSEC Influent Flow", "NSEC Influent Temp", "NSEC Influent NH3", "NSEC Influent TSS")
+# cols2remove <- sapply(cols2remove, function(x) which(colnames(data1) == x))
+# data1 <- data1[,-cols2remove]
+
+# cols2keep <- c("NSEC Aerobic SRT", "NSEC Effluent NH3", "NSEC Effluent OP", "NSEC Effluent NO3","NSEC Effluent TSS","NSEC Effluent NO5",
+#                "NSEC Influent Flow","NSEC Effluent Flow", "AB-10 Influent Flow", "AB-10 RAS Flow", "AB-10 MLR Flow", "Quad 4 RAS Flow")
+# data1 <- data1[,cols2keep]
+
+# During initial analysis, a log transformation of pre-disinfection *E. coli* was found to improve the results of PCA, PLS, and GAM modeling. 
+data2 <- oct.paa
+label1 <- colnames(data1)
+label2 <- colnames(data2)
+
+all.data <- merge(data2, data1)
+all.data.index <- which(!is.na(all.data[,1]))
+for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
+    rownames(data.avg) <- as.character(index(all.data)[row.stop])
+    # data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if (i == 1) {
+        new.data <- data.avg
+    }
+    if (i != 1) {
+        new.data <- rbind(new.data, data.avg)
+    }
+}
+
+all.data <- new.data
+r <- paste0(range(as.POSIXct(rownames(all.data)))[1],"/",range(as.POSIXct(rownames(all.data)))[2])
+all.data <- mergeData(list.x = list(all.data,vis.data[r]))
+
+```
+
+
+```{r Prep data for deltaPAA NN, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# NN
+all.data <- new.data
+all.data <- na.omit(all.data)
+zero.rows <- unlist(apply(all.data, 2, function(x) which(x == 0)))
+
+remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample","PAA...1.2.Basin.Sampling", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin","Quad.4.Basins.in.Service", "Sample.Time..1_min.", "SPBased.Disinfection.CT", "CalcBased.Disinfection.CT")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+
+predict.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples")
+predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) == x))
+
+## Create training and test datasets
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+
+for (predictor in 1:length(predict.cols)) {
+  
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
+
+for (j in 1:(ncol(all.data)-1)) {
+  hidden.nodes <- (ncol(all.data)-j)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(j==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+# plot(NN)
+
+## Predict using NN
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.column], predict.NN))
+min.val <- min(c(testing.data[,predict.column], predict.NN))
+data2plot <- cbind(testing.data[,predict.column], predict.NN)
+
+png(paste0("images/PAA_NN_",colnames(all.data)[predict.cols[predictor]],".png"), units="in", res=2000, width = 4, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     # , xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = colnames(all.data)[predict.cols[predictor]]
+     )
+abline(a=0,b=1,col="blue", lwd=2)
+# text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
+legend("bottomright", 
+       # inset = c(-.01,.04),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+text(do.call(paste0, as.list(paste0(colnames(testing.data), "\n"))), x = max(data2plot[,1])+.015, y = 0.55, xpd=NA, pos=4, cex=.7)
+dev.off()
+}
+```
