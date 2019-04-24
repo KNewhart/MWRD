@@ -734,6 +734,212 @@ dev.off()
 ```
 
 
+```{r E.coli take two}
+library(readxl)
+library(xts)
+
+
+ecoli <- readxl::read_excel("data/PAA-Ecoli.xlsx", 
+                                sheet = "Sheet2")
+ecoli <- list(xts(na.omit(ecoli[,2][[1]]), order.by = na.omit(ecoli[,1][[1]])),
+              xts(na.omit(ecoli[,4][[1]]), order.by = na.omit(ecoli[,3][[1]])))
+
+mergeData <- function(list.x, sort.by = 1, average = FALSE) {
+  library(xts)
+  
+  all.data <- do.call(merge, list.x)
+  all.data.index <- which(!is.na(all.data[,sort.by]))
+  for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if(average) {
+      data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
+      rownames(data.avg) <- as.character(index(all.data)[row.stop])
+      
+    }
+    if (i == 1) {
+      if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
+      if(average) new.data <- data.avg
+    }
+    if (i != 1) {
+      if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+      if(average) new.data <- rbind(new.data, data.avg)
+    }
+  }
+  new.data <- na.omit(new.data)
+  new.data.xts <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+  
+  return(new.data.xts)
+}
+
+ecoli <- mergeData(ecoli)
+colnames(ecoli) <- c("Pre-dis E.coli", "Post-dis E.coli")
+
+
+
+
+
+
+vis.data <- readxl::read_excel("data/NNE Carbovis Data2.xlsx",
+                               sheet = "Inst DL Data", col_types = c("date",
+                                                                     "text", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip"), skip = 6)
+vis.data <- vis.data[which(vis.data[,2] == "Valid"),-2]
+colnames(vis.data) <- c("Time", "CODto (mg/L)", "CODto (V)",
+                        "TSS (mg/L)", "TSS (V)",
+                        "UVT (%)", "UVT (V)",
+                        "CODds (mg/L)", "CODds (V)",
+                        "SACto (1/m)", "SACto (V)")
+vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])[,1], format = "%Y-%m-%d %H-%M-%S"))
+
+
+
+
+
+
+
+
+all.data <- vis.data
+data2 <- ecoli
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+r <- paste0(range(index(data2[r]))[1],"/",
+            range(index(data2[r]))[2])
+all.data <- mergeData(list.x = list(data2[r],all.data[r])) 
+
+remove.cols.names <- c("CODto..V.", "TSS..V.", "UVT..V.", "CODds..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+
+more.nsec <- readxl::read_excel("data/PAA-Ecoli-2.xlsx", 
+                                sheet = "Sheet1", col_types = c("date", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric"))
+more.nsec <- xts(more.nsec[,-1], order.by = more.nsec[,1][[1]])
+colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North Flow", 
+                         "Temperature NSEC Inf", "ASRT", "NSEC Effluent NH3",
+                         "NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS",
+                         "NSEC Effluent NO5","NSEC Effluent Flow", "AB-10 RAS")
+
+
+
+data2 <- all.data
+all.data <- more.nsec
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+r <- paste0(range(index(data2[r]))[1],"/",
+            range(index(data2[r]))[2])
+all.data <- mergeData(list.x = list(data2[r],all.data[r])) 
+
+
+
+
+
+
+
+
+
+
+
+predict.cols.names <- c("Pre.dis.E.coli", "Post.dis.E.coli")
+predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) == x))
+all.data[,predict.cols] <- log(all.data[,predict.cols])
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+
+for (predictor in 1:length(predict.cols)) {
+# predictor <- 1
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
+
+for (j in 1:(ncol(all.data[-predict.cols])-1)) {
+  hidden.nodes <- j
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+  
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.cols[predictor]] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(j==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+# Use # of nodes with lowest RMSE
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+# Retrain with optimum number of nodes
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+# plot(NN)
+
+## Predict using NN
+predict.NN.colnames <- colnames(testing.NN[,-predict.cols])
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+
+## Re-scale
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.cols[predictor]], predict.NN))
+min.val <- min(c(testing.data[,predict.cols[predictor]], predict.NN))
+data2plot <- cbind(testing.data[,predict.cols[predictor]], predict.NN)
+
+png(paste0("images/logecoli_NN_",colnames(all.data)[predict.cols[predictor]],"_clean.png"), units="in", res=2000, width = 5, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     , xlim=c(min.val,max.val), ylim=c(min.val,max.val)
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = stringr::str_replace_all(colnames(all.data)[predict.cols[predictor]], c("[.]" = " "))
+)
+abline(a=0,b=1,col="blue", lwd=2)
+
+legend("bottomright", 
+       inset = c(-.55,-.23),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+
+text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.015, y = max.val-min.val, xpd=NA, pos=4, cex=.7)
+dev.off()
+}
+```
 
 
 
