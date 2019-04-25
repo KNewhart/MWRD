@@ -477,7 +477,7 @@ hidden.nodes <- min(results[,c("RMSE")])
 hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
 hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
 # Retrain with optimum number of nodes
-NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
 # plot(NN)
 
 ## Predict using NN
@@ -525,7 +525,7 @@ fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste
 
 for (j in 1:(ncol(all.data[-predict.cols])-1)) {
   hidden.nodes <- (ncol(all.data[-predict.cols])-j)
-  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
 
   ## Predict using NN
   predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
@@ -606,35 +606,36 @@ predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) 
 # PAA Dose
 predictor.flow <- (testing.data[,1] * (max(all.data[,1]) - min(all.data[,1]))) + min(all.data[,1])
 # 1/2 basin PAA
-calc.final <- predictor.flow - predict.NN
+# calc.final <- predictor.flow - predict.NN # NO
 
-if(r==1) plot.data <- cbind(predictor.flow, calc.final)
-if(r>1) plot.data <- cbind(plot.data, calc.final)
+
+if(r==1) plot.data <- cbind(predictor.flow, predict.NN)
+if(r>1) plot.data <- cbind(plot.data, predict.NN)
 }
+
+plot.min <- min(apply(plot.data[,2:ncol(plot.data)],2,min))
+plot.max <- max(apply(plot.data[,2:ncol(plot.data)],2,max))
 
 png("images/flow_variance_NN.png", units = "in", res = 2000, width = 5, height = 3.5)
 par(cex=1, mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
-plot(plot.data[,1:2], col="white", xlab = "PAA Dose (mg/L)", ylab = "1/2-basin PAA (mg/L)")
+plot(plot.data[,1:2], col="white", xlab = "C0 (mg/L PAA) - Predictor", ylab = "dC (mg/L PAA) - Response", ylim = c(plot.min,plot.max))
 for(i in 2:ncol(plot.data)) {
   xspline(x=plot.data[,1], plot.data[,i], lty=2)
 }
-legend("bottomright",
-       legend = c("Different Sets of Observed Conditions"),
+legend("topleft",
+       legend = c("Various Environmental Conditions"),
        lty = c(2)
        )
 dev.off()
 ```
 
-```{r Impact of each variable}
-
-```
 
 ```{r Comparison to online PAA - NN model, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # NN
 all.data <- vis.data
 data2 <- more.nsec[-which(is.na(more.nsec[,2])),]
 data2 <- data2[-which(data2[,1] < 0.1),]
-data2 <- data2[-which(data2[,1] > 4),]
+data2 <- data2[-which(data2[,1] > 2.5),]
 r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
 r <- paste0(range(index(data2[r]))[1],"/",
             range(index(data2[r]))[2])
@@ -650,6 +651,7 @@ predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) 
 ## Create training and test datasets
 set.seed(80)
 all.data <- as.data.frame(all.data)
+all.data <- model.matrix(as.formula(paste0("~",paste(colnames(all.data),collapse="+"))), data=all.data)[,-1]
 training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
 training.data <- all.data[training.index,]
 testing.data <- all.data[-training.index,]
@@ -670,7 +672,9 @@ predictor <- 1
 
 fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
 
-for (j in 1:(ncol(all.data[-predict.cols])-1)) {
+# for (j in 1:(ncol(all.data[-predict.cols])-1)) {
+for (j in seq(1,(ncol(all.data[,-predict.cols])-1),2)) {
+  print(j)
   hidden.nodes <- j
   NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
 
@@ -684,6 +688,7 @@ for (j in 1:(ncol(all.data[-predict.cols])-1)) {
   if(j==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
     results <- rbind(results, c(hidden.nodes,RMSE.NN))
   }
+  print(RMSE.NN)
 }
 
 # Use # of nodes with lowest RMSE
@@ -691,12 +696,17 @@ hidden.nodes <- min(results[,c("RMSE")])
 hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
 hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
 # Retrain with optimum number of nodes
-NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
-# plot(NN)
+hidden.nodes <- 2
+start.time <- Sys.time()
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+end.time <- Sys.time()
+end.time - start.time
+
 
 ## Predict using NN
 predict.NN.colnames <- colnames(testing.NN[,-predict.cols])
 predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+# predict.NN <- neuralnet::prediction(NN, testing.NN[,-predict.cols])
 
 ## Re-scale
 predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
@@ -706,7 +716,7 @@ max.val <- max(c(testing.data[,predict.cols[predictor]], predict.NN))
 min.val <- min(c(testing.data[,predict.cols[predictor]], predict.NN))
 data2plot <- cbind(testing.data[,predict.cols[predictor]], predict.NN)
 
-png(paste0("images/onlinePAA_NN_",colnames(all.data)[predict.cols[predictor]],"_clean.png"), units="in", res=2000, width = 5, height = 4)
+png(paste0("images/onlinePAA_NN_",colnames(all.data)[predict.cols[predictor]],"_clean_",hidden.nodes,".png"), units="in", res=2000, width = 5, height = 4)
 par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
 plot(x = data2plot[,1], y = data2plot[,2]
      , xlim=c(min.val,max.val), ylim=c(min.val,max.val)
@@ -727,7 +737,7 @@ legend("bottomright",
        xjust = 1,
        text.font = 2)
 
-text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.015, y = max.val-min.val, xpd=NA, pos=4, cex=.7)
+text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.015, y = max.val-min.val-max.val*.02, xpd=NA, pos=4, cex=.7)
 dev.off()
 
 # }
@@ -743,35 +753,6 @@ ecoli <- readxl::read_excel("data/PAA-Ecoli.xlsx",
                                 sheet = "Sheet2")
 ecoli <- list(xts(na.omit(ecoli[,2][[1]]), order.by = na.omit(ecoli[,1][[1]])),
               xts(na.omit(ecoli[,4][[1]]), order.by = na.omit(ecoli[,3][[1]])))
-
-mergeData <- function(list.x, sort.by = 1, average = FALSE) {
-  library(xts)
-  
-  all.data <- do.call(merge, list.x)
-  all.data.index <- which(!is.na(all.data[,sort.by]))
-  for(i in 1:(length(all.data.index)-1)) {
-    row.start <- all.data.index[i]
-    row.stop <- all.data.index[i+1]
-    if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
-    if(average) {
-      data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
-      rownames(data.avg) <- as.character(index(all.data)[row.stop])
-      
-    }
-    if (i == 1) {
-      if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
-      if(average) new.data <- data.avg
-    }
-    if (i != 1) {
-      if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
-      if(average) new.data <- rbind(new.data, data.avg)
-    }
-  }
-  new.data <- na.omit(new.data)
-  new.data.xts <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
-  
-  return(new.data.xts)
-}
 
 ecoli <- mergeData(ecoli)
 colnames(ecoli) <- c("Pre-dis E.coli", "Post-dis E.coli")
@@ -936,7 +917,7 @@ legend("bottomright",
        xjust = 1,
        text.font = 2)
 
-text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.015, y = max.val-min.val, xpd=NA, pos=4, cex=.7)
+text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.01, y = max.val-(max.val-min.val)/2, xpd=NA, pos=4, cex=.7)
 dev.off()
 }
 ```
