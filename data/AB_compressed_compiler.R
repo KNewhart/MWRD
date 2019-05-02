@@ -1,0 +1,40 @@
+# User-defined functions
+PIdataImport <- function(PIdata) {
+  # PIdata <- readxl::read_excel(fileLocation, skip = 2)
+  n <- ncol(PIdata)/2 # n = number of datasets to import
+  for (i in 1:n) {
+    remove.nas <- which(is.na(PIdata[,(i*2-1)]))
+    if (length(remove.nas) == 0) {
+      PIdata.sub <- xts::xts(PIdata[,(i*2)], order.by = as.POSIXct(data.frame(PIdata[,(i*2-1)])[[1]], format = "%Y-%m-%d %H:%M:%S"))
+    } else {
+      PIdata.sub <- xts::xts(PIdata[-remove.nas,(i*2)], order.by = as.POSIXct(data.frame(PIdata[-remove.nas,(i*2-1)])[[1]], format = "%Y-%m-%d %H:%M:%S"))
+    }
+    names(PIdata.sub) <- stringr::str_replace_all(names(PIdata.sub), c(" " = "." , "-" = "" ))
+    assign(as.character(names(PIdata.sub)), PIdata.sub, envir = .GlobalEnv)
+    if (i == 1) {
+      new.objects <- as.character(names(PIdata.sub))
+    } else {
+      new.objects <- c(new.objects, as.character(names(PIdata.sub)))
+    }
+  }
+  return(new.objects)
+}
+
+raw.data <- readxl::read_excel("data/AB_compressed.xlsx", 
+                               col_types = c("date", "numeric", "date", 
+                                             "numeric", "date", "numeric", "date", 
+                                             "numeric", "date", "numeric", "date", 
+                                             "text", "date", "numeric", "date", 
+                                             "numeric"), skip = 2)
+compiled.xts <- do.call(merge, mget(PIdataImport(raw.data)))
+round.end <- which(!is.na(compiled.xts[,1]))
+new.data <- data.frame()
+
+for(i in 1:length(round.end)) {
+  if(i == 1) data.locf <- zoo::na.locf(compiled.xts[1:round.end[i],])[round.end[i]]
+  if(i > 1) data.locf <- zoo::na.locf(compiled.xts[(1+round.end[i-1]):round.end[i],])[length((1+round.end[i-1]):round.end[i])]
+  if (i == 1) new.data <- data.locf
+  if (i > 1) new.data <- rbind(new.data, data.locf)
+}
+new.data <- na.omit(new.data)
+                        
