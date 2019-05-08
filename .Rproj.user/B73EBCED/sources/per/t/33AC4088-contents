@@ -1,7 +1,8 @@
 ---
-title: "MWRD PAA - Neural Networks Optimization"
-subtitle: "Version 4"
+title: "MWRD PAA - Preliminary Data Analysis"
+subtitle: "Version 3"
 author: "Kate Newhart"
+date: "4/16/2019"
 output:
   bookdown::word_document2:
     reference_docx: MWRD_PAA_style.docx
@@ -11,16 +12,11 @@ output:
 ```{r Import data, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 rm(list = ls())
 library(xts)
-library(doSNOW)
-library(parallel)
-library(neuralnet)
-
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   library(xts)
   
   all.data <- do.call(merge, list.x)
   all.data.index <- which(!is.na(all.data[,sort.by]))
-  
   for(i in 1:(length(all.data.index)-1)) {
     row.start <- all.data.index[i]
     row.stop <- all.data.index[i+1]
@@ -107,6 +103,7 @@ vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])
 
 ##### North Secondary - Online #####
 ## North secondary online
+setwd("C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD")
 nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
     col_types = c("date", "numeric", "numeric", 
         "numeric", "numeric", "numeric", 
@@ -147,47 +144,35 @@ colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North F
                          "NSEC Effluent NO5","NSEC Effluent Flow")
 ```
 
-```{r NN procedure, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+```{r Prep data for E.coli NN, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # NN
-NNopt <- function(all.data, predict.col.name, percent.train = 0.8) {
-  ## Prep data
-  predict.column <- which(colnames(all.data) == predict.col.name)
-  all.data <- na.omit(data.frame(all.data))
+all.data <- na.omit(n.paa.grab[which(!is.na(n.paa.grab$PreDisinfection.E..coli.MPN.100.mL)),])
+predict.column <- which(colnames(all.data) == "Effluent.E..coli.MPN.100.mL")
 
-  ## Scale data using min-max method
-  max <- apply(all.data, 2, max)
-  min <- apply(all.data, 2, min)
-  scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
-  
-  ## Create training and test datasets
-  set.seed(Sys.time())
-  training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
-  training.data <- all.data[training.index,]
-  testing.data <- all.data[-training.index,]
-  training.NN <- scaled.data[training.index,]
-  testing.NN <- scaled.data[-training.index,]
-  
-  fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~",
-                            paste(colnames(all.data)[-predict.column], collapse= "+")))
-    
-  # detect cores with parallel() package
-  nCores <- detectCores(logical = FALSE)
-  # detect threads with parallel()
-  nThreads<- detectCores(logical = TRUE)
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
 
-  # Create doSNOW compute cluster
-  cluster = makeCluster(nThreads, type = "SOCK")
-  class(cluster);
-  
-  # register the cluster
-  registerDoSNOW(cluster)
- 
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
 
-  ## Find optimum number of hidden nodes
-  results <- foreach::foreach(i = 1:(ncol(all.data)-1), .combine = rbind) %dopar% {
-    
-  hidden.nodes <- i
-  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~", paste(colnames(all.data)[-predict.column], collapse= "+")))
+```
+
+```{r ecoliNN, eval=FALSE, fig.cap="Neural network Effluent E.coli prediction from Oct 2-15, fig.height=4, fig.width=4, include=FALSE}
+for (i in 1:(ncol(all.data)-1)) {
+  hidden.nodes <- (ncol(all.data)-i)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
 
   ## Predict using NN
   predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
@@ -196,127 +181,46 @@ NNopt <- function(all.data, predict.col.name, percent.train = 0.8) {
   # Calculate Root Mean Square Error (RMSE)
   RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
   
-  data.frame("Hidden Nodes" = hidden.nodes,
-             "RMSE" = RMSE.NN)
+  if(i==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
   }
-  
-            
-  # stop cluster and remove clients
-  stopCluster(cluster)
-  
-  # insert serial backend, otherwise error in repetetive tasks
-  registerDoSEQ()
-  
-  # clean up a bit.
-  invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
-  
-  ## Build best NN
-  hidden.nodes <- min(results[,c("RMSE")])
-  hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
-  hidden.nodes <- as.numeric(results[hidden.nodes,"Hidden.Nodes"])
-
-  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
-  
-  ## Predict using NN
-  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
-  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) -
-                                          min(all.data[,predict.column]))) + 
-                                        min(all.data[,predict.column])
-  
-  # Calculate Root Mean Square Error (RMSE)
-  RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
-  
-
-  return(list("NN" = NN,
-              "Actual" = testing.data[,predict.column],
-              "Predicted" = predict.NN,
-              "RMSE" = RMSE.NN))
-} # End of NNopt function
-
-
-all.data <- mergeData(list.x = list(oct.paa,vis.data))
-all.data <- na.omit(all.data)
-remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample","PAA...1.2.Basin.Sampling", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.","TSS..V.", "UVT..V.", "UVT..V.", "SACto..V.")
-remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
-all.data <- all.data[,-remove.cols]
-
-x <- data.frame(combn(seq(4,ncol(all.data)),4))
-x <- apply(x, 2, function(x) x[order(x)])
-# 
-# # Random sampling - Node #
-# for(i in 1:10) {
-#   NN.obj <- NNopt(all.data = all.data[,c(1:3,x[,cols])], predict.col.name = "Initial.PAA.Demand.or.Decay")
-#   if(i==1) RMSE.i <- data.frame("Iteration" = i, 
-#                                 "Hidden Nodes" = ncol(NN.obj[[1]]$weights[[1]][[1]]),
-#                                 "RMSE" = NN.obj[[4]])
-#   if(i!=1) RMSE.i <- rbind(RMSE.i, data.frame("Iteration" = i, 
-#                                 "Hidden Nodes" = ncol(NN.obj[[1]]$weights[[1]][[1]]),
-#                                 "RMSE" = NN.obj[[4]])
-#                            )
-# }
-
-
-set.seed(Sys.time())
-index <- sample(seq_len(ncol(x)), size=300)
-
-RMSE.i_ls <- list()
-start <- Sys.time()
-# Start excluding variables
-for(jk in 1:10) {
-RMSE.i <- data.frame()
-for(i in index) {
-  NN.obj <- NNopt(all.data = all.data[,c(1:3,x[,i])], predict.col.name = "Initial.PAA.Demand.or.Decay")
-  if(length(RMSE.i) == 0) RMSE.i <- data.frame("Iteration" = i, 
-                                # "Col Removed" = colnames(all.data)[-c(1:3,x[,i])],
-                                # "Col Kept" = colnames(all.data)[c(1:3,x[,i])],
-                                # "Hidden Nodes" = ncol(NN.obj[[1]]$weights[[1]][[1]]),
-                                "RMSE" = NN.obj[[4]])
-  if(length(RMSE.i) > 0) RMSE.i <- rbind(RMSE.i, data.frame("Iteration" = i, 
-                                              # "Col Removed" = colnames(all.data)[-c(1:3,x[,i])],
-                                              # "Col Kept" = colnames(all.data)[c(1:3,x[,i])],
-                                              # "Hidden Nodes" = ncol(NN.obj[[1]]$weights[[1]][[1]]),
-                                              "RMSE" = NN.obj[[4]])
-                           )
 }
 
-RMSE.i_ls <- c(RMSE.i_ls, list(RMSE.i))
-}
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
 
-RMSE.i_avg <- RMSE.i_ls[[1]]
-for (i in 1:nrow(RMSE.i_avg)) {
-  RMSE.i_avg[i,2] <- mean(unlist(lapply(RMSE.i_ls, function(x) x[i,2]))) # Average RMSE
-}
-RMSE.i_avg[,2] <- RMSE.i_avg[,2]
-# [,-c(1,3)]
-end <- Sys.time()
-end-start
-# Order results
-RMSE.i_avg <- RMSE.i_avg[order(RMSE.i_avg[,2]),]
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+# plot(NN)
 
-# 
-# ## Plot prediction
-# max.val <- max(c(NN.obj[[2]], NN.obj[[3]]))
-# min.val <- min(c(NN.obj[[2]], NN.obj[[3]]))
-# par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
-# plot(x = NN.obj[[2]], y = NN.obj[[3]], 
-#      xlim=c(min.val,max.val), ylim=c(min.val,max.val),
-#      xlab="Actal PAA Demand", ylab="Predicted PAA Demand", pch=20)
-# abline(a=0,b=1,col="blue", lwd=2)
-# # text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
-# legend("bottomright", 
-#        # inset = c(-.01,.04),
-#        legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(NN.obj[[4]],2))),
-#        col = c("black", "blue", NA),
-#        pch = c(20,NA, NA),
-#        lwd = c(NA,2, NA),
-#        bty = "n",
-#        xpd=NA,
-#        xjust = 1,
-#        text.font = 2)
+## Predict using NN
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.column], predict.NN))
+min.val <- min(c(testing.data[,predict.column], predict.NN))
+par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+plot(x = testing.data[,predict.column], y = predict.NN, 
+     xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     xlab="Actal Effluent E.coli", ylab="Predicted E.coli", pch=20)
+abline(a=0,b=1,col="blue", lwd=2)
+# text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
+legend("bottomright", 
+       # inset = c(-.01,.04),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+# text(x=min.val,y=max.val,labels="(a)", font=2)
 ```
 
 
-
+Figure \@ref(fig:ecoliNN) BOO YAH
 ```{r eval=FALSE, include=FALSE}
 # NN
 all.data <- mergeData(list.x = list(oct.paa,vis.data))
@@ -345,7 +249,7 @@ testing.NN <- scaled.data[-training.index,]
 fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~", paste(colnames(all.data)[-predict.column], collapse= "+")))
 ```
 
-```{r deltaPAANN, eval=FALSE, fig.cap="Neural network initial PAA demand/decay prediction from Oct 2-15", fig.height=4, fig.width=4, include=FALSE}
+```{r deltaPAANN, eval=FALSE, fig.cap="Neural network initial PAA demand/decay prediction from Oct 2-15, fig.height=4, fig.width=4, include=FALSE}
 for (i in 1:(ncol(all.data)-1)) {
   hidden.nodes <- (ncol(all.data)-i)
   NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
@@ -683,7 +587,7 @@ dev.off()
 ```
 
 
-```{r Lets mess with flowrates}
+```{r Let's mess with flowrates}
 ## For one set of conditions
 for(r in 1:nrow(testing.NN)) {
   
@@ -1019,101 +923,6 @@ dev.off()
 ```
 
 
-```{r Solve for k}
-all.data <- mergeData(list.x = list(oct.paa,vis.data))
-all.data <- na.omit(all.data)
-remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "...10" , "Volume.to.1.min..Sample" , "Total.Basin.Volume", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.","TSS..V.", "UVT..V.", "UVT..V.", "SACto..V.")
-remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
-all.data <- all.data[,-remove.cols]
-
-# Repeat once with data to calculate k based on actual C2, then repeat with NN C2
-t <- all.data[,"DT.of.1.2.Basin"]
-C2 <- all.data[,"PAA...1.2.Basin.Sampling"]
-C1 <- all.data[,"PAA...1.min..Sample"]
-C0 <- all.data[,"Pump.Flow.Based.PAA.Dose"]
-
-# Solve for k
-k <- -(1/t)*log(C2/(C1))
-plot(k)
-k_avg <- mean(k)
-
-# Calculate CT
-Ct = C1/k*exp(-k*t)
-Ct_kavg <- C1/k_avg*exp(-k_avg*t)
-plot(Ct)
-points(Ct_kavg)
-
-
-# Ecoli data 
-ecoli <- readxl::read_excel("data/PAA-Ecoli.xlsx", 
-                                sheet = "Sheet2")
-ecoli <- list(xts(na.omit(ecoli[,2][[1]]), order.by = na.omit(ecoli[,1][[1]])),
-              xts(na.omit(ecoli[,4][[1]]), order.by = na.omit(ecoli[,3][[1]])))
-
-ecoli <- mergeData(ecoli)
-colnames(ecoli) <- c("Pre-dis E.coli", "Post-dis E.coli")
-
-ecoli <- mergeData(list(ecoli, Ct_kavg))
-
-N0 <- ecoli[,1]
-N <- ecoli[,2]
-Ct_ecoli <- ecoli[,3]
-
-fn <- function(beta, k_d, k_p, N, N0, Ct) {
-  N_calc = as.numeric(N0)*beta*exp(-as.numeric(Ct)*k_d)+as.numeric(N0)*(beta-1)*exp(-as.numeric(Ct)*k_p)
-  # N_error
-  return(xts(N_calc-N))
-}
-beta <- seq(0.9,1, by=(1-0.9)/length(N0)) 
-k_d <- seq(0.2,0.5, by=(0.5-0.2)/length(beta)) 
-k_p <- seq(0,0.2, by=0.2/length(beta))
-N_error <- list()
-N_index <- list()
-for (i in 1:length(beta)) {
-  for(j in 1:length(k_d)) {
-    for(k in 1:length(k_p)) {
-      for(l in 1:length(N0)) {
-        N_error_iteration <- fn(beta = beta[i], 
-                                     k_d = k_d[j], 
-                                     k_p = k_p[k], 
-                                     N0 = N0[l], 
-                                     N = N[l], 
-                                     Ct = Ct_ecoli[l])
-        N_error <- c(N_error, list(N_error_iteration^2))
-        N_index <- c(N_index, list(c(i,j,k,l)))
-      }
-    }
-  }
-}
-
-
-N_error_compiled <- do.call(rbind, N_error)
-N_index_compiled <- do.call(rbind, N_index)
-sum.sq.error <- sapply(seq(1,length(N0), by = 1), function(x) sum(N_error_compiled[which(N_index_compiled[,4] == x),]))
-which(N_index_compiled[,4] ==1)
-min.sq.error <- which(min(sum.sq.error)==sum.sq.error)
-
-N_index[[min.sq.error]]
-beta.i <- beta[N_index[[1]]]
-k_d.i <- k_d[N_index[2]]
-k_p.i <- k_p[N_index[3]]
-N0.i <- N0[N_index[4]]
-
-
-# all.data <- vis.data
-# data2 <- ecoli
-# r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
-# r <- paste0(range(index(data2[r]))[1],"/",
-#             range(index(data2[r]))[2])
-all.data <- mergeData(list.x = list(data2[r],all.data[r])) 
-
-
-
-
-Ct <- Ct # Timestamp mismatch
-
-
-```
 
 
 
