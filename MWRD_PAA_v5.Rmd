@@ -1,0 +1,78 @@
+---
+title: "MWRD PAA - Neural Networks Optimization"
+subtitle: "Version 5"
+author: "Kate Newhart"
+---
+```{r Functions and Libraries}
+setwd("C:/Users/KNewhart/Documents/GitHub/MWRD")
+library(readxl)
+library(xts)
+library(readr)
+
+mergeData <- function(list.x, sort.by = 1, average = FALSE) {
+  library(xts)
+  
+  all.data <- do.call(merge, list.x)
+  all.data.index <- which(!is.na(all.data[,sort.by]))
+  
+  for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if(average) {
+      data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
+      rownames(data.avg) <- as.character(index(all.data)[row.stop])
+
+    }
+    if (i == 1) {
+      if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
+      if(average) new.data <- data.avg
+    }
+    if (i != 1) {
+      if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+      if(average) new.data <- rbind(new.data, data.avg)
+    }
+  }
+  new.data <- na.omit(new.data)
+  new.data.xts <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+  
+  return(new.data.xts)
+}
+```
+
+
+```{r Import directly from R, eval=FALSE, include=FALSE}
+library(piwebapi)
+useKerberos <- FALSE
+username <- "knewhart"
+password <- "Lunabear2@"
+validateSSL <- FALSE
+debug <- TRUE
+piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+
+response1 = piWebApiService$home$get()
+```
+
+```{r}
+
+# Import E.coli
+ecoli <- readxl::read_excel("data/PAA-Ecoli.xlsx", 
+                                sheet = "Sheet2")
+ecoli <- list(xts(na.omit(ecoli[,2][[1]]), order.by = na.omit(ecoli[,1][[1]])),
+              xts(na.omit(ecoli[,4][[1]]), order.by = na.omit(ecoli[,3][[1]])))
+
+ecoli <- mergeData(ecoli)
+colnames(ecoli) <- c("Pre-dis E.coli", "Post-dis E.coli")
+# Import Carbovis
+
+Carbovis_May2019 <- read_csv("data/Carbovis_May2019.csv", 
+    col_types = cols(Time = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_1 = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_2 = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_3 = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_4 = col_datetime(format = "%m/%d/%Y %H:%M")))
+# Import Flow/Temp
+
+# Predict C1 & C2
+```
+
