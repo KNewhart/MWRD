@@ -390,21 +390,124 @@ RMSE.i_avg <- RMSE.i_avg[order(RMSE.i_avg[,2]),]
 #        xjust = 1,
 #        text.font = 2)
 ```
-```{r}
+
+
+
+```{r Plot C}
+data1 <- C0
+label1 <- "PAA Concentration (mg/L)"
+
+r1 <- range(index(data1)[which(!is.na(data1))])[1]
+r2 <- range(index(data1)[which(!is.na(data1))])[2]
+
+data2plot <- na.omit(data1)[paste0(r1,"/",r2)]
+data2plot <- data.frame(data2plot, row.names = as.character(index(data2plot)))
+data2plot <- cbind(data2plot, as.numeric(difftime(as.POSIXct(rownames(data2plot)), as.POSIXct(rownames(data2plot)[1]),units = "days")))
+
+png(filename = "images/PAA-time.png", width = 6.5, height = 4, units = "in", res = 200)
+par(mar=c(3.1,4.1,2.1,2.1))
+plot(x = data2plot[,ncol(data2plot)], y = data2plot[,1], type = "p", pch = 20, col = "black", xaxt = "n", xlab = "", ylab = "", yaxt="n", ylim=c(0,3))
+axis(side = 2)
+mtext(side = 2, label1, line = 2.5)
+  
+# x-axis
+axis.ticks <- seq(1,nrow(data2plot), length.out = 5)
+axis(side = 1, at = data2plot[axis.ticks,ncol(data2plot)], labels = format(as.POSIXct(rownames(data2plot)[axis.ticks]), "%m/%d %H:%M"))
+
+points(data.frame(C1), col = "purple", pch = 20)
+points(data.frame(C2), col="blue", pch = 20)
+
+legend(x = data2plot[1,ncol(data2plot)]-.54, y = 3+.12, 
+       legend = c("Initial dose", "1-min C", "1/2-basin C"),
+       pch = 20, 
+       col = c("black", "purple", "blue"),
+       # bty = "n", 
+       xpd = TRUE)
+dev.off()
+```
+
+
+```{r Calc D and k}
 all.data <- mergeData(list.x = list(oct.paa,vis.data))
 all.data <- na.omit(all.data)
-remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "...10" , "Volume.to.1.min..Sample" , "Total.Basin.Volume", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.","TSS..V.", "CODds..V.", "UVT..V.", "SACto..V.")
-remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
-all.data <- all.data[,-remove.cols]
 
 ## Calculate k
 # Repeat once with data to calculate k based on actual C2, then repeat with NN C2
 t <- all.data[,"DT.of.1.2.Basin"]
+t2 <- all.data[,"DT.of.1.2.Basin"]
+t1 <- all.data[,"Time.to.1.min..Sample"]
 C2 <- all.data[,"PAA...1.2.Basin.Sampling"]
 C1 <- all.data[,"PAA...1.min..Sample"]
 C0 <- all.data[,"Pump.Flow.Based.PAA.Dose"]
 
-# Solve for k
+# Solve for k & D
+k.obs <- -1/t2*log((C2+C1*exp(t2/t1))/(C0-1))
+D <- (C0*exp(-k.obs*t1)-C1)/exp(-k.obs*t1)
+
+# Prep data
+all.data <- cbind(all.data, k.obs, D)
+colnames(all.data)[(ncol(all.data)-1):ncol(all.data)] <- c("k.obs", "D")
+
+remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample", "PAA...1.2.Basin.Sampling","Initial.PAA.Demand.or.Decay", "DPAA.Samples", "...10" , "Sample.Time..1_min.","Volume.to.1.min..Sample" ,"DT.of.1.2.Basin", "Time.to.1.min..Sample","Total.Basin.Volume", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.","TSS..V.", "CODds..V.", "UVT..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+NN.obj.k <- NNopt(all.data[,-ncol(all.data)], "k.obs")
+NN.obj.D <- NNopt(all.data[,-(ncol(all.data)-1)], "D")
+
+png("images/NN-k.png", units = "in", width = 4.5, height=  4, res = 200)
+## Plot prediction
+max.val <- max(c(NN.obj.k$Actual, NN.obj.k$Predicted))
+min.val <- min(c(NN.obj.k$Actual, NN.obj.k$Predicted))
+par(mar=c(3,3,1.5,.5), mgp=c(1.75,.5,0))
+plot(x = NN.obj.k$Actual, y = NN.obj.k$Predicted, 
+     xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     xlab="Actal", ylab="Predicted", pch=20)
+abline(a=0,b=1,col="blue", lwd=2)
+# text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
+mtext(text="k", side = 3, font=2)
+legend("bottomright", 
+       # inset = c(-.01,.04),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(NN.obj.k$RMSE,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+dev.off()
+
+png("images/NN-D.png", units = "in", width = 4.5, height = 4, res = 200)
+## Plot prediction
+max.val <- max(c(NN.obj.D$Actual, NN.obj.D$Predicted))
+min.val <- min(c(NN.obj.D$Actual, NN.obj.D$Predicted))
+par(mar=c(3,3,1.5,.5), mgp=c(1.75,.5,0))
+plot(x = NN.obj.D$Actual, y = NN.obj.D$Predicted, 
+     xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     xlab="Actal", ylab="Predicted", pch=20)
+abline(a=0,b=1,col="blue", lwd=2)
+# text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
+mtext(text="D", side = 3, font=2)
+legend("bottomright", 
+       # inset = c(-.01,.04),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(NN.obj.D$RMSE,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+dev.off()
+```
+
+
+
+
+
+
+```{r}
 k <- -(1/t)*log(C2/(C1))
 plot(k)
 k_avg <- mean(k)
