@@ -4,18 +4,42 @@ subtitle: "Version 5"
 author: "Kate Newhart"
 ---
 ```{r Functions and Libraries}
+rm(list=ls())
+
 setwd("C:/Users/KNewhart/Documents/GitHub/MWRD")
 library(readxl)
 library(xts)
 library(readr)
+library(doSNOW)
+library(parallel)
+library(neuralnet)
 
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
-  library(xts)
+  
   
   all.data <- do.call(merge, list.x)
   all.data.index <- which(!is.na(all.data[,sort.by]))
   
-  for(i in 1:(length(all.data.index)-1)) {
+  
+  # detect cores with parallel() package
+  nCores <- detectCores(logical = FALSE)
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  class(cluster);
+  
+  # register the cluster
+  registerDoSNOW(cluster)
+ 
+
+  ## Find optimum number of hidden nodes
+  new.data <- foreach::foreach(i = 1:(length(all.data.index)-1), .combine = rbind) %dopar% {
+  
+    library(xts)
+  
+  # for(i in 1:(length(all.data.index)-1)) {
     row.start <- all.data.index[i]
     row.stop <- all.data.index[i+1]
     if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
@@ -24,55 +48,440 @@ mergeData <- function(list.x, sort.by = 1, average = FALSE) {
       rownames(data.avg) <- as.character(index(all.data)[row.stop])
 
     }
-    if (i == 1) {
-      if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
-      if(average) new.data <- data.avg
-    }
-    if (i != 1) {
-      if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
-      if(average) new.data <- rbind(new.data, data.avg)
-    }
+    # if (i == 1) {
+    #   if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
+    #   if(average) new.data <- data.avg
+    # }
+    # if (i != 1) {
+      # if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+      # if(average) new.data <- rbind(new.data, data.avg)
+    # }
+    if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
+    if(average) new.data <- data.avg
+    new.data
   }
+  
+  # stop cluster and remove clients
+  stopCluster(cluster)
+  
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  
+  # clean up a bit.
+  invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+  
   new.data <- na.omit(new.data)
   new.data.xts <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
   
   return(new.data.xts)
 }
+
+# Fix timestamps - this function creates an xts object from the piWebApiService function above
+fix.timestamps <- function(pi.data) {
+  ch.times <- pi.data[,2]
+  ch.times <- sub("T", " ", ch.times)
+  ch.times <- sub("Z", " ", ch.times)
+  times <- as.POSIXct(ch.times)
+  return(xts::xts(pi.data[,1], order.by = times))
+}
+
+
+NNopt <- function(all.data, predict.col.name, percent.train = 0.8, training.index=NULL) {
+  ## Prep data
+  predict.column <- which(colnames(all.data) == predict.col.name)
+  all.data <- na.omit(data.frame(all.data))
+
+  ## Scale data using min-max method
+  max <- apply(all.data, 2, max)
+  min <- apply(all.data, 2, min)
+  scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+  
+  ## Create training and test datasets
+  if(is.null(training.index)) {
+    set.seed(Sys.time())
+    training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
+  }
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  training.NN <- scaled.data[training.index,]
+  testing.NN <- scaled.data[-training.index,]
+  
+  fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~",
+                            paste(colnames(all.data)[-predict.column], collapse= "+")))
+    
+  # detect cores with parallel() package
+  nCores <- detectCores(logical = FALSE)
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  class(cluster);
+  
+  # register the cluster
+  registerDoSNOW(cluster)
+ 
+
+  ## Find optimum number of hidden nodes
+  results <- foreach::foreach(i = 1:(ncol(all.data)-1), .combine = rbind) %dopar% {
+    
+  hidden.nodes <- i
+  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+  predict.NN <- (predict.NN$net.result +* (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  data.frame("Hidden Nodes" = hidden.nodes,
+             "RMSE" = RMSE.NN)
+  }
+  
+            
+  # stop cluster and remove clients
+  stopCluster(cluster)
+  
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  
+  # clean up a bit.
+  invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+  
+  ## Build best NN
+  hidden.nodes <- min(results[,c("RMSE")])
+  hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+  hidden.nodes <- as.numeric(results[hidden.nodes,"Hidden.Nodes"])
+
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+  
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) -
+                                          min(all.data[,predict.column]))) + 
+                                        min(all.data[,predict.column])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+
+  return(list("NN" = NN,
+              "Actual" = testing.data[,predict.column],
+              "Predicted" = predict.NN,
+              "RMSE" = RMSE.NN))
+} # End of NNopt function
 ```
 
 
-```{r Import directly from R, eval=FALSE, include=FALSE}
+```{r Import PI data, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# Install and load piwebapi package from Github
+# install.packages("devtools")
+# library(devtools)
+# install_github("rbechalany/PI-Web-API-Client-R")
 library(piwebapi)
-useKerberos <- FALSE
+
+# Login information
+useKerberos <- TRUE
 username <- "knewhart"
 password <- "Lunabear2@"
-validateSSL <- FALSE
+validateSSL <- TRUE
 debug <- TRUE
 piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
 
-response1 = piWebApiService$home$get()
+# Compile data
+pi.tags <- matrix(c("DIS PAA N Upstream Residual", 
+                    "pi:\\\\applepi\\AI_K826",
+                    
+                    "DIS N PAA Retention Time", 
+                    "pi:\\\\applepi\\PAA_N_Retention_T",
+                    
+                    "N PAA Pump Flow",
+                    "pi:\\\\applepi\\FY_K810",
+                    
+                    "N PAA Total Flow",
+                    "pi:\\\\applepi\\PAA_North_Plant_Flow",
+                    
+                    "Pre-dis E.coli", 
+                    "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G",
+                    
+                    "Post-dis E.coli", 
+                    "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G"
+                    )
+                  , ncol = 2, byrow = TRUE)
+# 
+# start <- paste0(as.character(as.Date(Sys.time()) - 2), "T00:00:00Z")
+# end <- paste0(as.character(as.Date(Sys.time()) - 1), "T00:00:00Z")
+
+# for(i in 1:nrow(pi.tags)) {
+#   assign(make.names(pi.tags[i,1]), piWebApiService$data$getRecordedValues(path=pi.tags[i,2], startTime = start, endTime = end)[,1:2])
+# assign(make.names(pi.tags[i,1]), fix.timestamps(get(make.names(pi.tags[i,1]))))
+# }
+# 
+# # rawData <- mergeData(list(get(make.names(pi.tags[,1]))))
+# for(i in 1:nrow(pi.tags)) {
+#   if (i == 1) {
+#     rawData <- get(make.names(pi.tags[i,1]))
+#     colnames(rawData)[i] <- make.names(pi.tags[i,1])
+#   } else {
+#     rawData <- cbind(rawData, get(make.names(pi.tags[i,1])))
+#     colnames(rawData)[i] <- make.names(pi.tags[i,1])
+#   }
+# }
+
 ```
 
-```{r}
+```{r Predict E.coli with just Carbovis message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+pi.tags <- matrix(c("Pre-dis E.coli", 
+                    "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G",
+                    
+                    "Post-dis E.coli", 
+                    "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G"
+                    )
+                  , ncol = 2, byrow = TRUE)
 
 # Import E.coli
-ecoli <- readxl::read_excel("data/PAA-Ecoli.xlsx", 
-                                sheet = "Sheet2")
-ecoli <- list(xts(na.omit(ecoli[,2][[1]]), order.by = na.omit(ecoli[,1][[1]])),
-              xts(na.omit(ecoli[,4][[1]]), order.by = na.omit(ecoli[,3][[1]])))
+start <- paste0("2019-01-01", "T00:00:00Z")
+end <- paste0(as.character(as.Date(Sys.time()) - 1), "T00:00:00Z")
 
-ecoli <- mergeData(ecoli)
-colnames(ecoli) <- c("Pre-dis E.coli", "Post-dis E.coli")
+for(i in 1:2) {
+  assign(make.names(pi.tags[i,1]), piWebApiService$data$getRecordedValues(path=pi.tags[i,2], startTime = start, endTime = end)[,1:2])
+assign(make.names(pi.tags[i,1]), fix.timestamps(get(make.names(pi.tags[i,1]))))
+}
+
 # Import Carbovis
-
-Carbovis_May2019 <- read_csv("data/Carbovis_May2019.csv", 
+Carbovis_May2019 <- readr::read_csv("data/Carbovis_May2019.csv", 
     col_types = cols(Time = col_datetime(format = "%m/%d/%Y %H:%M"), 
         Time_1 = col_datetime(format = "%m/%d/%Y %H:%M"), 
         Time_2 = col_datetime(format = "%m/%d/%Y %H:%M"), 
         Time_3 = col_datetime(format = "%m/%d/%Y %H:%M"), 
         Time_4 = col_datetime(format = "%m/%d/%Y %H:%M")))
-# Import Flow/Temp
+object.list <- list()
+for(i in 1:4) {
+  x <- which(!is.na(Carbovis_May2019[,i*2]))
+  assign(make.names(colnames(Carbovis_May2019)[i*2]), xts(Carbovis_May2019[x,i*2], order.by = Carbovis_May2019[x,(i*2-1)][[1]]))
+  object.list <-c(object.list, list(make.names(colnames(Carbovis_May2019)[i*2])))
+}
 
-# Predict C1 & C2
+all.data <- mergeData(list(Pre.dis.E.coli, UVT, CODds, CODto, TSS))
+colnames(all.data)[1] <- "Pre.dis.E.coli"
+NN.obj <- NNopt(all.data, predict.col.name = "Pre.dis.E.coli")
+plot(x=NN.obj$Actual,y=NN.obj$Predicted, xlim=c(min(NN.obj$Actual), max(NN.obj$Predicted)), ylim=c(min(NN.obj$Actual), max(NN.obj$Predicted)))
+# Carbovis alone cannot predict E.coli
+```
+
+```{r Add NSec water quality, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+pi.tags <- matrix(c("AB10 NH3 C" , "pi:\\\\applepi\\AI_N109B",
+                  "AB10 NO3 C", "pi:\\\\applepi\\AI_N109A",
+                  "AB10 Temp", "pi:\\\\applepi\\TI_N100"
+                  ), ncol=2, byrow=TRUE)
+
+start <- paste0(substr(as.character(range(index(all.data))[1]),1,10), "T00:00:00Z")
+end <- paste0(substr(as.character(range(index(all.data))[2]),1,10), "T00:00:00Z")
+
+for(i in 1:nrow(pi.tags)) {
+  holder <- fix.timestamps(piWebApiService$data$getRecordedValues(path=pi.tags[i,2], startTime = start, endTime = end)[,1:2])
+  keeper <- holder
+  while(nrow(holder) == 1000) { # Then there are more datapoints to
+    # Change start time
+    new.start <- range(index(holder))[2]
+    if (nchar(new.start) == 10){
+      new.start <- paste0(substr(as.character(new.start),1,10), "T00:00:00Z")
+    } else {
+      new.start <- paste0(substr(as.character(new.start),1,10), "T", substr(as.character(new.start), 12, 19),"Z")
+    }
+    # Pull next 1000 (or so) observations
+    holder <- fix.timestamps(piWebApiService$data$getRecordedValues(path=pi.tags[i,2], startTime = new.start, endTime = end)[,1:2])
+    # Merge with full dataset
+    keeper <- rbind(keeper, holder)
+  }
+  # Merge last iteration of loop
+  if (nrow(keeper) != nrow(holder)) keeper <- rbind(keeper, holder)
+  # Create object
+  assign(make.names(pi.tags[i,1]), keeper)
+}
+
+# all.data <- mergeData(list(Pre.dis.E.coli, UVT, CODds, CODto, TSS, AB10.NH3.C, AB10.NO3.C, AB10.Temp))
+# colnames(all.data)[1] <- "Pre.dis.E.coli"
+all.data <- mergeData(list(all.data, AB10.NH3.C, AB10.NO3.C, AB10.Temp))
+colnames(all.data)[(ncol(all.data)-2):ncol(all.data)] <- c("AB10 NH3", "AB10 NO3", "AB10.Temp")
+NN.obj <- NNopt(all.data, predict.col.name = "Pre.dis.E.coli")
+plot(x=NN.obj$Actual,y=NN.obj$Predicted, xlim=c(min(NN.obj$Actual), max(NN.obj$Predicted)), ylim=c(min(NN.obj$Actual), max(NN.obj$Predicted)))
+
+# Still nothing...
+# c0 <- pump flow*60*24*9.5*0.15/8.34/inf flow
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+pi.tags <- matrix(c("AB10 MLR Flow" , "pi:\\\\applepi\\FC_N102B",
+                  "AB10 RAS Flow", "pi:\\\\applepi\\FC_N210",
+                  "NSEC Eff Flow", "pi:\\\\applepi\\FY-F225"
+                  ), ncol=2, byrow=TRUE)
+## Actual
+# start <- paste0(substr(as.character(range(index(all.data))[1]),1,10), "T00:00:00Z")
+# end <- paste0(substr(as.character(range(index(all.data))[2]),1,10), "T00:00:00Z")
+
+## Testing
+
+
+for(i in 1:nrow(pi.tags)) {
+  
+   # detect cores with parallel() package
+  nCores <- detectCores(logical = FALSE)
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  class(cluster);
+  
+  # register the cluster
+  registerDoSNOW(cluster)
+ 
+
+  ## Find optimum number of hidden nodes
+  keeper <- foreach::foreach(j = 1:nrow(all.data), .combine = rbind) %dopar% {
+    library(xts)
+    library(piwebapi)
+  # for(j in 1:nrow(all.data)) {
+    # Pull 30 min of data prior to timestamp
+    start <- paste0(substr(as.character(range(index(all.data[j]))[2]-30*60),1,10), "T", substr(as.character(range(index(all.data[j]))[2]-30*60), 12, 19),"Z")
+end <- paste0(substr(as.character(range(index(all.data[j]))[2]),1,10), "T", substr(as.character(range(index(all.data[j]))[2]), 12, 19),"Z")
+  holder <- fix.timestamps(piWebApiService$data$getRecordedValues(path=pi.tags[i,2], startTime = start, endTime = end)[,1:2])
+  # if (j == 1) {
+  #   keeper <- holder
+  # } else {
+  #   # Merge with full dataset
+  #   keeper <- rbind(keeper, holder)
+  holder
+  }
+    # stop cluster and remove clients
+  stopCluster(cluster)
+  
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  
+  # clean up a bit.
+  invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+  
+
+   # Create object
+  assign(make.names(pi.tags[i,1]), keeper)
+}
+ 
+
+
+
+all.data <- mergeData(list(all.data, AB10.MLR.Flow, AB10.RAS.Flow, NSEC.Eff.Flow))
+# colnames(all.data)[1] <- "Pre.dis.E.coli"
+colnames(all.data)[(ncol(all.data)-2):ncol(all.data)] <- c("AB10 MLR Flow", "AB10 RAS Flow", "NSEC Eff Flow")
+NN.obj <- NNopt(all.data, predict.col.name = "Pre.dis.E.coli")
+plot(x=NN.obj$Actual,y=NN.obj$Predicted, xlim=c(min(NN.obj$Actual), max(NN.obj$Predicted)), ylim=c(min(NN.obj$Actual), max(NN.obj$Predicted)))
+# Better...
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+pi.tags <- matrix(c("NSEC Effluent OP", "pi:\\\\applepi\\AI_N501F",
+                    "NSEC Effluent TSS", "pi:\\\\applepi\\AI-K530N",
+                    "NSEC Effluent NO5", "pi:\\\\applepi\\AI-K570N"
+                    # , "NSEC Aerobic SRT", "pi:\\\\applepi\\ASRT_ASRT_N"
+                  ), ncol=2, byrow=TRUE)
+## Actual
+# start <- paste0(substr(as.character(range(index(all.data))[1]),1,10), "T00:00:00Z")
+# end <- paste0(substr(as.character(range(index(all.data))[2]),1,10), "T00:00:00Z")
+
+## Testing
+
+
+for(i in 1:nrow(pi.tags)) {
+  
+   # detect cores with parallel() package
+  nCores <- detectCores(logical = FALSE)
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  class(cluster);
+  
+  # register the cluster
+  registerDoSNOW(cluster)
+ 
+
+  ## Find optimum number of hidden nodes
+  keeper <- foreach::foreach(j = 1:nrow(all.data), .combine = rbind) %dopar% {
+    library(xts)
+    library(piwebapi)
+  # for(j in 1:nrow(all.data)) {
+    # Pull 30 min of data prior to timestamp
+    start <- paste0(substr(as.character(range(index(all.data[j]))[2]-30*60),1,10), "T", substr(as.character(range(index(all.data[j]))[2]-30*60), 12, 19),"Z")
+end <- paste0(substr(as.character(range(index(all.data[j]))[2]),1,10), "T", substr(as.character(range(index(all.data[j]))[2]), 12, 19),"Z")
+  holder <- fix.timestamps(piWebApiService$data$getRecordedValues(path=pi.tags[i,2], startTime = start, endTime = end)[,1:2])
+  # if (j == 1) {
+  #   keeper <- holder
+  # } else {
+  #   # Merge with full dataset
+  #   keeper <- rbind(keeper, holder)
+  holder
+  }
+    # stop cluster and remove clients
+  stopCluster(cluster)
+  
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  
+  # clean up a bit.
+  invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+  
+
+   # Create object
+  assign(make.names(pi.tags[i,1]), keeper)
+}
+ 
+
+
+all.data <- mergeData(list(all.data, NSEC.Effluent.OP, NSEC.Effluent.TSS, NSEC.Effluent.NO5))
+# colnames(all.data)[1] <- "Pre.dis.E.coli"
+colnames(all.data)[(ncol(all.data)-2):ncol(all.data)] <- c("NSEC.Effluent.OP","NSEC.Effluent.TSS", "NSEC.Effluent.NO5")
+NN.obj <- NNopt(all.data, predict.col.name = "Pre.dis.E.coli")
+plot(x=NN.obj$Actual,y=NN.obj$Predicted, xlim=c(min(NN.obj$Actual), max(NN.obj$Predicted)), ylim=c(min(NN.obj$Actual), max(NN.obj$Predicted)))
+text(NN.obj$RMSE, x=max(NN.obj$Predicted), y = min(NN.obj$Actual))
+# It got worse!!!!
+# How?!?
+
+
+```
+
+
+```{r}
+pi.tags <- matrix(c("Pre-dis E.coli Oct", 
+                    "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G",
+                    
+                    "Post-dis E.coli Oct", 
+                    "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G"
+                    )
+                  , ncol = 2, byrow = TRUE)
+
+# Import E.coli
+start <- paste0("2018-10-02", "T00:00:00Z")
+end <- paste0("2018-10-16", "T00:00:00Z")
+
+for(i in 1:2) {
+  assign(make.names(pi.tags[i,1]), piWebApiService$data$getRecordedValues(path=pi.tags[i,2], startTime = start, endTime = end)[,1:2])
+assign(make.names(pi.tags[i,1]), fix.timestamps(get(make.names(pi.tags[i,1]))))
+}
+
+##### October PAA Process Data - Grab #####
+oct.paa <- readxl::read_excel("data/Copy of PAA Process Data Clean KN.xlsx", 
+                              sheet = "Oct 2 to 15, 2018", range = "A1:V170")[-1,]
+n.datetime <- which(colnames(oct.paa) == "Date and Time")
+oct.paa.index <- oct.paa[,n.datetime]
+oct.paa <- sapply(oct.paa[,-n.datetime], function(x) as.numeric(x))
+colnames(oct.paa) <- stringr::str_replace_all(colnames(oct.paa), c(" " = "." , "-" = "" ))
+oct.paa <- xts(oct.paa, order.by = oct.paa.index[[1]])
+
+plot(Post.dis.E.coli.Oct)
+plot(oct.paa$`PAA.@.1/2.Basin.Sampling`)
+oct.data <- mergeData(list(Post.dis.E.coli.Oct, oct.paa$`PAA.@.1/2.Basin.Sampling`))
 ```
 

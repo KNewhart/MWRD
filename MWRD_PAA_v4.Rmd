@@ -304,7 +304,7 @@ axis(side = 1, at = axis.ticks, labels = format(as.POSIXct(rownames(data2plot)[a
 }
 ```
 
-```{r NN procedure, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+```{r NN procedure, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 # NN
 
 
@@ -393,44 +393,16 @@ RMSE.i_avg <- RMSE.i_avg[order(RMSE.i_avg[,2]),]
 
 
 
-```{r Plot C}
-data1 <- C0
-label1 <- "PAA Concentration (mg/L)"
 
-r1 <- range(index(data1)[which(!is.na(data1))])[1]
-r2 <- range(index(data1)[which(!is.na(data1))])[2]
-
-data2plot <- na.omit(data1)[paste0(r1,"/",r2)]
-data2plot <- data.frame(data2plot, row.names = as.character(index(data2plot)))
-data2plot <- cbind(data2plot, as.numeric(difftime(as.POSIXct(rownames(data2plot)), as.POSIXct(rownames(data2plot)[1]),units = "days")))
-
-png(filename = "images/PAA-time.png", width = 6.5, height = 4, units = "in", res = 200)
-par(mar=c(3.1,4.1,2.1,2.1))
-plot(x = data2plot[,ncol(data2plot)], y = data2plot[,1], type = "p", pch = 20, col = "black", xaxt = "n", xlab = "", ylab = "", yaxt="n", ylim=c(0,3))
-axis(side = 2)
-mtext(side = 2, label1, line = 2.5)
-  
-# x-axis
-axis.ticks <- seq(1,nrow(data2plot), length.out = 5)
-axis(side = 1, at = data2plot[axis.ticks,ncol(data2plot)], labels = format(as.POSIXct(rownames(data2plot)[axis.ticks]), "%m/%d %H:%M"))
-
-points(data.frame(C1), col = "purple", pch = 20)
-points(data.frame(C2), col="blue", pch = 20)
-
-legend(x = data2plot[1,ncol(data2plot)]-.54, y = 3+.12, 
-       legend = c("Initial dose", "1-min C", "1/2-basin C"),
-       pch = 20, 
-       col = c("black", "purple", "blue"),
-       # bty = "n", 
-       xpd = TRUE)
-dev.off()
-```
 
 
 ```{r Calc D and k}
 all.data <- mergeData(list.x = list(oct.paa,vis.data))
 all.data <- na.omit(all.data)
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+all.data <- mergeData(list.x = list(all.data, nsec.online[r,22:28]), average = FALSE)
 
+all.data <- all.data["2018-10-08/"]
 ## Calculate k
 # Repeat once with data to calculate k based on actual C2, then repeat with NN C2
 t <- all.data[,"DT.of.1.2.Basin"]
@@ -441,8 +413,8 @@ C1 <- all.data[,"PAA...1.min..Sample"]
 C0 <- all.data[,"Pump.Flow.Based.PAA.Dose"]
 
 # Solve for k & D
-k.obs <- -1/t2*log((C2+C1*exp(t2/t1))/(C0-1))
-D <- (C0*exp(-k.obs*t1)-C1)/exp(-k.obs*t1)
+k.obs <- 1/(t1-t2)*log(C2/C1)
+D <- C0-C1*exp(k.obs*t1) # Negative demand????
 
 # Prep data
 all.data <- cbind(all.data, k.obs, D)
@@ -503,7 +475,38 @@ dev.off()
 ```
 
 
+```{r Plot C}
+data1 <- C0
+label1 <- "PAA Concentration (mg/L)"
 
+r1 <- range(index(data1)[which(!is.na(data1))])[1]
+r2 <- range(index(data1)[which(!is.na(data1))])[2]
+
+data2plot <- na.omit(data1)[paste0(r1,"/",r2)]
+data2plot <- data.frame(data2plot, row.names = as.character(index(data2plot)))
+data2plot <- cbind(data2plot, as.numeric(difftime(as.POSIXct(rownames(data2plot)), as.POSIXct(rownames(data2plot)[1]),units = "days")))
+
+png(filename = "images/PAA-time.png", width = 6.5, height = 4, units = "in", res = 200)
+par(mar=c(3.1,4.1,2.1,2.1))
+plot(x = data2plot[,ncol(data2plot)], y = data2plot[,1], type = "p", pch = 20, col = "black", xaxt = "n", xlab = "", ylab = "", yaxt="n", ylim=c(0,3))
+axis(side = 2)
+mtext(side = 2, label1, line = 2.5)
+  
+# x-axis
+axis.ticks <- seq(1,nrow(data2plot), length.out = 5)
+axis(side = 1, at = data2plot[axis.ticks,ncol(data2plot)], labels = format(as.POSIXct(rownames(data2plot)[axis.ticks]), "%m/%d %H:%M"))
+
+points(data.frame(C1), col = "purple", pch = 20)
+points(data.frame(C2), col="blue", pch = 20)
+
+legend(x = data2plot[1,ncol(data2plot)]-.54, y = 3+.12, 
+       legend = c("Initial dose", "1-min C", "1/2-basin C"),
+       pch = 20, 
+       col = c("black", "purple", "blue"),
+       # bty = "n", 
+       xpd = TRUE)
+dev.off()
+```
 
 
 
