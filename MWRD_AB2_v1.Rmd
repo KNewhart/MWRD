@@ -35,25 +35,24 @@ piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, userna
 
 ```{r Import Pi tags, include=FALSE}
 pi.tags <- read_excel("pi-tags.xls")
-
+pi.tags <- na.omit(pi.tags)
 # Fix tags
 for(i in 1:nrow(pi.tags)) {
   if(is.na(pi.tags[i,2])) next
   if(substr(pi.tags[i,2],1,12) == "\\\\APPLEPI_AF") pi.tags[i,2] <- paste0("af:", pi.tags[i,2])
   if(substr(pi.tags[i,2],1,9) == "\\\\applepi") pi.tags[i,2] <- paste0("pi:", pi.tags[i,2])
 }
-pi.tags <- na.omit(pi.tags)
+
 
 pi.tags.2.remove <- c("South Primary Influent Flow", "South Secondary Influent Flow")
 pi.tags.2.remove <- sapply(pi.tags.2.remove, function(x) which(x == pi.tags[,1]))
 pi.tags <- pi.tags[-pi.tags.2.remove,]
 
-start <- paste0("2019-01-04", "T00:00:00Z")
-end <- paste0("2019-02-04", "T00:00:00Z")
+start <- paste0("2019-02-11", "T00:00:00Z")
+end <- paste0("2019-04-15", "T00:00:00Z")
 # end <- paste0(as.character(as.Date(Sys.time()) - 1), "T00:00:00Z")
 
 # Load data
-new.objects <- list()
 for(i in 1:nrow(pi.tags)) {
   # assign(make.names(pi.tags[i,1]), piWebApiService$data$getInterpolatedValues(path=unlist(pi.tags[i,2]), startTime = start, endTime = end, interval = "1d")[,1:2])
   # assign(make.names(pi.tags[i,1]), fix.timestamps(get(make.names(pi.tags[i,1]))))
@@ -71,30 +70,31 @@ for(i in 1:nrow(pi.tags)) {
 
 cols2keep <- which(!is.na(all.data[1,]))
 all.data <- all.data[,cols2keep]
+
 ```
 
 
 
 
 ```{r Distributions}
-tiff(filename="MWRD_AB2_v1_density.tiff", units = "in", width = 20, height = 20, res = 200)
-par(mfrow=c(round(sqrt(ncol(all.data))), round(ncol(all.data)/round(sqrt(ncol(all.data))))),
-    mar=c(3,3,3,1)+.01)
+# tiff(filename="MWRD_AB2_v1_density.tiff", units = "in", width = 20, height = 20, res = 200)
+# par(mfrow=c(round(sqrt(ncol(all.data))), round(ncol(all.data)/round(sqrt(ncol(all.data))))),
+    # mar=c(3,3,3,1)+.01)
 for(i in 1:ncol(all.data)) {
   plot(density(as.vector(na.omit(all.data[,i]))), 
        main = colnames(all.data)[i],
        xlab="", ylab="")
 }
-dev.off()
+# dev.off()
 
-tiff(filename="MWRD_AB2_v1_probability.tiff", units = "in", width = 20, height = 20, res = 200)
-par(mfrow=c(round(sqrt(ncol(all.data))), round(ncol(all.data)/round(sqrt(ncol(all.data))))),
-    mar=c(3,3,3,1)+.01)
+# tiff(filename="MWRD_AB2_v1_probability.tiff", units = "in", width = 20, height = 20, res = 200)
+# par(mfrow=c(round(sqrt(ncol(all.data))), round(ncol(all.data)/round(sqrt(ncol(all.data))))),
+    # mar=c(3,3,3,1)+.01)
 for(i in 1:ncol(all.data)) {
   qqnorm(as.vector(na.omit(all.data[,i])), main = colnames(all.data)[i])
   qqline(as.vector(na.omit(all.data[,i])))
 }
-dev.off()
+# dev.off()
 ```
 
 
@@ -117,7 +117,10 @@ fviz_pca_var(pca.results, labelsize = 3,
 dev.off()
 
 AB2 <- grep("AB2", colnames(all.data))
-pca.data <- scale(as.data.frame(na.omit(all.data[,AB2])))
+pca.data <- as.data.frame(na.omit(all.data[,AB2]))
+pca.data <- pca.data[,-which(apply(pca.data,2,mean) == 0)]
+pca.data <- scale(pca.data)
+rownames(pca.data) <- seq(1:nrow(pca.data))
 pca.results <- princomp(pca.data) # Spectral decomposition
 tiff(filename="MWRD_AB2_v1_PCA_AB2.tiff", units = "in", width = 11, height = 6.5, res = 200)
 fviz_pca_var(pca.results, labelsize = 3,
@@ -183,20 +186,4 @@ dev.off()
 ```
 
 
-
-
-
-
-
-```{r eval=FALSE, include=FALSE}
-# NOT RUNNING
-pi.tags <- c("A Basin 9 NH3  Zone C A Pass", "\\\\applepi\\AI_N96B",
-             "A Basin 9 NH3 C Pass", "\\\\applepi\\AI_N99B",
-             "A Basin 9 NO3 C Pass", "\\\\applepi\\AI_N99A",
-             "A Basin 9 NO3 Zone A A Pass", "\\\\applepi\\AI_N93A",
-             "A Basin 9 NO3 Zone C A Pass", "\\\\applepi\\AI_N96A",
-             "A Basin 9 NSEC Temp", "\\\\applepi\\TI_N90",
-             "AB Influent Gate 9", "\\\\applepi\\FC_N90",
-             "AE Basin 9A Air", "\\\\applepi\\FC_N94A")
-```
 
