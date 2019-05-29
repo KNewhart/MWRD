@@ -130,7 +130,7 @@ NNopt <- function(all.data, predict.col.name, percent.train = 0.8, training.inde
 
   ## Predict using NN
   predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
-  predict.NN <- (predict.NN$net.result +* (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
   
   # Calculate Root Mean Square Error (RMSE)
   RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
