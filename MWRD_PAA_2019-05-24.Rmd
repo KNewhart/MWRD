@@ -15,7 +15,7 @@ r.sq <- function(raw,fit) {
   return(r_sq)
 }
 # setwd("GitHub")
-setwd("~/KNewhart/MWRD")
+# setwd("~/KNewhart/MWRD")
 library(xts)
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   library(xts)
@@ -25,23 +25,27 @@ mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   for(i in 1:(length(all.data.index)-1)) {
     row.start <- all.data.index[i]
     row.stop <- all.data.index[i+1]
+    if((row.stop-row.start) == 1) {
+      next
+    }
     if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
     if(average) {
       data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
       rownames(data.avg) <- as.character(index(all.data)[row.stop])
       
     }
-    if (i == 1) {
+    if (!exists("new.data")) {
       if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
       if(average) new.data <- data.avg
     }
-    if (i != 1) {
+    if (exists("new.data")) {
       if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
       if(average) new.data <- rbind(new.data, data.avg)
     }
   }
   new.data <- na.omit(new.data)
-  new.data.xts <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+  na.fix <- which(!is.na(as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S")))
+  new.data.xts <- xts(new.data[na.fix,], order.by = as.POSIXct(rownames(new.data)[na.fix], format = "%Y-%m-%d %H:%M:%S"))
   
   return(new.data.xts)
 }
@@ -147,6 +151,26 @@ colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North F
                          "NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS",
                          "NSEC Effluent NO5","NSEC Effluent Flow")
 
+library(readr)
+more.vis <- read_csv("data/Carbovis_May2019.csv", 
+    col_types = cols(Time = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_1 = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_2 = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_3 = col_datetime(format = "%m/%d/%Y %H:%M"), 
+        Time_4 = col_datetime(format = "%m/%d/%Y %H:%M")))
+r <- range(data.frame(more.vis[-which(is.na(more.vis[,2])),1][1])[,1])
+# more.vis.all <- mergeData(list.x=list(xts(na.omit(more.vis[,2]), order.by = data.frame(more.vis[-which(is.na(more.vis[,2])),1][1])[,1]),
+                                  # xts(na.omit(more.vis[,4]), order.by = data.frame(more.vis[-which(is.na(more.vis[,4])),3][1])[,1])[paste0(r[1],"/",r[2])]))
+more.vis.all <- merge(xts(na.omit(more.vis[,2]), order.by = data.frame(more.vis[-which(is.na(more.vis[,2])),1][1])[,1]),
+                                  xts(na.omit(more.vis[,4]), order.by = data.frame(more.vis[-which(is.na(more.vis[,4])),3][1])[,1])[paste0(r[1],"/",r[2])])
+more.vis.all <- merge(more.vis.all, 
+                      xts(na.omit(more.vis[,6]), order.by = data.frame(more.vis[-which(is.na(more.vis[,6])),5][1])[,1]))
+more.vis.all <- merge(more.vis.all, 
+                      xts(na.omit(more.vis[,8]), order.by = data.frame(more.vis[-which(is.na(more.vis[,8])),7][1])[,1]))
+more.vis.all <- merge(more.vis.all, 
+                      xts(na.omit(more.vis[,10]), order.by = data.frame(more.vis[-which(is.na(more.vis[,10])),9][1])[,1]))
+more.vis.all <- more.vis.all[!is.na(more.vis.all[,1]),]
+
 all.data <- oct.paa
 r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
 all.data <- mergeData(list.x = list(all.data,vis.data[r]))
@@ -160,7 +184,7 @@ all.data <- all.data[,-remove.cols]
 ```
 
 # NN Models were built to predict PAA at the "1-min" sample point to predict C1
-```{r}
+```{r include=FALSE}
 Optimize <- FALSE
 if(Optimize){
   predict.col.name <- c("PAA...1.min..Sample", "PAA...1.2.Basin.Sampling")
@@ -256,34 +280,100 @@ iterations <- 10
   }
   }
   
+  
+}
   file <- paste0("results/",list.files(path="results"))
   for(i in 1:length(file)){
     raw <- read.csv(file[i], row.names=1, stringsAsFactors=FALSE)
     if(i ==1) data <- raw
     if(i != 1)data <- rbind(data,raw)
   }
-  data.index <- sapply(unique(data$Fmla), function(x) which(x == data$Fmla))
-  data.avg <- cbind(unique(data$Fmla), sapply(data.index, function(x) mean(data$Fmla[x])))
+  
+  
+  
+    # detect cores with parallel() package
+    nCores <- detectCores(logical = FALSE)
+    # detect threads with parallel()
+    nThreads<- detectCores(logical = TRUE)
+    
+    # Create doSNOW compute cluster
+    cluster = makeCluster(nThreads, type = "SOCK")
+    class(cluster);
+    
+    # register the cluster
+    registerDoSNOW(cluster)
+    
+    data.avg <- foreach::foreach(i = 1:length(unique(data$Fmla)), .combine = rbind) %dopar% {
+  # for(i in 1:length(unique(data$Fmla))){
+  # for(i in 4594:length(unique(data$Fmla))){
+    # if(i == 1) data.avg <- mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])])
+    # if(i != 1) data.avg <- c(data.avg, mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])]))
+    result <- mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])])
+    data.frame("Fmla" = unique(data$Fmla)[i],
+               "R2" = result)
+    }
+    
+    # stop cluster and remove clients
+    stopCluster(cluster)
+    
+    # insert serial backend, otherwise error in repetetive tasks
+    registerDoSEQ()
+    
+    # clean up a bit.
+    invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+    
+    
+  # data.avg <- sapply(unique(data$Fmla), function(x) mean(data$r2[which(data$Fmla == x)]))
+  # data.avg <- cbind(unique(data$Fmla), sapply(data.index, function(x) mean(data$Fmla[x])))
   # Rank r2 and RMSE to find best model
   
+  best.r2 <- which(data.avg == max(data.avg))
+  best.fmla <- unique(data$Fmla)[best.r2]
   
-  
-  data.top5 <- subset(data, r2 > quantile(r2, prob = 1 - 1/100))
-  data.vars <- colnames(all.data)
-  data.vars <- sapply(data.vars, function(x) grepl(x, data.top5[,1]))
-  data.vars.count <- apply(data.vars,2,function(x)length(which(x)))
-  data.nodes.count <- sapply(unique(data.top5$Nodes), function(x) length(which(data.top5$Nodes == x)))
-  names(data.nodes.count) <- unique(data.top5$Nodes)
-}
+      fmla <- best.fmla
+      nodes <- round(no.vars/2)
+      NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+      
+      ## Predict using NN
+      predict.NN <-  tryCatch(neuralnet::compute(NN, testing.NN[,-predict.column]), error = function(e){})
+      if(is.null(predict.NN)){
+        RMSE.NN <- NA
+        r2.NN <- NA
+      } else {
+        predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+        # Calculate Root Mean Square Error (RMSE)
+        RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+        # Calculate R-sq
+        r2.NN <- r.sq(raw=testing.data[,predict.column], fit = predict.NN)
+      }
 
+# Data to test
+# test.data <- more.nsec[paste0(range(rownames(all.data))[2],"/")]
+test.data <- more.nsec[paste0(range(index(all.data))[2],"/")]
+test.data <- test.data[-unique(as.numeric(unlist(apply(test.data,2,function(x) which(is.na(x)))))),]
+# test.data <- mergeData(list.x=list(more.vis.all[paste0(range(rownames(all.data))[2],"/",range(index(test.data))[2])], 
+#                                    test.data))
+test.data <- mergeData(list.x=list(more.vis.all[paste0(range(index(all.data))[2],"/",range(index(test.data))[2])], 
+                                   test.data))
 # C1 <- Neural network prediction
+C1 <- neuralnet::compute(NN, data.frame(test.data))
 # t1 <- HRT to the "1-min sample point"
+t1 <- 130.5293*test.data$Dis.North.Flow^-0.9495
 ```
 
 # The online Carbovis analyzer 
 ```{r}
-
+C2 <- test.data$PAA.Upstream.Residual
+t2 <- 130.5293*test.data$Dis.North.Flow^-0.9495 + 10
 ```
+
+# NN Models were built to predict PAA at the 1/2 basin sample point to predict C3
+```{r}
+# Build NN for 1/2 basin
+# C3 <- 
+t3 <- 1477.2*test.data$Dis.North.Flow^-.958
+```
+
 
 # Scrap
 ```{r}
@@ -313,6 +403,13 @@ iterations <- 10
   #              "RMSE" = RMSE.NN,
   #              "r2" = r2.NN)
   # }
+
+  # data.top5 <- subset(data, r2 > quantile(r2, prob = 1 - 1/100))
+  # data.vars <- colnames(all.data)
+  # data.vars <- sapply(data.vars, function(x) grepl(x, data.top5[,1]))
+  # data.vars.count <- apply(data.vars,2,function(x)length(which(x)))
+  # data.nodes.count <- sapply(unique(data.top5$Nodes), function(x) length(which(data.top5$Nodes == x)))
+  # names(data.nodes.count) <- unique(data.top5$Nodes)
   
 ```
 
