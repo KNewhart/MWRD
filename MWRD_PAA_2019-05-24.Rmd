@@ -14,8 +14,8 @@ r.sq <- function(raw,fit) {
   r_sq <- cor(raw,fit)^2
   return(r_sq)
 }
-setwd("GitHub")
-setwd("MWRD")
+# setwd("GitHub")
+setwd("~/KNewhart/MWRD")
 library(xts)
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   library(xts)
@@ -187,10 +187,10 @@ iterations <- 10
   
   for(iteration in 1:iterations) {
   ## Create training and test datasets
-  if(is.null(training.index)) {
+  # if(is.null(training.index)) {
     set.seed(Sys.time())
     training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
-  }
+  # }
   training.data <- all.data[training.index,]
   testing.data <- all.data[-training.index,]
   training.NN <- scaled.data[training.index,]
@@ -198,8 +198,7 @@ iterations <- 10
   
   ## Find optimum number of variables
   n <- which(colnames(all.data) != predict.col.name)
-  x.combos <- c(3,6,9,12,15)
-  x.combos <- c(7,8,10,11)
+  x.combos <- c(3,4,5,6,7,8,9)
   for(no.vars in x.combos) {
 
     x <- data.frame(combn(n,no.vars))
@@ -238,7 +237,7 @@ iterations <- 10
       }
       data.frame("Fmla" = as.character(fmla[3]),
                  "RMSE" = RMSE.NN,
-                 "r2" = r2.NN,
+                 "r2" = as.numeric(r2.NN),
                  "Nodes" = nodes)
     }
     
