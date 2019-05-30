@@ -102,7 +102,6 @@ vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])
 
 ##### North Secondary - Online #####
 ## North secondary online
-setwd("C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD")
 nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
     col_types = c("date", "numeric", "numeric", 
         "numeric", "numeric", "numeric", 
