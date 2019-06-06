@@ -48,8 +48,8 @@ pi.tags.2.remove <- c("South Primary Influent Flow", "South Secondary Influent F
 pi.tags.2.remove <- sapply(pi.tags.2.remove, function(x) which(x == pi.tags[,1]))
 pi.tags <- pi.tags[-pi.tags.2.remove,]
 
-start <- paste0("2019-02-11", "T00:00:00Z")
-end <- paste0("2019-04-15", "T00:00:00Z")
+start <- paste0("2019-02-10", "T00:00:00Z")
+end <- paste0("2019-04-17", "T00:00:00Z")
 # end <- paste0(as.character(as.Date(Sys.time()) - 1), "T00:00:00Z")
 
 # Load data
@@ -77,15 +77,15 @@ all.data <- all.data[,cols2keep]
 
 
 ```{r Distributions}
-# tiff(filename="MWRD_AB2_v1_density.tiff", units = "in", width = 20, height = 20, res = 200)
-# par(mfrow=c(round(sqrt(ncol(all.data))), round(ncol(all.data)/round(sqrt(ncol(all.data))))),
-    # mar=c(3,3,3,1)+.01)
+tiff(filename="MWRD_AB2_v1_density.tiff", units = "in", width = 20, height = 20, res = 200)
+par(mfrow=c(round(sqrt(ncol(all.data)))+1, round(ncol(all.data)/round(sqrt(ncol(all.data))))),
+    mar=c(3,3,3,1)+.01)
 for(i in 1:ncol(all.data)) {
   plot(density(as.vector(na.omit(all.data[,i]))), 
        main = colnames(all.data)[i],
        xlab="", ylab="")
 }
-# dev.off()
+dev.off()
 
 # tiff(filename="MWRD_AB2_v1_probability.tiff", units = "in", width = 20, height = 20, res = 200)
 # par(mfrow=c(round(sqrt(ncol(all.data))), round(ncol(all.data)/round(sqrt(ncol(all.data))))),
@@ -186,4 +186,25 @@ dev.off()
 ```
 
 
+
+```{r PLS}
+library(pls)
+AB2 <- grep("AB2", colnames(all.data))
+pls.data <- as.data.frame(na.omit(all.data[,AB2]))
+pls.data <- pls.data[,-which(apply(pls.data,2,mean) == 0)]
+pls.data <- as.data.frame(scale(pls.data))
+rownames(pls.data) <- seq(1:nrow(pls.data))
+pls.model <- plsr(North.AB2.C.NH3 ~ ., data = pls.data, validation = "CV")
+# Find the number of dimensions with lowest cross validation error
+cv = RMSEP(pls.model)
+best.dims = which.min(cv$val[estimate = "adjCV", , ]) - 1
+# Rerun the model
+pls.model = plsr(North.AB2.C.NH3 ~ ., data = pls.data, ncomp = best.dims)
+
+coefficients = coef(pls.model)
+sum.coef = sum(sapply(coefficients, abs))
+coefficients = coefficients * 100 / sum.coef
+coefficients = sort(coefficients[, 1 , 1])
+barplot(tail(coefficients, 5))
+```
 

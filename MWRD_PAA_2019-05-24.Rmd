@@ -2,7 +2,7 @@
 title: "MWRD_PAA_2019-05-24"
 ---
 # Import data and functions
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 rm(list = ls())
 # setwd("..")
 # source("functions/r-sq.R")
@@ -17,102 +17,22 @@ r.sq <- function(raw,fit) {
 # setwd("GitHub")
 # setwd("~/KNewhart/MWRD")
 library(xts)
-
-
-### FAIL ###
-rbindNN <- function(i.range, i.function, ...) {
-    library(doSNOW)
-    library(parallel)
-    library(neuralnet)
-    
-    # detect cores with parallel() package
-    nCores <- detectCores(logical = FALSE)
-    # detect threads with parallel()
-    nThreads<- detectCores(logical = TRUE)
-    
-    # Create doSNOW compute cluster
-    cluster = makeCluster(nThreads, type = "SOCK")
-    class(cluster);
-    
-    # register the cluster
-    registerDoSNOW(cluster)
-    
-    results <- foreach::foreach(i = i.range, .combine = rbind) %dopar% {
-      data.frame(i.function(i,...))
-    }
-    
-    # stop cluster and remove clients
-    stopCluster(cluster)
-    
-    # insert serial backend, otherwise error in repetetive tasks
-    registerDoSEQ()
-    
-    # clean up a bit.
-    invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
-    return(results)
-}
-
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   library(xts)
-  # library(doSNOW)
-  # library(parallel)
-  # library(neuralnet)
   
   all.data <- do.call(merge, list.x)
   all.data.index <- which(!is.na(all.data[,sort.by]))
-
-  ### FAIL ###
-  # loop <- function(i, ...) {
-  #   all.data <- get("all.data", envir = .GlobalEnv)
-  #   all.data.index <- get("all.data.index", envir = .GlobalEnv)
-  #   row.start <- all.data.index[i]
-  #   row.stop <- all.data.index[i+1]
-  #   if((row.stop-row.start) == 1) {
-  #     next
-  #   }
-  #   if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
-  #   if(average) {
-  #     data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
-  #     rownames(data.avg) <- as.character(index(all.data)[row.stop])
-  #     
-  #   }
-  #   if (!exists("new.data")) {
-  #     if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
-  #     if(average) new.data <- data.avg
-  #   }
-  #   if (exists("new.data")) {
-  #     if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
-  #     if(average) new.data <- rbind(new.data, data.avg)
-  #   }
-  #   
-  # }
-  
-  # new.data <- rbindNN(i.range = 1:(length(all.data.index)-1), i.function = loop, all.data, all.data.index) # FAIL
-   # 
-   # # detect cores with parallel() package
-   #  nCores <- detectCores(logical = FALSE)
-   #  # detect threads with parallel()
-   #  nThreads<- detectCores(logical = TRUE)
-   #  
-   #  # Create doSNOW compute cluster
-   #  cluster = makeCluster(nThreads, type = "SOCK")
-   #  class(cluster);
-   #  
-   #  # register the cluster
-   #  registerDoSNOW(cluster)
-    
-    # results <- foreach::foreach(i = 1:(length(all.data.index)-1), .combine = rbind) %dopar% {
-      
   for(i in 1:(length(all.data.index)-1)) {
     row.start <- all.data.index[i]
     row.stop <- all.data.index[i+1]
     if((row.stop-row.start) == 1) {
-    } else {
-          if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+      next
+    }
+    if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
     if(average) {
       data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
       rownames(data.avg) <- as.character(index(all.data)[row.stop])
-
+      
     }
     if (!exists("new.data")) {
       if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
@@ -122,30 +42,13 @@ mergeData <- function(list.x, sort.by = 1, average = FALSE) {
       if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
       if(average) new.data <- rbind(new.data, data.avg)
     }
-    
-    }
-
-    }
-    
-    #  # stop cluster and remove clients
-    # stopCluster(cluster)
-    # 
-    # # insert serial backend, otherwise error in repetetive tasks
-    # registerDoSEQ()
-    # 
-    # # clean up a bit.
-    # invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
-    
-  
+  }
   new.data <- na.omit(new.data)
   na.fix <- which(!is.na(as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S")))
   new.data.xts <- xts(new.data[na.fix,], order.by = as.POSIXct(rownames(new.data)[na.fix], format = "%Y-%m-%d %H:%M:%S"))
   
   return(new.data.xts)
 }
-
-
-
 
 
 ##### PAA Process Data - Grab #####
@@ -242,6 +145,7 @@ more.nsec <- readxl::read_excel("data/PAA-Ecoli.xlsx",
                                                                 "numeric", "numeric", "numeric", 
                                                                 "numeric", "numeric", "numeric", 
                                                                 "numeric", "numeric"))
+more.nsec <- more.nsec[which(!is.na(more.nsec[,1])),]
 more.nsec <- xts(more.nsec[,-1], order.by = more.nsec[,1][[1]])
 colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North Flow", 
                          "Temperature NSEC Inf", "ASRT", "NSEC Effluent NH3",
@@ -280,7 +184,7 @@ all.data <- all.data[,-remove.cols]
 
 ```
 
-# NN Models were built to predict PAA at the "1-min" sample point to predict C1
+# NN Models were built to predict PAA at the "1-min" and "1/2 basin" sample point to predict C1 and C2
 ```{r include=FALSE}
 Optimize <- FALSE
 if(Optimize){
@@ -377,13 +281,14 @@ iterations <- 10
   }
   }
   
-  
   file <- paste0("results/",list.files(path="results"))
   for(i in 1:length(file)){
     raw <- read.csv(file[i], row.names=1, stringsAsFactors=FALSE)
     if(i ==1) data <- raw
     if(i != 1)data <- rbind(data,raw)
   }
+  
+  
   
     # detect cores with parallel() package
     nCores <- detectCores(logical = FALSE)
@@ -398,6 +303,10 @@ iterations <- 10
     registerDoSNOW(cluster)
     
     data.avg <- foreach::foreach(i = 1:length(unique(data$Fmla)), .combine = rbind) %dopar% {
+  # for(i in 1:length(unique(data$Fmla))){
+  # for(i in 4594:length(unique(data$Fmla))){
+    # if(i == 1) data.avg <- mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])])
+    # if(i != 1) data.avg <- c(data.avg, mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])]))
     result <- mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])])
     data.frame("Fmla" = unique(data$Fmla)[i],
                "R2" = result)
@@ -412,54 +321,14 @@ iterations <- 10
     # clean up a bit.
     invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
     
-      # Rank r2 and RMSE to find best model
-  best.r2 <- which(data.avg[,2] == max(data.avg[,2]))
-  best.fmla <- unique(data$Fmla)[best.r2]
-  
-  fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~",
-                            best.fmla))
-  nodes <- round(no.vars/2)
-  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
-  
-  ## Predict using NN
-  predict.NN <-  tryCatch(neuralnet::compute(NN, testing.NN[,-predict.column]), error = function(e){})
-  if(is.null(predict.NN)){
-    RMSE.NN <- NA
-    r2.NN <- NA
-  } else {
-    predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
-    # Calculate Root Mean Square Error (RMSE)
-    RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
-    # Calculate R-sq
-    r2.NN <- r.sq(raw=testing.data[,predict.column], fit = predict.NN)
-  }
-  
 }
+  
+
+    
+  # data.avg <- sapply(unique(data$Fmla), function(x) mean(data$r2[which(data$Fmla == x)]))
+  # data.avg <- cbind(unique(data$Fmla), sapply(data.index, function(x) mean(data$Fmla[x])))
 
 
-# Data to test
-# # FIX
-# # test.data <- more.nsec[paste0(range(rownames(all.data))[2],"/")]
-# test.data <- more.nsec[paste0(range(index(all.data))[2],"/")]
-# test.data <- test.data[-unique(as.numeric(unlist(apply(test.data,2,function(x) which(is.na(x)))))),]
-# # test.data <- mergeData(list.x=list(more.vis.all[paste0(range(rownames(all.data))[2],"/",range(index(test.data))[2])], 
-# #                                    test.data))
-# test.data <- mergeData(list.x=list(test.data, more.vis.all[paste0(range(index(test.data))[1],"/",range(index(test.data))[2])]))
-# C1 <- Neural network prediction
-C1 <- neuralnet::compute(NN, testing.NN)
-# t1 <- HRT to the "1-min sample point"
-t1 <- 130.5293*testing.data$N..Basin.Outfall^-0.9495
-```
-
-# The online Carbovis analyzer 
-```{r}
-C2 <- testing.data$PAA.Upstream.Residual
-t2 <- 130.5293*testing.data$N..Basin.Outfall^-0.9495 + 10
-```
-
-# NN Models were built to predict PAA at the 1/2 basin sample point to predict C3
-```{r}
-# Build NN for 1/2 basin
 all.data <- oct.paa
 r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
 all.data <- mergeData(list.x = list(all.data,vis.data[r]))
@@ -469,172 +338,217 @@ remove.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples","Sample.Tim
 remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
 all.data <- all.data[,-remove.cols]
 
-Optimize <- FALSE
-if(Optimize){
-  predict.col.name <- c("PAA...1.min..Sample", "PAA...1.2.Basin.Sampling")
+for(obs in c(10, 30,35,40,45,50,55,60,65,70,90,110)) {
 
-percent.train = 0.8
-training.index = NULL
-all.data <- all.data[,which(colnames(all.data) != predict.col.name[1])]
-predict.col.name <- predict.col.name[2]
-iterations <- 10 
+predict.col.name <- c("PAA...1.min..Sample")
+## Prep data
+predict.column <- which(colnames(all.data) == predict.col.name)
+all.data <- na.omit(data.frame(all.data))
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
 
-# NNopt <- function(all.data, predict.col.name, percent.train = 0.8, training.index=NULL) {
-  library(doSNOW)
-  library(parallel)
-  library(neuralnet)
 
-  ## Prep data
-  predict.column <- which(colnames(all.data) == predict.col.name)
-  all.data <- na.omit(data.frame(all.data))
-  
-  ## Scale data using min-max method
-  max <- apply(all.data, 2, max)
-  min <- apply(all.data, 2, min)
-  scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
-  
-  for(iteration in 1:iterations) {
-  ## Create training and test datasets
-  # if(is.null(training.index)) {
-    set.seed(Sys.time())
-    training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
-  # }
+percent.train = obs/nrow(all.data)
+# set.seed(Sys.time())
+# training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
   training.data <- all.data[training.index,]
   testing.data <- all.data[-training.index,]
   training.NN <- scaled.data[training.index,]
   testing.NN <- scaled.data[-training.index,]
-  
-  ## Find optimum number of variables
-  n <- which(colnames(all.data) != predict.col.name)
-  x.combos <- c(3,4,5,6,7,8,9)
-  for(no.vars in x.combos) {
-
-    x <- data.frame(combn(n,no.vars))
-    x.index <- seq(1:ncol(x))
-    
-    # detect cores with parallel() package
-    nCores <- detectCores(logical = FALSE)
-    # detect threads with parallel()
-    nThreads<- detectCores(logical = TRUE)
-    
-    # Create doSNOW compute cluster
-    cluster = makeCluster(nThreads, type = "SOCK")
-    class(cluster);
-    
-    # register the cluster
-    registerDoSNOW(cluster)
-    
-    results <- foreach::foreach(i = x.index, .combine = rbind) %dopar% {
-      
-      fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~",
-                                paste(colnames(all.data)[x[,i]], collapse= "+")))
-      nodes <- round(no.vars/2)
-      NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
-      
-      ## Predict using NN
-      predict.NN <-  tryCatch(neuralnet::compute(NN, testing.NN[,-predict.column]), error = function(e){})
-      if(is.null(predict.NN)){
-        RMSE.NN <- NA
-        r2.NN <- NA
-      } else {
-        predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
-        # Calculate Root Mean Square Error (RMSE)
-        RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
-        # Calculate R-sq
-        r2.NN <- r.sq(raw=testing.data[,predict.column], fit = predict.NN)
-      }
-      data.frame("Fmla" = as.character(fmla[3]),
-                 "RMSE" = RMSE.NN,
-                 "r2" = as.numeric(r2.NN),
-                 "Nodes" = nodes)
-    }
-    
-    # stop cluster and remove clients
-    stopCluster(cluster)
-    
-    # insert serial backend, otherwise error in repetetive tasks
-    registerDoSEQ()
-    
-    # clean up a bit.
-    invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
-    
-    write.csv(results, paste0("results/PAA_1-2basin_NN_",results[1,4],"nodes_",no.vars,"vars_",iteration,".csv"))
-    
-    
-  }
-  }
-  
-  
-  file <- paste0("results/",list.files(path="results"))
-  file <- file[grep("PAA_1-2basin",file)]
-
-  for(i in 1:length(file)){
-    raw <- read.csv(file[i], row.names=1, stringsAsFactors=FALSE)
-    if(i ==1) data <- raw
-    if(i != 1)data <- rbind(data,raw)
-  }
-  
-    # detect cores with parallel() package
-    nCores <- detectCores(logical = FALSE)
-    # detect threads with parallel()
-    nThreads<- detectCores(logical = TRUE)
-    
-    # Create doSNOW compute cluster
-    cluster = makeCluster(nThreads, type = "SOCK")
-    class(cluster);
-    
-    # register the cluster
-    registerDoSNOW(cluster)
-    
-    data.avg <- foreach::foreach(i = 1:length(unique(data$Fmla)), .combine = rbind) %dopar% {
-    result <- mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])])
-    data.frame("Fmla" = unique(data$Fmla)[i],
-               "R2" = result)
-    }
-    
-    # stop cluster and remove clients
-    stopCluster(cluster)
-    
-    # insert serial backend, otherwise error in repetetive tasks
-    registerDoSEQ()
-    
-    # clean up a bit.
-    invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
-    
-      # Rank r2 and RMSE to find best model
-  best.r2 <- which(data.avg[,2] == max(data.avg[,2]))
-  best.fmla <- unique(data$Fmla)[best.r2]
-  print.this <- data.avg[order(-data.avg[,2]),]
-  write.csv(print.this,"some_results.csv")
-  fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~",
-                            best.fmla))
+  best.fmla <- as.formula("PAA...1.min..Sample ~ Pump.Flow.Based.PAA.Dose + Temp..of.NSEC.Main.Ch. + Temp..of.the.Atmos. + Secondary.Effluent.Flow + NSEC.Effluent.OP + NSEC.Effluent.NO5 + NSEC.Effluent.Flow")
+  fmla <- best.fmla
+  no.vars <- 9
   nodes <- round(no.vars/2)
   NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+  predict.NN <-  neuralnet::compute(NN, testing.NN[i,])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+# 
+#   
+#   C <- training.data$PAA...1.min..Sample
+#   t <- 130.5293*training.data$N..Basin.Outfall^-0.9495
+#   exponential.model <- lm(log(C) ~ t)
+#   k <- -1*exponential.model$coefficients[2]
+#   C0 <- exp(exponential.model$coefficients[1])
+#   Cp <- as.numeric(C0*exp(-k*130.5293*testing.data$N..Basin.Outfall[i]^-0.9495))
+#   
+  t <- 130.5293*testing.data$N..Basin.Outfall[i]^-0.9495
   
-  ## Predict using NN
-  predict.NN <-  tryCatch(neuralnet::compute(NN, testing.NN[,-predict.column]), error = function(e){})
-  if(is.null(predict.NN)){
-    RMSE.NN <- NA
-    r2.NN <- NA
-  } else {
-    predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
-    # Calculate Root Mean Square Error (RMSE)
-    RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
-    # Calculate R-sq
-    r2.NN <- r.sq(raw=testing.data[,predict.column], fit = predict.NN)
-  }
+
+  if(i == 1) results <- c(testing.data[i,predict.column],
+                          predict.NN,t)
+  if(i > 1) results <- rbind(results, c(testing.data[i,predict.column],
+                          predict.NN,t))
+}
+rownames(results) <- rownames(all.data)[-c(1:(nrow(all.data)*(percent.train)))]
+colnames(results) <- c("Actual", "NN C", "HRT")
+# View(results)
+results.metrics <- c((sum((results[,1] - results[,2])^2) / nrow(results)) ^ 0.5, cor(results[,1],results[,2])^2)
+
+
+
+
+# # Data to test
+# # test.data <- more.nsec[paste0(range(rownames(all.data))[2],"/")]
+# test.data <- more.nsec[paste0(range(index(all.data))[2],"/")]
+# test.data <- test.data[-unique(as.numeric(unlist(apply(test.data,2,function(x) which(is.na(x)))))),]
+# # test.data <- mergeData(list.x=list(more.vis.all[paste0(range(rownames(all.data))[2],"/",range(index(test.data))[2])], 
+# #                                    test.data))
+# test.data <- mergeData(list.x=list(more.vis.all[paste0(range(index(all.data))[2],"/",range(index(test.data))[2])], 
+#                                    test.data))
+# 
+# 
+# 
+
+# C1 <- Neural network prediction
+# C1 <- neuralnet::compute(NN, data.frame(test.data))
+C1 <- results
+# t1 <- HRT to the "1-min sample point"
+t1 <- 130.5293*all.data$N..Basin.Outfall[-c(1:(nrow(all.data)*(1-percent.train)))]^-0.9495
+
+
+
+
+# Build NN for 1/2 basin
+
+
+predict.col.name <- c("PAA...1.2.Basin.Sampling")
+## Prep data
+predict.column <- which(colnames(all.data) == predict.col.name)
+all.data <- na.omit(data.frame(all.data))
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+# percent.train = 0.5
+# set.seed(Sys.time())
+# training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  training.NN <- scaled.data[training.index,]
+  testing.NN <- scaled.data[-training.index,]
+  best.fmla <- as.formula("PAA...1.2.Basin.Sampling ~ N..Eff..TSS.Conc. + N..Basin.Outfall + TSS..mg.L. + UVT.... + NSEC.Aerobic.SRT + NSEC.Effluent.NO3 + NSEC.Effluent.NO5")
+  fmla <- best.fmla
+  no.vars <- 9
+  nodes <- round(no.vars/2)
+  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+  predict.NN <-  neuralnet::compute(NN, testing.NN[i,])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+
   
+  # C <- training.data$PAA...1.2.Basin.Sampling
+  t <- 1477.2*testing.data$N..Basin.Outfall[i]^-0.958
+
+  
+  
+  
+
+  if(i == 1) results <- c(testing.data[i,predict.column],
+                          predict.NN,t)
+  if(i > 1) results <- rbind(results, c(testing.data[i,predict.column],
+                          predict.NN,t))
+}
+rownames(results) <- rownames(all.data)[-c(1:(nrow(all.data)*(percent.train)))]
+colnames(results) <- c("Actual", "NN C", "HRT")
+# View(results)
+
+results.metrics <- c((sum((results[,1] - results[,2])^2) / nrow(results)) ^ 0.5, cor(results[,1],results[,2])^2)
+
+
+
+
+# # Data to test
+# # test.data <- more.nsec[paste0(range(rownames(all.data))[2],"/")]
+# test.data <- more.nsec[paste0(range(index(all.data))[2],"/")]
+# test.data <- test.data[-unique(as.numeric(unlist(apply(test.data,2,function(x) which(is.na(x)))))),]
+# # test.data <- mergeData(list.x=list(more.vis.all[paste0(range(rownames(all.data))[2],"/",range(index(test.data))[2])], 
+# #                                    test.data))
+# test.data <- mergeData(list.x=list(more.vis.all[paste0(range(index(all.data))[2],"/",range(index(test.data))[2])], 
+#                                    test.data))
+# 
+# 
+# 
+
+# C1 <- Neural network prediction
+# C1 <- neuralnet::compute(NN, data.frame(test.data))
+C3 <- results
+t3 <- 1477.2*all.data$N..Basin.Outfall[-c(1:(nrow(all.data)*(1-percent.train)))]^-.958
+
+
+
+
+
+
+
+
+# Let's plot C1 and C3
+# source("ct.R")
+# actualCt <- calcCt(C1=C1[,1], t1 = t1, C2 = C3[,1], t2=t3)
+# predictedCt <- calcCt(C1=C1[,2], t1 = t1, C2 = C3[,2], t2=t3)
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  C <- c(C1[i,2], C3[i,2]) # NN predicted C
+  t <- c(C1[i,3], C3[i,3]) # HRT
+  exponential.model <- lm(log(C) ~ t) # Exponential model fit of NN predictions
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  t_f <- 2775*testing.data$N..Basin.Outfall[i]^-.959
+  Ct <- C0/k-C0/k*exp(-k*t_f) # Ct under exponential curve to end of basin
+  
+  if(i == 1) results <- Ct
+  if(i > 1) results <- rbind(results, Ct)
+  # 
+  # C <- c(training.data$PAA...1.min..Sample, training.data$PAA...1.2.Basin.Sampling)
+  # t <- c(130.5293*training.data$N..Basin.Outfall^-0.9495, 
+  #        1477.2*training.data$N..Basin.Outfall^-.958)
+  # exponential.model <- lm(log(C) ~ t)
+  # k <- -1*exponential.model$coefficients[2]
+  # C0 <- exp(exponential.model$coefficients[1])
+  # Ct <- C0/k-C0/k*exp(-k*t) # Ct under single exponential curve
 }
 
+Ct.predicted <- results
+
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  C <- c(C1[i,1], C3[i,1]) # Actual C
+  t <- c(C1[i,3], C3[i,3]) # HRT
+  exponential.model <- lm(log(C) ~ t) # Exponential model fit of NN predictions
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  t_f <- 2775*testing.data$N..Basin.Outfall[i]^-.959
+  Ct <- C0/k-C0/k*exp(-k*t_f) # Ct under exponential curve to end of basin
+  
+  if(i == 1) results <- Ct
+  if(i > 1) results <- rbind(results, Ct)
+}
+
+Ct.actual <- results
+r2.NN <- cor(Ct.actual, Ct.predicted)^2
 
 
+n.obs <- as.numeric(nrow(all.data) - nrow(Ct.actual))
+png(paste0("Ct_",n.obs,"obs.png"), width = 600, height = 400)
+plot(Ct.actual, type="l", lwd=1.5,xlab = "Sampling Event", ylab="Ct (mg/L*min)", main=paste0("Ct - trained on ",n.obs," obs"))
+points(Ct.predicted, type="l", col = "purple", lwd=1.5)
+legend("topleft", legend = c("Actual Ct", "Predicted Ct"), lty = 1, lwd=1.5,col=c("black", "purple"))
+text(x=nrow(Ct.actual),y=min(Ct.actual), labels=paste("R2 =", as.character(round(r2.NN,2))), adj=1)
+dev.off()
 
-# C3 <- 
-t3 <- 1477.2*test.data$Dis.North.Flow^-.958
+print(paste("For",as.character(n.obs),
+  "obs, R2 =", as.character(round(r2.NN,2))))
+}
 ```
-
-
-
 
 
 # Scrap
