@@ -48,6 +48,22 @@ pi.tags.2.remove <- c("South Primary Influent Flow", "South Secondary Influent F
 pi.tags.2.remove <- sapply(pi.tags.2.remove, function(x) which(x == pi.tags[,1]))
 pi.tags <- pi.tags[-pi.tags.2.remove,]
 
+AB.Inf.Flow <- grep("Influent Flow", pi.tags$Name)
+AB.RAS.Flow <- grep("RAS Flow", pi.tags$Name)
+AB.RAS.TSS <- grep("RAS TSS", pi.tags$Name)
+AB.A.DO <- grep("A DO", pi.tags$Name)
+AB.B.DO <- grep("B DO", pi.tags$Name)
+AB.C.DO <- grep("C DO", pi.tags$Name)
+AB.A.Air <- grep("A Air", pi.tags$Name)
+AB.B.Air <- grep("B Air", pi.tags$Name)
+AB.C.Air <- grep("C Air", pi.tags$Name)
+AB.A.NH3 <- grep("A NH3", pi.tags$Name)
+AB.C.NH3 <- grep("C NH3", pi.tags$Name)
+AB.A.NO3 <- grep("A NO3", pi.tags$Name)
+AB.C.NO3 <- grep("C NO3", pi.tags$Name)
+
+
+
 start <- paste0("2019-02-10", "T00:00:00Z")
 end <- paste0("2019-04-17", "T00:00:00Z")
 # end <- paste0(as.character(as.Date(Sys.time()) - 1), "T00:00:00Z")
