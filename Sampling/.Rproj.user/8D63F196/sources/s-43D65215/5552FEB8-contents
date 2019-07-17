@@ -1,5 +1,6 @@
 library(xts)
-PAA.PROFILE.DATA <- read.csv("~/GitHub/MWRD/Sampling/Copy of PAA PROFILE DATA_6-27-19_2.csv")
+# PAA.PROFILE.DATA <- read.csv("~/GitHub/MWRD/Sampling/data/Copy of PAA PROFILE DATA_6-27-19_2.csv")
+PAA.PROFILE.DATA <- read.csv("~/GitHub/MWRD/Sampling/data/PAA PROFILE DATA_07-12-19.csv")
 date.time <- strptime(paste(as.character(PAA.PROFILE.DATA$COLLECTION_DATE), as.character(PAA.PROFILE.DATA$COLLECTION_TIME)), format="%m/%d/%Y %H:%M")
 PAA.PROFILE.DATA <- cbind(PAA.PROFILE.DATA[,1:3],date.time,PAA.PROFILE.DATA[,6:ncol(PAA.PROFILE.DATA)])
 # Color by sampling campagin
@@ -34,6 +35,6 @@ library(RColorBrewer)
 plot(xx, as.numeric(yy), pch=20,
      col=brewer.pal(unique(sampling.campaign),"Set1")[as.numeric(plotting.data[,ncol(plotting.data)])])
 # Add labels
-text(xx,as.numeric(yy),labels=xx, cex=.5, pos=2)
+# text(xx,as.numeric(yy),labels=xx, cex=.5, pos=2)
 
 # From plot use 

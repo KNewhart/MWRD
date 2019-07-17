@@ -12,14 +12,14 @@
     "path" : null,
     "project_path" : null,
     "properties" : {
-        "cacheKey" : "50184D",
+        "cacheKey" : "CE659D56",
         "caption" : "PAA.PROFILE.DATA",
-        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=PAA.PROFILE.DATA&cache_key=50184D",
-        "displayedObservations" : "114",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=PAA.PROFILE.DATA&cache_key=CE659D56",
+        "displayedObservations" : "432",
         "environment" : "",
         "object" : "PAA.PROFILE.DATA",
         "preview" : "0",
-        "totalObservations" : "114",
+        "totalObservations" : "432",
         "variables" : "14"
     },
     "relative_order" : 4,
