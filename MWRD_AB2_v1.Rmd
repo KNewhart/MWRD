@@ -1,4 +1,6 @@
-```{r include=FALSE}
+```{r Setup, include=FALSE}
+rm(list=ls())
+
 library(readxl)
 library(xts)
 library(readr)
@@ -33,7 +35,7 @@ piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, userna
 
 
 
-```{r Import Pi tags, include=FALSE}
+```{r Import data, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 pi.tags <- read_excel("pi-tags.xls")
 pi.tags <- na.omit(pi.tags)
 # Fix tags
@@ -61,14 +63,16 @@ AB.A.NH3 <- grep("A NH3", pi.tags$Name)
 AB.C.NH3 <- grep("C NH3", pi.tags$Name)
 AB.A.NO3 <- grep("A NO3", pi.tags$Name)
 AB.C.NO3 <- grep("C NO3", pi.tags$Name)
-
-
+pi.tag.list <- c("AB.Inf.Flow", "AB.RAS.Flow", "AB.RAS.TSS", 
+                 "AB.A.DO", "AB.B.DO", "AB.C.DO",
+                 "AB.A.Air", "AB.B.Air", "AB.C.Air", 
+                 "AB.A.NH3", "AB.C.NH3", "AB.A.NO3", "AB.C.NO3")
 
 start <- paste0("2019-02-10", "T00:00:00Z")
-end <- paste0("2019-04-17", "T00:00:00Z")
+end <- paste0("2019-04-16", "T00:00:00Z")
 # end <- paste0(as.character(as.Date(Sys.time()) - 1), "T00:00:00Z")
 
-# Load data
+# Load daily data
 for(i in 1:nrow(pi.tags)) {
   # assign(make.names(pi.tags[i,1]), piWebApiService$data$getInterpolatedValues(path=unlist(pi.tags[i,2]), startTime = start, endTime = end, interval = "1d")[,1:2])
   # assign(make.names(pi.tags[i,1]), fix.timestamps(get(make.names(pi.tags[i,1]))))
@@ -77,19 +81,50 @@ for(i in 1:nrow(pi.tags)) {
   data.holder <- piWebApiService$data$getInterpolatedValues(path=unlist(pi.tags[i,2]), startTime = start, endTime = end, interval = "1d")[,1:2]
   data.holder <- fix.timestamps(data.holder)
   colnames(data.holder) <- make.names(pi.tags[i,1])
-  if (i ==1 ) {
+  if (i == 1) {
     all.data <- data.holder
   } else {
-    all.data <- merge(all.data, data.holder)
+    all.data <- cbind(all.data, data.holder)
   }
 }
 
 cols2keep <- which(!is.na(all.data[1,]))
 all.data <- all.data[,cols2keep]
 
+AB.Inf.Flow <- grep("Influent.Flow", colnames(all.data))
+AB.RAS.Flow <- grep("RAS.Flow", colnames(all.data))
+AB.RAS.TSS <- grep("RAS.TSS", colnames(all.data))
+AB.A.DO <- grep("A.DO", colnames(all.data))
+AB.B.DO <- grep("B.DO", colnames(all.data))
+AB.C.DO <- grep("C.DO", colnames(all.data))
+AB.A.Air <- grep("A.Air", colnames(all.data))
+AB.B.Air <- grep("B.Air", colnames(all.data))
+AB.C.Air <- grep("C.Air", colnames(all.data))
+AB.A.NH3 <- grep("A.NH3", colnames(all.data))
+AB.C.NH3 <- grep("C.NH3", colnames(all.data))
+AB.A.NO3 <- grep("A.NO3", colnames(all.data))
+AB.C.NO3 <- grep("C.NO3", colnames(all.data))
+pi.tag.list <- c("AB.Inf.Flow", # All zeros
+                 "AB.RAS.Flow", "AB.RAS.TSS", 
+                 "AB.A.DO", "AB.B.DO", "AB.C.DO",
+                 "AB.A.Air", "AB.B.Air", "AB.C.Air", 
+                 "AB.A.NH3", "AB.C.NH3", "AB.A.NO3", "AB.C.NO3")
 ```
 
 
+```{r PCA Cluster, echo=FALSE, message=FALSE, warning=FALSE}
+pi.tag.data <- all.data[,c(unlist(sapply(pi.tag.list, function(x) get(x))))]
+pi.tag.data <- pi.tag.data[,-grep("AB2.Influent.Flow", colnames(pi.tag.data))] # All zeros
+pi.tag.data <- pi.tag.data[,-grep("AB2.RAS.Flow", colnames(pi.tag.data))] # All zeros
+remove.rows <- unique(unlist(apply(pi.tag.data, 2, function(x) which(is.na(x)))))
+pi.tag.data <- pi.tag.data[-remove.rows,]
+pi.data.pca <- prcomp(pi.tag.data, center = TRUE,scale. = TRUE)
+basins <- sapply(strsplit(colnames(pi.tag.data), "AB", "[.]"), "[", 2)
+basins <- sapply(strsplit(basins, "[.]"), function(x) as.numeric(unlist(x)[1]))
+devtools::install_github("vqv/ggbiplot")
+library(ggbiplot)
+ggbiplot(pi.data.pca, ellipse=TRUE)
+```
 
 
 ```{r Distributions}

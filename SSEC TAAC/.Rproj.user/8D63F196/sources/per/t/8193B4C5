@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1561653086638.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3701449871",
+    "id" : "8193B4C5",
+    "lastKnownWriteTime" : 1561650119,
+    "last_content_update" : 1561650119,
+    "path" : "~/GitHub/MWRD/Neural Networks/pre-dis-ecoli.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "55,0",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,962 @@
+---
+title: "MWRD PAA - Neural Networks"
+subtitle: "Version 3"
+author: "Kate Newhart"
+output:
+  bookdown::word_document2:
+    reference_docx: MWRD_PAA_style.docx
+    fig_caption: yes
+---
+
+```{r Import data, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+rm(list = ls())
+library(xts)
+mergeData <- function(list.x, sort.by = 1, average = FALSE) {
+  library(xts)
+  
+  all.data <- do.call(merge, list.x)
+  all.data.index <- which(!is.na(all.data[,sort.by]))
+  for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if(average) {
+      data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
+      rownames(data.avg) <- as.character(index(all.data)[row.stop])
+
+    }
+    if (i == 1) {
+      if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
+      if(average) new.data <- data.avg
+    }
+    if (i != 1) {
+      if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+      if(average) new.data <- rbind(new.data, data.avg)
+    }
+  }
+  new.data <- na.omit(new.data)
+  new.data.xts <- xts(new.data, order.by = as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S"))
+  
+  return(new.data.xts)
+}
+
+
+##### PAA Process Data - Grab #####
+delta <- intToUtf8(0x0394)
+# Daily data
+process.data <- readxl::read_excel("data/Copy of PAA Process Data Clean KN.xlsx", 
+                                   sheet = "Process Data", skip = 1)
+process.data <- process.data[-1,]
+n.paa.grab <- xts::xts(apply(process.data[,c(12:17,19:27)], 2, function(x) as.numeric(x)), order.by =  as.POSIXct(as.data.frame(process.data[,18])[,1], format = "%Y-%m-%d %H:%M:%S"))
+colnames(n.paa.grab) <- c("PAA Dosing Pump Total Flow (gpm)", #1 
+                          "PAA Dose (mg/L)", #2
+                          "PAA Setpoint (mg/L)", #3 
+                          "Upstream  Residual (mg/L)", #4 
+                          # paste0(delta,"PAA (mg/L)"),	#5
+                          "deltaPAA (mg/L)", #5
+                          "Pre-Disinfection E. coli (MPN/100 mL)",  #6
+                          "Effluent Discharge (MGD)", #7
+                          "Contact Tank Volume (MG)", #8
+                          "Detention Time (min)", #9
+                          "Time to Upstream Sample Point (min)", #10
+                          "Log Removal (N0/N)", #11
+                          "Effluent E. coli (MPN/100 mL)", #12
+                          "CT (mg/L*min)", #13
+                          "CuT (mg/L*min)", #14
+                          "Ambient Temperature")#15
+colnames(n.paa.grab) <- stringr::str_replace_all(colnames(n.paa.grab), c(" " = ".", "/" = "." , "-" = "","[(]" = "", "[)]" = "", "[*]"="."))
+rm(process.data)
+
+
+##### October PAA Process Data - Grab #####
+oct.paa <- readxl::read_excel("data/Copy of PAA Process Data Clean KN.xlsx", 
+                              sheet = "Oct 2 to 15, 2018", range = "A1:V170")[-1,]
+n.datetime <- which(colnames(oct.paa) == "Date and Time")
+oct.paa.index <- oct.paa[,n.datetime]
+oct.paa <- sapply(oct.paa[,-n.datetime], function(x) as.numeric(x))
+colnames(oct.paa) <- stringr::str_replace_all(colnames(oct.paa), c(" " = "." , "-" = "" ))
+oct.paa <- xts(oct.paa, order.by = oct.paa.index[[1]])
+
+###### North Carbovis Data #####
+vis.data <- readxl::read_excel("data/NNE Carbovis Data2.xlsx",
+    sheet = "Inst DL Data", col_types = c("date",
+        "text", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "numeric", "skip", "skip",
+        "skip", "skip", "numeric", "skip",
+        "skip", "skip", "numeric", "skip",
+        "skip", "skip", "skip", "numeric",
+        "skip", "skip", "skip", "numeric",
+        "skip"), skip = 6)
+vis.data <- vis.data[which(vis.data[,2] == "Valid"),-2]
+colnames(vis.data) <- c("Time", "CODto (mg/L)", "CODto (V)",
+                        "TSS (mg/L)", "TSS (V)",
+                        "UVT (%)", "UVT (V)",
+                        "CODds (mg/L)", "CODds (V)",
+                        "SACto (1/m)", "SACto (V)")
+vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])[,1], format = "%Y-%m-%d %H-%M-%S"))
+
+
+##### North Secondary - Online #####
+## North secondary online
+nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
+    col_types = c("date", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric"), 
+    skip = 4)))
+nsec.online <- xts(nsec.online[,-1], order.by = nsec.online[,1])
+colnames(nsec.online) <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Influent NH3","NSEC Influent TSS","NSEC Influent COD",
+                           "NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3",
+                           "GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow",
+                           "AB-10 Influent Flow","AB-10 A-Pass Temp","AB-10 A-Pass pH","AB-10 A-Pass DO","AB-10 A-Pass NH3","AB-10 A-Pass NO3","AB-10 B-Pass DO","AB-10 C-Pass pH	AB-10","C-Pass DO","AB-10 C-Pass NH3","AB-10 C-Pass NO3","AB-10 MLSS","AB-10 MLR Flow","Quad 4 RAS Flow","Quad 4 Basins in Service","AB-10 RAS Flow","NSEC Aerobic SRT",
+                           "NSEC Effluent NH3","NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS","NSEC Effluent NO5","NSEC Effluent Flow")
+
+
+# nsec.online <- nsec.online["2018-11-04/2018-12-01"]
+cols2remove <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3","GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
+
+nsec.online <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec.online) == x))]
+
+more.nsec <- readxl::read_excel("data/PAA-Ecoli.xlsx", 
+                                sheet = "Sheet1", col_types = c("date", 
+                                    "numeric", "numeric", "numeric", 
+                                    "numeric", "numeric", "numeric", 
+                                    "numeric", "numeric", "numeric", 
+                                    "numeric", "numeric"))
+more.nsec <- xts(more.nsec[,-1], order.by = more.nsec[,1][[1]])
+colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North Flow", 
+                         "Temperature NSEC Inf", "ASRT", "NSEC Effluent NH3",
+                         "NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS",
+                         "NSEC Effluent NO5","NSEC Effluent Flow")
+```
+
+```{r Prep data for E.coli NN, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# NN
+all.data <- na.omit(n.paa.grab[which(!is.na(n.paa.grab$PreDisinfection.E..coli.MPN.100.mL)),])
+predict.column <- which(colnames(all.data) == "Effluent.E..coli.MPN.100.mL")
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~", paste(colnames(all.data)[-predict.column], collapse= "+")))
+```
+
+```{r ecoliNN, eval=FALSE, fig.cap="Neural network Effluent E.coli prediction from Oct 2-15, fig.height=4, fig.width=4, include=FALSE}
+for (i in 1:(ncol(all.data)-1)) {
+  hidden.nodes <- (ncol(all.data)-i)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(i==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+# plot(NN)
+
+## Predict using NN
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.column], predict.NN))
+min.val <- min(c(testing.data[,predict.column], predict.NN))
+par(mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+plot(x = testing.data[,predict.column], y = predict.NN, 
+     xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     xlab="Actal Effluent E.coli", ylab="Predicted E.coli", pch=20)
+abline(a=0,b=1,col="blue", lwd=2)
+# text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
+legend("bottomright", 
+       # inset = c(-.01,.04),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+# text(x=min.val,y=max.val,labels="(a)", font=2)
+```
+
+
+Figure \@ref(fig:ecoliNN) BOO YAH
+```{r eval=FALSE, include=FALSE}
+# NN
+all.data <- mergeData(list.x = list(oct.paa,vis.data))
+all.data <- na.omit(all.data)
+remove.cols <- sapply(c("CODds..mg.L.", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample", "PAA...1.2.Basin.Sampling", "DPAA.Samples"), function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+predict.column <- which(colnames(all.data) == "Initial.PAA.Demand.or.Decay")
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~", paste(colnames(all.data)[-predict.column], collapse= "+")))
+```
+
+```{r deltaPAANN, eval=FALSE, fig.cap="Neural network initial PAA demand/decay prediction from Oct 2-15, fig.height=4, fig.width=4, include=FALSE}
+for (i in 1:(ncol(all.data)-1)) {
+  hidden.nodes <- (ncol(all.data)-i)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(i==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+# plot(NN)
+
+## Predict using NN
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.column], predict.NN))
+min.val <- min(c(testing.data[,predict.column], predict.NN))
+data2plot <- cbind(testing.data[,predict.column], predict.NN)
+
+png("images/PAA_NN.png", units="in", res=2000, width = 6, height = 4)
+par(mar=c(3,3,.5,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2], 
+     # xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     xlab="Actal Initial PAA Demand", ylab="Predicted Initial PAA Demand", pch=20)
+abline(a=0,b=1,col="blue", lwd=2)
+# text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
+legend("bottomright", 
+       # inset = c(-.01,.04),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+text(do.call(paste0, as.list(paste0(colnames(testing.data), "\n"))), x = max(data2plot[,1])+.015, y = 0.55, xpd=NA, pos=4, cex=.7)
+dev.off()
+
+plot(NN)
+
+```
+
+Figure \@ref(fig:deltaPAANN) BOO YAH
+
+```{r eval=FALSE, include=FALSE}
+# NN
+RMSE.NN.org <- RMSE.NN
+all.data <- mergeData(list.x = list(oct.paa,vis.data))
+all.data <- na.omit(all.data)
+remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample","PAA...1.2.Basin.Sampling", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.","TSS..V.", "UVT..V.", "UVT..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+
+predict.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples")
+predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) == x))
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+
+for (predictor in 1:length(predict.cols)) {
+  
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
+
+for (i in 1:(ncol(all.data)-1)) {
+  hidden.nodes <- (ncol(all.data)-i)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.column] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(i==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+# plot(NN)
+
+## Predict using NN
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.column])
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.column], predict.NN))
+min.val <- min(c(testing.data[,predict.column], predict.NN))
+data2plot <- cbind(testing.data[,predict.column], predict.NN)
+
+png(paste0("images/PAA_NN_",colnames(all.data)[predict.cols[predictor]],".png"), units="in", res=2000, width = 4, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     # , xlim=c(min.val,max.val), ylim=c(min.val,max.val),
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = colnames(all.data)[predict.cols[predictor]]
+     )
+abline(a=0,b=1,col="blue", lwd=2)
+# text(x=max.val,y=min.val,labels=paste0("RMSE = ",round(RMSE.NN,1)), font=2, adj = 1)
+legend("bottomright", 
+       # inset = c(-.01,.04),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+text(do.call(paste0, as.list(paste0(colnames(testing.data), "\n"))), x = max(data2plot[,1])+.015, y = 0.55, xpd=NA, pos=4, cex=.7)
+dev.off()
+}
+
+
+
+
+# for(i in 1:10) {
+# 
+# # if(ncol(NN$weights[[1]][[1]]) == 2) cols2remove <- c(which(abs(NN$weights[[1]][[1]][,1]) == min(abs(NN$weights[[1]][[1]][,1]))), which(abs(NN$weights[[1]][[1]][,2]) == min(abs(NN$weights[[1]][[1]][,2]))))
+# # if(ncol(NN$weights[[1]][[1]]) == 1) cols2remove <- which(abs(NN$weights[[1]][[1]][,1]) == min(abs(NN$weights[[1]][[1]][,1])))
+# cols2remove <- apply(NN$weights[[1]][[1]],2,function(x) which(abs(x) == min(abs(x))))
+# all.data <- all.data[,-cols2remove]
+# }
+
+```
+
+
+
+
+```{r October PAA Grab Sample - NN model, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# NN
+all.data <- oct.paa
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+all.data <- mergeData(list.x = list(all.data,vis.data[r]))
+all.data <- mergeData(list.x = list(all.data, nsec.online[r,22:28]), average = FALSE)
+
+# all.data <- na.omit(all.data)
+# zero.rows <- unlist(apply(all.data, 2, function(x) which(x == 0)))
+
+remove.cols.names <- c("PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "PAA...1.min..Sample","PAA...1.2.Basin.Sampling", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin", "Sample.Time..1_min.", "SPBased.Disinfection.CT", "CalcBased.Disinfection.CT", "CODto..V.", "TSS..V.", "UVT..V.", "CODds..V.", "SACto..V.", "N..Eff..TSS.Conc.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+predict.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples")
+predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) == x))
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+
+# for (predictor in 1:length(predict.cols)) {
+predictor <- 1
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
+
+for (j in 1:(ncol(all.data[-predict.cols])-1)) {
+  hidden.nodes <- (ncol(all.data[-predict.cols])-j)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.cols[predictor]] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(j==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+# Use # of nodes with lowest RMSE
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+# Retrain with optimum number of nodes
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+# plot(NN)
+
+## Predict using NN
+predict.NN.colnames <- colnames(testing.NN[,-predict.cols])
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+
+## Re-scale
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.cols[predictor]], predict.NN))
+min.val <- min(c(testing.data[,predict.cols[predictor]], predict.NN))
+data2plot <- cbind(testing.data[,predict.cols[predictor]], predict.NN)
+
+png(paste0("images/PAA_NN_",colnames(all.data)[predict.cols[predictor]],".png"), units="in", res=2000, width = 5, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     , xlim=c(min.val,max.val), ylim=c(min.val,max.val)
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = stringr::str_replace_all(colnames(all.data)[predict.cols[predictor]], c("[.]" = " "))
+     )
+abline(a=0,b=1,col="blue", lwd=2)
+
+legend("bottomright", 
+       inset = c(-.55,-.23),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+
+text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.015, y = max.val-min.val, xpd=NA, pos=4, cex=.7)
+dev.off()
+
+
+
+
+predictor <- 2
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
+
+for (j in 1:(ncol(all.data[-predict.cols])-1)) {
+  hidden.nodes <- (ncol(all.data[-predict.cols])-j)
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.cols[predictor]] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(j==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+# Use # of nodes with lowest RMSE
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+# Retrain with optimum number of nodes
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+# plot(NN)
+
+## Predict using NN
+predict.NN.colnames <- colnames(testing.NN[,-predict.cols])
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+predict.NN.scaled <- predict.NN
+
+## Re-scale
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.cols[predictor]], predict.NN))
+min.val <- min(c(testing.data[,predict.cols[predictor]], predict.NN))
+data2plot <- cbind(testing.data[,predict.cols[predictor]], predict.NN)
+
+png(paste0("images/PAA_NN_",colnames(all.data)[predict.cols[predictor]],".png"), units="in", res=2000, width = 5, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     , xlim=c(min.val,max.val), ylim=c(min.val,max.val)
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = stringr::str_replace_all(colnames(all.data)[predict.cols[predictor]], c("[.]" = " "))
+     )
+abline(a=0,b=1,col="blue", lwd=2)
+
+legend("bottomright", 
+       inset = c(-.55,-.23),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+
+text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.015, y = max.val-2*min.val, xpd=NA, pos=4, cex=.7)
+dev.off()
+# }
+```
+
+
+```{r Let's mess with flowrates}
+## For one set of conditions
+for(r in 1:nrow(testing.NN)) {
+  
+## Let's change the scaled flowrates
+testing.data <- testing.NN[r,-predict.cols]
+for(i in 0:100) {
+  if(i > 0) testing.data <- rbind(testing.data, testing.NN[r,-predict.cols])
+  testing.data[nrow(testing.data),1] <- i*.01
+}
+
+## Predict scaled delta-PAA
+predict.NN <-  neuralnet::compute(NN, testing.data)
+
+## Re-scale to Delta-PAA
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+# PAA Dose
+predictor.flow <- (testing.data[,1] * (max(all.data[,1]) - min(all.data[,1]))) + min(all.data[,1])
+# 1/2 basin PAA
+# calc.final <- predictor.flow - predict.NN # NO
+
+
+if(r==1) plot.data <- cbind(predictor.flow, predict.NN)
+if(r>1) plot.data <- cbind(plot.data, predict.NN)
+}
+
+plot.min <- min(apply(plot.data[,2:ncol(plot.data)],2,min))
+plot.max <- max(apply(plot.data[,2:ncol(plot.data)],2,max))
+
+png("images/flow_variance_NN.png", units = "in", res = 2000, width = 5, height = 3.5)
+par(cex=1, mar=c(3,3,.5,.5), mgp=c(1.75,.5,0))
+plot(plot.data[,1:2], col="white", xlab = "C0 (mg/L PAA) - Predictor", ylab = "dC (mg/L PAA) - Response", ylim = c(plot.min,plot.max))
+for(i in 2:ncol(plot.data)) {
+  xspline(x=plot.data[,1], plot.data[,i], lty=2)
+}
+legend("topleft",
+       legend = c("Various Environmental Conditions"),
+       lty = c(2)
+       )
+dev.off()
+```
+
+
+```{r Comparison to online PAA - NN model, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# NN
+all.data <- vis.data
+data2 <- more.nsec[-which(is.na(more.nsec[,2])),]
+data2 <- data2[-which(data2[,1] < 0.1),]
+data2 <- data2[-which(data2[,1] > 2.5),]
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+r <- paste0(range(index(data2[r]))[1],"/",
+            range(index(data2[r]))[2])
+all.data <- mergeData(list.x = list(data2[r],all.data[r])) 
+
+remove.cols.names <- c("CODto..V.", "TSS..V.", "UVT..V.", "CODds..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+predict.cols.names <- c("PAA.Upstream.Residual")
+predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) == x))
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+all.data <- model.matrix(as.formula(paste0("~",paste(colnames(all.data),collapse="+"))), data=all.data)[,-1]
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+
+# for (predictor in 1:length(predict.cols)) {
+predictor <- 1
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
+
+# for (j in 1:(ncol(all.data[-predict.cols])-1)) {
+for (j in seq(1,(ncol(all.data[,-predict.cols])-1),2)) {
+  print(j)
+  hidden.nodes <- j
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.cols[predictor]] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(j==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+  print(RMSE.NN)
+}
+
+# Use # of nodes with lowest RMSE
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+# Retrain with optimum number of nodes
+hidden.nodes <- 2
+start.time <- Sys.time()
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+end.time <- Sys.time()
+end.time - start.time
+
+
+## Predict using NN
+predict.NN.colnames <- colnames(testing.NN[,-predict.cols])
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+# predict.NN <- neuralnet::prediction(NN, testing.NN[,-predict.cols])
+
+## Re-scale
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.cols[predictor]], predict.NN))
+min.val <- min(c(testing.data[,predict.cols[predictor]], predict.NN))
+data2plot <- cbind(testing.data[,predict.cols[predictor]], predict.NN)
+
+png(paste0("images/onlinePAA_NN_",colnames(all.data)[predict.cols[predictor]],"_clean_",hidden.nodes,".png"), units="in", res=2000, width = 5, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     , xlim=c(min.val,max.val), ylim=c(min.val,max.val)
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = stringr::str_replace_all(colnames(all.data)[predict.cols[predictor]], c("[.]" = " "))
+     )
+abline(a=0,b=1,col="blue", lwd=2)
+
+legend("bottomright", 
+       inset = c(-.55,-.23),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+
+text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.015, y = max.val-min.val-max.val*.02, xpd=NA, pos=4, cex=.7)
+dev.off()
+
+# }
+```
+
+
+```{r E.coli take two}
+library(readxl)
+library(xts)
+
+
+ecoli <- readxl::read_excel("data/PAA-Ecoli.xlsx", 
+                                sheet = "Sheet2")
+ecoli <- list(xts(na.omit(ecoli[,2][[1]]), order.by = na.omit(ecoli[,1][[1]])),
+              xts(na.omit(ecoli[,4][[1]]), order.by = na.omit(ecoli[,3][[1]])))
+
+ecoli <- mergeData(ecoli)
+colnames(ecoli) <- c("Pre-dis E.coli", "Post-dis E.coli")
+
+
+
+
+
+
+vis.data <- readxl::read_excel("data/NNE Carbovis Data2.xlsx",
+                               sheet = "Inst DL Data", col_types = c("date",
+                                                                     "text", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip"), skip = 6)
+vis.data <- vis.data[which(vis.data[,2] == "Valid"),-2]
+colnames(vis.data) <- c("Time", "CODto (mg/L)", "CODto (V)",
+                        "TSS (mg/L)", "TSS (V)",
+                        "UVT (%)", "UVT (V)",
+                        "CODds (mg/L)", "CODds (V)",
+                        "SACto (1/m)", "SACto (V)")
+vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])[,1], format = "%Y-%m-%d %H-%M-%S"))
+
+
+
+
+
+
+
+
+all.data <- vis.data
+data2 <- ecoli
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+r <- paste0(range(index(data2[r]))[1],"/",
+            range(index(data2[r]))[2])
+all.data <- mergeData(list.x = list(data2[r],all.data[r])) 
+
+remove.cols.names <- c("CODto..V.", "TSS..V.", "UVT..V.", "CODds..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+
+more.nsec <- readxl::read_excel("data/PAA-Ecoli-2.xlsx", 
+                                sheet = "Sheet1", col_types = c("date", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric"))
+more.nsec <- xts(more.nsec[,-1], order.by = more.nsec[,1][[1]])
+colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North Flow", 
+                         "Temperature NSEC Inf", "ASRT", "NSEC Effluent NH3",
+                         "NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS",
+                         "NSEC Effluent NO5","NSEC Effluent Flow", "AB-10 RAS")
+
+
+
+data2 <- all.data
+all.data <- more.nsec
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+r <- paste0(range(index(data2[r]))[1],"/",
+            range(index(data2[r]))[2])
+all.data <- mergeData(list.x = list(data2[r],all.data[r])) 
+
+
+
+
+
+
+
+
+
+
+
+predict.cols.names <- c("Pre.dis.E.coli", "Post.dis.E.coli")
+predict.cols <- sapply(predict.cols.names, function(x) which(colnames(all.data) == x))
+all.data[,predict.cols] <- log(all.data[,predict.cols])
+
+## Create training and test datasets
+set.seed(80)
+all.data <- as.data.frame(all.data)
+training.index <- sample(seq_len(nrow(all.data)), size=(0.8*nrow(all.data)))
+training.data <- all.data[training.index,]
+testing.data <- all.data[-training.index,]
+
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+## Fit NN
+# install.packages("neuralnet")
+library(neuralnet)
+training.NN <- scaled.data[training.index,]
+testing.NN <- scaled.data[-training.index,]
+
+for (predictor in 1:length(predict.cols)) {
+# predictor <- 1
+
+fmla <- as.formula(paste0(colnames(all.data)[predict.cols[predictor]],"~", paste(colnames(all.data)[-predict.cols], collapse= "+")))
+
+for (j in 1:(ncol(all.data[-predict.cols])-1)) {
+  hidden.nodes <- j
+  NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = FALSE)
+  
+  ## Predict using NN
+  predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+  
+  # Calculate Root Mean Square Error (RMSE)
+  RMSE.NN <- (sum((testing.data[,predict.cols[predictor]] - predict.NN)^2) / nrow(testing.data)) ^ 0.5
+  
+  if(j==1){results <- matrix(c(hidden.nodes,RMSE.NN), ncol=2, dimnames = list(c(NULL), c("Nodes","RMSE")))} else{
+    results <- rbind(results, c(hidden.nodes,RMSE.NN))
+  }
+}
+
+# Use # of nodes with lowest RMSE
+hidden.nodes <- min(results[,c("RMSE")])
+hidden.nodes <- which(results[,c("RMSE")] == hidden.nodes)
+hidden.nodes <- as.numeric(results[hidden.nodes,c("Nodes")])
+# Retrain with optimum number of nodes
+NN <- neuralnet(fmla, training.NN, hidden = hidden.nodes, linear.output = TRUE)
+# plot(NN)
+
+## Predict using NN
+predict.NN.colnames <- colnames(testing.NN[,-predict.cols])
+predict.NN <-  neuralnet::compute(NN, testing.NN[,-predict.cols])
+
+## Re-scale
+predict.NN <- (predict.NN$net.result * (max(all.data[,predict.cols[predictor]]) - min(all.data[,predict.cols[predictor]]))) + min(all.data[,predict.cols[predictor]])
+
+## Plot prediction
+max.val <- max(c(testing.data[,predict.cols[predictor]], predict.NN))
+min.val <- min(c(testing.data[,predict.cols[predictor]], predict.NN))
+data2plot <- cbind(testing.data[,predict.cols[predictor]], predict.NN)
+
+png(paste0("images/logecoli_NN_",colnames(all.data)[predict.cols[predictor]],"_clean.png"), units="in", res=2000, width = 5, height = 4)
+par(mar=c(3,3,2,8), mgp=c(1.75,.5,0))
+plot(x = data2plot[,1], y = data2plot[,2]
+     , xlim=c(min.val,max.val), ylim=c(min.val,max.val)
+     , xlab="Actal", ylab="Predicted"
+     , pch=20
+     , main = stringr::str_replace_all(colnames(all.data)[predict.cols[predictor]], c("[.]" = " "))
+)
+abline(a=0,b=1,col="blue", lwd=2)
+
+legend("bottomright", 
+       inset = c(-.55,-.23),
+       legend = c("Observation", "Perfect Fit", paste0("RMSE = ",round(RMSE.NN,2))),
+       col = c("black", "blue", NA),
+       pch = c(20,NA, NA),
+       lwd = c(NA,2, NA),
+       bty = "n",
+       xpd=NA,
+       xjust = 1,
+       text.font = 2)
+
+text(do.call(paste0, as.list(paste0(stringr::str_replace_all(predict.NN.colnames, c("[.][.]" = " ", "[.]" = " ")), "\n"))), x = max.val+max.val*.01, y = max.val-(max.val-min.val)/2, xpd=NA, pos=4, cex=.7)
+dev.off()
+}
+```
+
+
+
+
+
+
+```{r Manual NN, eval=FALSE, include=FALSE}
+weights <- NN$weights[[1]][[1]][2:length(NN$weights[[1]][[1]])]
+bias <- c(NN$weights[[1]][[1]][1], NN$weights[[1]][[2]][1])
+
+# Input Layer
+scaled <- testing.NN[,-predict.cols]
+scaled.weighted <- sapply(1:ncol(scaled),function(x) scaled[,x] * weights[x])
+scaled.weighted <- apply(scaled.weighted,1,sum)
+scaled.weighted.biased <- scaled.weighted + bias[1]
+
+# Layer 1
+lay1.activation <- 1/(1+exp(-scaled.weighted.biased))
+lay1.weighted <- lay1.activation*NN$weights[[1]][[2]][2]
+lay1.weighted.biased <- lay1.activation+bias[2]
+
+# Layer 2
+lay2.activation <-1/(1+exp(-lay1.weighted.biased))
+
+
+scaled.activated.weighted <- sapply(1:ncol(scaled.activated),function(x) scaled.activated[,x] * weights[x])
+colnames(scaled.activated.weighted) <- colnames(scaled.activated)
+
+# Hidden Layer 1
+hidden.node.activated <- apply(scaled.activated.weighted,1, function(x) sum(x)+bias[1])
+hidden.node.activated <- 1/(1+exp(-hidden.node.activated))
+hidden.node.activated.weighted <- hidden.node.activated*NN$weights[[1]][[2]][2]
+
+# Hidden Layer 2
+hidden.node.activated.weighted <- hidden.node.activated.weighted + bias[2]
+hidden.node.activated.weighted <- 1/(1+exp(-hidden.node.activated.weighted))
+
+## Re-scale
+predict.manual <- (hidden.node.activated.weighted * (max(all.data[,predict.cols[2]]) - min(all.data[,predict.cols[2]]))) + min(all.data[,predict.cols[2]])
+```
+

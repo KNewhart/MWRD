@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1561654123012.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2183036589",
+    "id" : "937EB5A7",
+    "lastKnownWriteTime" : 1557948159,
+    "last_content_update" : 1561654198994,
+    "path" : "~/GitHub/MWRD_R/PI-to-R.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "71,42",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 6,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

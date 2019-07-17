@@ -1,0 +1,115 @@
+LOCATION_CODE,COMMON_NAME,LOCATION_DESCRIPTION,COLLECTION_DATE,COLLECTION_TIME,ANALYSIS_CODE,ANALYSIS_NAME,ANALYTE_NAME,COMBINATION_RESULT,NUMERIC_RESULT,ANALYSIS_UNIT,ANALYTE_MDL,QUALIFIER,ACQUIRED_TYPE
+012_712_1011,N_PAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/23/2019,06:36,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.0,1.0,mg/L,0.1,,G
+012_700_1011,N_PREPAA,"RWH North, Pre-PAA addition",6/23/2019,06:34,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",10500,10500,EC/100mL,100,,G
+011_530_1061,S_PREPAA,"RWH South, Sec Clarifiers, Clar 6 Eff",6/23/2019,06:30,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",77000,77000,EC/100mL,100,,G
+012_712_1011,N_PAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/23/2019,06:36,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",Scratched,,mg/L,0.1,-5,G
+012_700_1011,N_PREPAA,"RWH North, Pre-PAA addition",6/23/2019,06:34,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",Scratched,,EC/100mL,1,-5,G
+011_530_1061,S_PREPAA,"RWH South, Sec Clarifiers, Clar 6 Eff",6/23/2019,06:30,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",Scratched,,EC/100mL,1,-5,G
+012_712_1012,1 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/24/2019,07:46,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.46,0.46,mg/L,0.1,,G
+012_712_1012,1 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/24/2019,07:46,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",41,41,EC/100mL,1,,G
+012_712_1011,1 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/24/2019,07:42,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.18,1.18,mg/L,0.1,,G
+012_712_1011,1 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/24/2019,07:42,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",6630,6630,EC/100mL,100,,G
+012_712_1013,1 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/24/2019,07:49,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.21,0.21,mg/L,0.1,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,07:54,TSS,Total Suspended Solids,Total Suspended Solids,4,4,mg/L,1,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,07:54,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",40,40,EC/100mL,1,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,07:54,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.00,0.00,mg/L,0.1,,G
+012_712_1012,2 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/24/2019,11:02,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.85,0.85,mg/L,0.1,,G
+012_712_1012,2 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/24/2019,11:02,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",222,222,EC/100mL,1,,G
+012_712_1011,2 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/24/2019,10:57,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.21,1.21,mg/L,0.1,,G
+012_712_1011,2 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/24/2019,10:57,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",4650,4650,EC/100mL,100,,G
+012_712_1013,2 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/24/2019,11:06,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.71,0.71,mg/L,0.1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,11:12,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.47,0.47,mg/L,0.1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,11:12,TSS,Total Suspended Solids,Total Suspended Solids,9,9,mg/L,1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,11:12,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",36,36,EC/100mL,1,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,10:53,CODLL,"CODLL, w/Ag2SO4, w/ HgSO4","CODLL, w/Ag2SO4, w/ HgSO4",21,21,mg/L,5,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,10:53,DTRM4,"Dig., Tot. Rec. Metals","Dig., Tot. Rec. Metals                  ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,10:53,$ICPT1,"Metals, Tot., ICP","Metals, Tot., ICP                       ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,10:53,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",8570,8570,EC/100mL,100,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,10:53,TSS,Total Suspended Solids,Total Suspended Solids,10,10,mg/L,1,,G
+012_712_1012,3 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/24/2019,13:05,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.07,1.07,mg/L,0.1,,G
+012_712_1012,3 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/24/2019,13:05,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",461,461,EC/100mL,1,,G
+012_712_1011,3 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/24/2019,13:02,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.29,1.29,mg/L,0.1,,G
+012_712_1011,3 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/24/2019,13:02,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",9590,9590,EC/100mL,100,,G
+012_712_1013,3 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/24/2019,13:10,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.93,0.93,mg/L,0.1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,13:15,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",35,35,EC/100mL,1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,13:15,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.57,0.57,mg/L,0.1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/24/2019,13:15,TSS,Total Suspended Solids,Total Suspended Solids,8,8,mg/L,1,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,12:57,CODLL,"CODLL, w/Ag2SO4, w/ HgSO4","CODLL, w/Ag2SO4, w/ HgSO4",23,23,mg/L,5,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,12:57,DTRM4,"Dig., Tot. Rec. Metals","Dig., Tot. Rec. Metals                  ",PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,12:57,$ICPT1,"Metals, Tot., ICP","Metals, Tot., ICP                       ",PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,12:57,TSS,Total Suspended Solids,Total Suspended Solids,8,8,mg/L,1,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/24/2019,12:57,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",8890,8890,EC/100mL,100,,G
+011_530_1061,S_PREPAA,"RWH South, Sec Clarifiers, Clar 6 Eff",6/24/2019,12:25,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",46100,46100,EC/100mL,100,,G
+012_712_1012,1 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/25/2019,08:04,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.58,0.58,mg/L,0.1,,G
+012_712_1012,1 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/25/2019,08:04,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",50,50,EC/100mL,1,,G
+012_712_1011,1 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/25/2019,07:56,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.09,1.09,mg/L,0.1,,G
+012_712_1011,1 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/25/2019,07:56,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",8390,8390,EC/100mL,100,,G
+012_712_1013,1 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/25/2019,08:10,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.16,0.16,mg/L,0.1,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,08:18,TSS,Total Suspended Solids,Total Suspended Solids,5,5,mg/L,1,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,08:18,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",24,24,EC/100mL,1,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,08:18,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.03,0.03,mg/L,0.1,,G
+012_712_1012,2 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/25/2019,11:10,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.70,0.70,mg/L,0.1,,G
+012_712_1012,2 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/25/2019,11:10,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",163,163,EC/100mL,1,,G
+012_712_1011,2 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/25/2019,11:04,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.24,1.24,mg/L,0.1,,G
+012_712_1011,2 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/25/2019,11:04,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",11100,11100,EC/100mL,100,,G
+012_712_1013,2 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/25/2019,11:16,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.68,0.68,mg/L,0.1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,11:23,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.17,0.17,mg/L,0.1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,11:23,TSS,Total Suspended Solids,Total Suspended Solids,9,9,mg/L,1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,11:23,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",58,58,EC/100mL,1,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,10:59,CODLL,"CODLL, w/Ag2SO4, w/ HgSO4","CODLL, w/Ag2SO4, w/ HgSO4",23,23,mg/L,5,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,10:59,DTRM4,"Dig., Tot. Rec. Metals","Dig., Tot. Rec. Metals                  ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,10:59,$ICPT1,"Metals, Tot., ICP","Metals, Tot., ICP                       ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,10:59,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",12200,12200,EC/100mL,100,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,10:59,TSS,Total Suspended Solids,Total Suspended Solids,12,12,mg/L,1,,G
+012_712_1012,3 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/25/2019,13:19,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.83,0.83,mg/L,0.1,,G
+012_712_1012,3 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/25/2019,13:19,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",313,313,EC/100mL,1,,G
+012_712_1011,3 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/25/2019,13:09,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.25,1.25,mg/L,0.1,,G
+012_712_1011,3 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/25/2019,13:09,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",14700,14700,EC/100mL,100,,G
+012_712_1013,3 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/25/2019,13:25,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.73,0.73,mg/L,0.1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,13:33,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",68,68,EC/100mL,1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,13:33,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.49,0.49,mg/L,0.1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/25/2019,13:33,TSS,Total Suspended Solids,Total Suspended Solids,8,8,mg/L,1,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,13:02,CODLL,"CODLL, w/Ag2SO4, w/ HgSO4","CODLL, w/Ag2SO4, w/ HgSO4",23,23,mg/L,5,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,13:02,DTRM4,"Dig., Tot. Rec. Metals","Dig., Tot. Rec. Metals                  ",PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,13:02,$ICPT1,"Metals, Tot., ICP","Metals, Tot., ICP                       ",PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,13:02,TSS,Total Suspended Solids,Total Suspended Solids,11,11,mg/L,1,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/25/2019,13:02,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",15500,15500,EC/100mL,100,,G
+011_530_1061,S_PREPAA,"RWH South, Sec Clarifiers, Clar 6 Eff",6/25/2019,07:07,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",105000,105000,EC/100mL,100,,G
+012_712_1011,N_PAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/26/2019,07:22,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.0,1.0,mg/L,0.1,,G
+012_700_1011,N_PREPAA,"RWH North, Pre-PAA addition",6/26/2019,07:20,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",8600,8600,EC/100mL,100,,G
+011_530_1061,S_PREPAA,"RWH South, Sec Clarifiers, Clar 6 Eff",6/26/2019,07:15,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert",26100,26100,EC/100mL,100,,G
+012_712_1012,1 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/27/2019,07:51,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.39,0.39,mg/L,0.1,,G
+012_712_1012,1 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/27/2019,07:51,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1011,1 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/27/2019,07:44,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.32,1.32,mg/L,0.1,,G
+012_712_1011,1 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/27/2019,07:44,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1013,1 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/27/2019,07:57,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.10,0.10,mg/L,0.1,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,08:05,TSS,Total Suspended Solids,Total Suspended Solids                  ,PENDING,,,,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,08:05,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1021,1 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,08:05,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.06,0.06,mg/L,0.1,,G
+012_712_1012,2 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/27/2019,11:14,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.74,0.74,mg/L,0.1,,G
+012_712_1012,2 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/27/2019,11:14,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1011,2 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/27/2019,11:09,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.09,1.09,mg/L,0.1,,G
+012_712_1011,2 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/27/2019,11:09,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1013,2 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/27/2019,11:20,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.64,0.64,mg/L,0.1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,11:26,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.41,0.41,mg/L,0.1,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,11:26,TSS,Total Suspended Solids,Total Suspended Solids                  ,PENDING,,,,,G
+012_712_1021,2 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,11:26,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,11:04,CODLL,"CODLL, w/Ag2SO4, w/ HgSO4","CODLL, w/Ag2SO4, w/ HgSO4               ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,11:04,DTRM4,"Dig., Tot. Rec. Metals","Dig., Tot. Rec. Metals                  ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,11:04,$ICPT1,"Metals, Tot., ICP","Metals, Tot., ICP                       ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,11:04,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_700_1011,2 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,11:04,TSS,Total Suspended Solids,Total Suspended Solids                  ,PENDING,,,,,G
+012_712_1012,3 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/27/2019,13:28,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.96,0.96,mg/L,0.1,,G
+012_712_1012,3 NPAA10MN,"RWH North, Post-PAA addition, 10 Min Contact Time",6/27/2019,13:28,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1011,3 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/27/2019,13:22,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",1.18,1.18,mg/L,0.1,,G
+012_712_1011,3 NPAA1MIN,"RWH North, Post-PAA addition, 1 Min Contact Time",6/27/2019,13:22,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1013,3 NPAA20MN,"RWH North, Post-PAA addition, 20 Min Contact Time",6/27/2019,13:32,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.70,0.70,mg/L,0.1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,13:38,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,13:38,PAAR,"PAA Residual, Peroxychem","PAA Residual, Peroxychem",0.49,0.49,mg/L,0.1,,G
+012_712_1021,3 NPAA30MN,"RWH North, Post-PAA Pre-SBS, 30 Min Contact Time",6/27/2019,13:38,TSS,Total Suspended Solids,Total Suspended Solids                  ,PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,13:18,CODLL,"CODLL, w/Ag2SO4, w/ HgSO4","CODLL, w/Ag2SO4, w/ HgSO4               ",PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,13:18,DTRM4,"Dig., Tot. Rec. Metals","Dig., Tot. Rec. Metals                  ",PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,13:18,$ICPT1,"Metals, Tot., ICP","Metals, Tot., ICP                       ",PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,13:18,TSS,Total Suspended Solids,Total Suspended Solids                  ,PENDING,,,,,G
+012_700_1011,3 N_PREPAA,"RWH North, Pre-PAA addition",6/27/2019,13:18,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G
+011_530_1061,S_PREPAA,"RWH South, Sec Clarifiers, Clar 6 Eff",6/27/2019,10:08,ECIDX,"E-Coli, MPN Idexx Colilert","E-Coli, MPN Idexx Colilert              ",PENDING,,,,,G

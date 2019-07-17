@@ -1,0 +1,113 @@
+rm(list=ls())
+library(xts)
+library(readxl)
+# devtools::install_github("rbechalany/PI-Web-API-Client-R")
+library(piwebapi)
+
+###### Setup Pi #####
+# Login information
+useKerberos <- TRUE
+username <- "knewhart"
+password <- "Lunabear2@"
+validateSSL <- TRUE
+debug <- TRUE
+piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+# Load tags
+pi.tags <- read_excel("C:/Users/KNewhart/Documents/GitHub/MWRD/pi-tags.xls")
+pi.tags <- na.omit(pi.tags)
+# Fix tags
+for(i in 1:nrow(pi.tags)) {
+  if(is.na(pi.tags[i,2])) next
+  if(substr(pi.tags[i,2],1,12) == "\\\\APPLEPI_AF") pi.tags[i,2] <- paste0("af:", pi.tags[i,2])
+  if(substr(pi.tags[i,2],1,9) == "\\\\applepi") pi.tags[i,2] <- paste0("pi:", pi.tags[i,2])
+  if(substr(pi.tags[i,2],1,9) == "\\\\APPLEPI") pi.tags[i,2] <- paste0("pi:", pi.tags[i,2])
+}
+# Select variables
+var <- c("South AB4 Anoxic Zone NO3",
+         "South AB4 CaRRB Flow",
+         "South AB4 MLR Flow",
+         "South AB4 PE Flow",
+         "South AB4 RAS Flow",
+         "South AB4 TSS",
+         "South AB4 Zone 4 NH3",
+         "South AB4 Zone 5 Air Flow",
+         "South AB4 Zone 5 DO",
+         "South AB4 Zone 6 Air Flow",
+         "South AB4 Zone 6 DO",
+         "South AB4 Zone 7 Air Flow",
+         "South AB4 Zone 7 DO",
+         "South AB4 Zone 8 Air Flow",
+         "South AB4 Zone 8 DO",
+         # "South AB4 Zone 8 NH3",
+         "South AB4 Zone 8 pH",
+         "South AB 4 Zone 5 TAAC Air SP",
+         "South AB 4 Zone 6 TAAC Air SP",
+         "South AB 4 Zone 7 TAAC Air SP",
+         "South AB 4 Zone 8 TAAC Air SP"
+         
+         )
+
+# Set time
+start <- paste0("2019-01-01", "T06:00:00Z") # Make sure to convert time to GMT
+end <- paste0(as.character(as.Date(Sys.time()) - 1), "T00:00:00Z")
+var.n <- sapply(var, function(x) which(x == pi.tags[,1]))
+# Fix timestamps - this function creates an xts object from the piWebApiService function above
+fix.timestamps <- function(pi.data) {
+  ch.times <- pi.data[,2]
+  ch.times <- sub("T", " ", ch.times)
+  ch.times <- sub("Z", " ", ch.times)
+  ch.times <- substr(ch.times, 1, 19)
+  return(cbind(ch.times, pi.data[,1]))
+}
+# Load daily data
+if (exists("all.data")) rm(all.data)
+require(parallel)
+require(neuralnet)
+require(doSNOW)
+# detect cores with parallel() package
+nCores <- detectCores(logical = FALSE)
+# detect threads with parallel()
+nThreads<- detectCores(logical = TRUE)
+
+# Create doSNOW compute cluster
+cluster = makeCluster(nThreads, type = "SOCK")
+class(cluster);
+
+# register the cluster
+registerDoSNOW(cluster)
+
+# for(i in var.n) {
+all.data <- foreach::foreach(i=var.n, .combine=cbind) %dopar% {
+  library(xts)
+  library(piwebapi)
+  holder <- piWebApiService$data$getInterpolatedValues(path=unlist(pi.tags[i,2]), startTime = start, endTime = end, interval = "15m")[,1:2]
+  # holder <- piWebApiService$data$getRecordedValues(path=unlist(pi.tags[i,2]), startTime = start, endTime = end)[,1:2]
+  holder <- fix.timestamps(holder)
+  x <- which(is.na(as.POSIXct(holder[,1], format="%Y-%m-%d %H:%M:%S")))
+  holder <- xts(as.numeric(holder[-x,2]), order.by = as.POSIXct(holder[-x,1], format="%Y-%m-%d %H:%M:%S"))
+  keeper <- holder
+  # while(nrow(holder) == 1000) { # Then there are more datapoints to pull
+  #   new.start <- range(index(holder))[2]
+  #   new.start <- paste0(substr(as.character(new.start),1,10), "T00:00:00Z")
+  #   holder <- piWebApiService$data$getInterpolatedValues(path=unlist(pi.tags[i,2]), startTime = start, endTime = end, interval = "15m")[,1:2]
+  #   # holder <- piWebApiService$data$getRecordedValues(path=unlist(pi.tags[i,2]), startTime = start, endTime = end)[,1:2]
+  #   holder <- fix.timestamps(holder)
+  #   holder <- xts(as.numeric(holder[,2]), order.by = as.POSIXct(holder[,1]))
+  #   keeper <- rbind(keeper, holder)
+  # }
+  # if (nrow(keeper) != nrow(holder)) keeper <- rbind(keeper, holder)
+  colnames(keeper) <- make.names(pi.tags[i,1])
+  keeper
+}
+
+# stop cluster and remove clients
+stopCluster(cluster)
+
+# insert serial backend, otherwise error in repetetive tasks
+registerDoSEQ()
+
+# clean up a bit.
+invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+
+TA <- all.data$South.AB.4.Zone.5.TAAC.Air.SP/25
+colnames(TA) <- "South.AB.4.TA"

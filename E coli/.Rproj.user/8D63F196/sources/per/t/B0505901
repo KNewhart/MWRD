@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1561568240561.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1096434657",
+    "id" : "B0505901",
+    "lastKnownWriteTime" : 1561579341,
+    "last_content_update" : 1561579341188,
+    "path" : "~/GitHub/MWRD/E coli/pre-dis-ecoli-sludge-blanket.R",
+    "project_path" : "pre-dis-ecoli-sludge-blanket.R",
+    "properties" : {
+        "cursorPosition" : "129,27",
+        "scrollLine" : "111",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

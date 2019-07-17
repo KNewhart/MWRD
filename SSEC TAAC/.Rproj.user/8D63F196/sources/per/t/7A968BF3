@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1561653058164.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3680501814",
+    "id" : "7A968BF3",
+    "lastKnownWriteTime" : 1561667198,
+    "last_content_update" : 1561667198037,
+    "path" : "~/GitHub/MWRD/SSEC TAAC/SSEC_TAAC.R",
+    "project_path" : "SSEC_TAAC.R",
+    "properties" : {
+        "cursorPosition" : "95,37",
+        "scrollLine" : "66",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

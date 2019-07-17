@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1561579995689.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "281391744",
+    "id" : "5AFEA08B",
+    "lastKnownWriteTime" : 1559230525,
+    "last_content_update" : 1559230525,
+    "path" : "~/GitHub/MWRD/MWRD_PAA_v3.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "243,0",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
