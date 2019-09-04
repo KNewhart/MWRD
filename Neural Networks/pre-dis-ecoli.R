@@ -54,6 +54,16 @@ for(i in var.n) {
   }
 }
 
+## Do something
+mod.data <- all.data
+
+
+
+
+
+
+
+
 ecoli <- all.data
 
 timestamps <- index(all.data)

@@ -21,3 +21,4 @@ calcCt <- function(C1, # D = initial decay (C1=C0-D)
   Ct <- (C1-C1*exp(-k*t2))/k # Ct under single exponential curve
   return(Ct)
 }
+

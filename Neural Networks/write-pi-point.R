@@ -1,21 +1,40 @@
+###### Setup Pi #####
+# Login information
+useKerberos <- TRUE
+username <- "knewhart"
+password <- "Lunabear2@"
+validateSSL <- TRUE
+debug <- TRUE
+piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+
+
 # Write PI Point
 library(piwebapi)
-newPoint <- PIPoint(NULL, NULL, "SINUSOIDR", NULL, "12 Hour Sine Wave", "classic", "Float32", NULL, NULL, NULL, NULL, NULL)  
-response10 <- piWebApiService$dataServer$createPoint("s0TJVKOA0Ws0KihcA8rM1GogUElGSVRORVNTLVNSVjI", newPoint)  
 
+createdPoint <- piWebApiService$point$getByPath("\\\\APPLEPI\\Test_knewhart")
 
-timedValue1 <- PITimedValue(timestamp = "2017-04-26T17:40:54Z", value = 30)  
-timedValue2 <- PITimedValue(timestamp = "2017-04-27T17:40:54Z", value = 31)  
-timedValue3 <- PITimedValue(timestamp = "2017-04-26T17:40:54Z", value = 32)  
-timedValue4 <- PITimedValue(timestamp = "2017-04-27T17:40:54Z", value = 33)  
+timedValue1 <- PITimedValue(timestamp = "2019-04-26T13:40:54Z", value = 25)  
+timedValue2 <- PITimedValue(timestamp = "2017-04-27T13:40:54Z", value = 50)  
+
+timedValue3 <- PITimedValue(timestamp = "2017-04-26T12:40:54Z", value = 75)  
+timedValue4 <- PITimedValue(timestamp = "2017-04-27T12:40:54Z", value = 100)  
+
 t1 <- list(timedValue1, timedValue2)  
 t2 <- list(timedValue3, timedValue4)  
-s1 <- PIStreamValues(webId = webIds[1], items = t1);  
-s2 <- PIStreamValues(webId = webIds[2], items = t2);  
+
+s1 <- PIStreamValues(webId = createdPoint$WebId, items = t1);  
+s2 <- PIStreamValues(webId = createdPoint$WebId, items = t2);  
+
 values <- list(s1, s2)  
-response11 <- piWebApiService$streamSet$updateValuesAdHoc(values, "BufferIfPossible", "Replace");  
-  
-createdPoint <- piWebApiService$point$getByPath("\\\\PIFITNESS-SRV2\\SINUSOIDR")  
-updatePoint <- PIPoint()  
-updatePoint$Descriptor <- "12 Hour Sine Wave for R"  
-response12 <- piWebApiService$point$update(createdPoint$WebId, updatePoint)
+
+# response12 <- piWebApiService$streamSet$updateValuesAdHoc(values, "Buffer", "Insert")
+
+response11 <- piWebApiService$streamSet$updateValuesAdHoc(values, "Buffer", "Replace")
+
+
+
+# data.holder <- piWebApiService$data$getRecordedValues(path="\\\\applepi\\Test_knewhart", startTime = "2019-04-26T17:40:54Z", endTime = "2017-04-27T17:40:54Z")
+
+
+
+
