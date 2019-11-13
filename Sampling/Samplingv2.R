@@ -26,7 +26,7 @@ data <- data[order(data[,1]),]
 
 # Load Flow and setpoint Data 
 {
-  # Install and load piwebapi package from Github
+  # Instasll and load piwebapi package from Github
   # install.packages("devtools")
   # library(devtools)
   # install_github("rbechalany/PI-Web-API-Client-R")
@@ -106,6 +106,45 @@ colnames(data.to.save) <- c("Datetime", "Sample Location", "PAA (mg/L)", "Flow (
                             "PAA Setpoint (mg/L)", "Chemscan PAA (mg/L)", "HRT (min)", "Sampling event")
 # write.csv(data.to.save, file="data/PAA PROFILE DATA_08-08-19_PAA.csv", row.names = FALSE)
 }
+
+##### Calculate k & D #####
+{
+  data <- data.to.save
+  exp.mod.vals <- matrix(data=NA, nrow=nrow(data), ncol=2)
+  mod.results <- matrix(data=NA, nrow=length(unique(data[,"Sampling event"])), ncol=4)
+  # Fit curve
+  for(i in unique(data[,"Sampling event"])) {
+    s <- which(data[,"Sampling event"] %in% i)
+    yy <- log(as.numeric(as.vector(data[s,"PAA (mg/L)"])))
+    xx <- as.numeric(as.vector(data[s,"HRT (min)"]))
+    if(any(is.infinite(yy))) {
+      xx <- xx[!is.infinite(yy)]
+      yy <- yy[!is.infinite(yy)]
+    }
+    mod <- lm(yy~xx)
+    yy.predict <- predict(mod)
+    k <- as.numeric(coef(mod)[2]*-1)
+    C0 <- exp(as.numeric(coef(mod)[1]))
+    D <- as.numeric(as.vector(data[s,"PAA Setpoint (mg/L)"])) - C0
+    exp.mod.vals[s,1] <- D
+    exp.mod.vals[s,2] <- k
+    mod.results[i,1] <- D[1]
+    mod.results[i,2] <- k[1]
+    mod.results[i,3] <- as.POSIXct(data[s,"Datetime"])[1]
+    mod.results[i,4] <- C0/k-C0/k*exp(-k*last(xx)) # CT
+    
+  }
+  
+  CT <- mod.results[,4]
+  
+  
+}
+
+
+
+
+
+
 
 ###### Compile other components #####
 {
@@ -205,10 +244,50 @@ for(i in 2:nrow(data3)){
     }
   }
 }
-
 data3 <- cbind(data3, as.data.frame(sample.count, stringsAsFactors = FALSE))
+
 sampling.count <- sapply(unique(sample.count), function(x) length(which(sample.count == x)))
 data4 <- data3[(sample.count %in% which(sampling.count > 1)),]
+
+log.removal <- sapply(unique(data4[,"sample.count"]), function(x) {
+  log10(data4[first(which(data4[,"sample.count"] == x)),3]/data4[last(which(data4[,"sample.count"] == x)),3])
+})
+
+final.ecoli <- sapply(unique(data4[,"sample.count"]), function(x) {
+  data4[last(which(data4[,"sample.count"] == x)),3]
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
+chemscan <- as.numeric(sapply(unique(data.to.save[,8]), function(x) data.to.save[first(which(data.to.save[,8]==x)),6]))
+data.to.plot <- data.frame("CT"=CT, "log.removal"=log.removal, "Chemscan"=chemscan)
+colnames(data.to.plot) <- c("CT", "log.removal", "chemscan")
+
+scatterplot3d(data.to.plot[,1], data.to.plot[,2], data.to.plot[,3], highlight.3d = TRUE,  angle = 30,col.axis = "blue", col.grid = "lightblue", cex.axis = 1.3,cex.lab = 1.1, main = "Hemisphere", pch = 20)
+
+data.to.analyze <- scale(data.to.plot)
+data.pca <- princomp(data.to.analyze)
+summary(data.pca)
+plot(data.pca)
+
+data.f1 <- factanal(data.to.analyze, factors=1, rotation="varimax")
+plot(log.removal ~ CT, data=data.to.plot)
+plot(log(final.ecoli) ~ data.to.plot[,"CT"], pch=20, xlab="CT", ylab=" Final E.coli", main="Final Ecoli vs PAA CT")
+data.lm <- lm(log(final.ecoli) ~ data.to.plot[,"CT"])
+
+library(mgcv)
+data.gam <- gam(log(final.ecoli) ~ data.to.plot[,"CT"] + data.to.plot[,"Chemscan"])
+
 # Re number
 unique.samples <- unique(which(sampling.count > 1))
 for(i in 1:nrow(data4)) {
@@ -255,35 +334,7 @@ data <- cbind(data, data.frame(PAA.PROFILE.DATA.tss$NUMERIC_RESULT))
 write.csv(data, file="data/PAA PROFILE DATA_08-08-19_TSS.csv")
 }
 
-##### Calculate k & D #####
-{
-data <- data.to.save
-exp.mod.vals <- matrix(data=NA, nrow=nrow(data), ncol=2)
-mod.results <- matrix(data=NA, nrow=length(unique(data[,"Sampling event"])), ncol=3)
-# Fit curve
-for(i in unique(data[,"Sampling event"])) {
-  s <- which(data[,"Sampling event"] %in% i)
-  yy <- log(as.numeric(as.vector(data[s,"PAA (mg/L)"])))
-  xx <- as.numeric(as.vector(data[s,"HRT (min)"]))
-  if(any(is.infinite(yy))) {
-    xx <- xx[!is.infinite(yy)]
-    yy <- yy[!is.infinite(yy)]
-  }
-  mod <- lm(yy~xx)
-  yy.predict <- predict(mod)
-  k <- as.numeric(coef(mod)[2]*-1)
-  C0 <- exp(as.numeric(coef(mod)[1]))
-  D <- as.numeric(as.vector(data[s,"PAA Setpoint (mg/L)"])) - C0
-  exp.mod.vals[s,1] <- D
-  exp.mod.vals[s,2] <- k
-  mod.results[i,1] <- D[1]
-  mod.results[i,2] <- k[1]
-  mod.results[i,3] <- as.POSIXct(data[s,"Datetime"])[1]
-}
 
-
-
-}
 
 ##### If k is constant #####
 avg.k <- mean(mod.results[,2])
@@ -291,15 +342,15 @@ avg.k <- mean(mod.results[,2])
 
 ##### PLOTS AND MODELS #####
 data <- data4
-par(mfrow=c(round(length(unique(data$sample.count))/4),4))
-pdf(file="plots/PAA_1storder_plots.pdf", width=8.5, height=11)
-par(mfrow=c(4,3), oma=c(2,2,2,2))
+# par(mfrow=c(round(length(unique(data$sample.count))/4),4))
+# pdf(file="plots/PAA_1storder_plots.pdf", width=8.5, height=11)
+# par(mfrow=c(4,3), oma=c(2,2,2,2))
 exp.mod.vals <- matrix(data=NA, nrow=nrow(data), ncol=2)
 mod.results <- matrix(data=NA, nrow=length(unique(data$sample.count)), ncol=3)
 # Fit curve
 for(i in unique(data$sample.count)) {
   yy <- log(as.numeric(as.vector(data[(data$sample.count %in% i),"NUMERIC_RESULT"])))
-  xx <- as.numeric(as.vector(data[(data$sample.count %in% i),"hrt"]))
+  xx <- as.numeric(as.vector(data[(data$sample.count %in% i),"HRT (min)"]))
   if(any(is.infinite(yy))) {
     xx <- xx[!is.infinite(yy)]
     yy <- yy[!is.infinite(yy)]
@@ -313,17 +364,21 @@ for(i in unique(data$sample.count)) {
   exp.mod.vals[which(data$sample.count %in% i),2] <- k
   mod.results[i,1] <- D[1]
   mod.results[i,2] <- k[1]
-  mod.results[i,3] <- as.POSIXct(rownames(data[(data$sample.count %in% i),]))[1]
+  mod.results[i,3] <- as.POSIXct(data[(data$sample.count %in% i),"date.time"])[1]
+  
+  #CT?
+  t <- last(as.numeric(as.vector(data[(data$sample.count %in% i),"HRT (min)"])))
+  CT <- C0/k[1]-C0/k[0]*exp(-k[1]*t)
     
   plot(y=as.numeric(as.vector(data[(data$sample.count %in% i),"NUMERIC_RESULT"])),
-       x=as.numeric(as.vector(data[(data$sample.count %in% i),"hrt"])),
+       x=as.numeric(as.vector(data[(data$sample.count %in% i),"HRT (min)"])),
        ylab="PAA Concentration", 
        xlab="HRT (min)",
        main=paste("Trial",i),
        ylim=c(0,1.44),
        xlim=c(0,101),
        pch=20)
-  new.data <- data.frame(x=seq(min(na.omit(as.numeric(as.vector(data[(data$sample.count %in% i),"hrt"])))), max(na.omit(as.numeric(as.vector(data[(data$sample.count %in% i),"hrt"])))), length.out=100))
+  new.data <- data.frame(x=seq(min(na.omit(as.numeric(as.vector(data[(data$sample.count %in% i),"HRT (min)"])))), max(na.omit(as.numeric(as.vector(data[(data$sample.count %in% i),"hrt"])))), length.out=100))
   new.data <- cbind(new.data, exp(-k*new.data+log(C0)))
   points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
   labels <- list(
@@ -334,7 +389,7 @@ for(i in unique(data$sample.count)) {
   mtext(labels[[1]], side=3, line=0.25, cex=0.75)
   text(x=90,y=1.45, paste(labels[[2]],"\n",labels[[3]]), pos=1)
 }
-dev.off()
+# dev.off()
 
 # Boxplot of D & k
 pdf(file="plots/PAA_1storder_boxplots.pdf", width=8.5, height=11)
