@@ -54,7 +54,7 @@ mergeData <- function(list.x, sort.by = 1, average = FALSE) {
 ##### PAA Process Data - Grab #####
 delta <- intToUtf8(0x0394)
 # Daily data
-process.data <- readxl::read_excel("data/Copy of PAA Process Data Clean KN.xlsx", 
+process.data <- readxl::read_excel("data/PAA PROFILE DATA_08-12-18.xlsx", 
                                    sheet = "Process Data", skip = 1)
 process.data <- process.data[-1,]
 n.paa.grab <- xts::xts(apply(process.data[,c(12:17,19:27)], 2, function(x) as.numeric(x)), order.by =  as.POSIXct(as.data.frame(process.data[,18])[,1], format = "%Y-%m-%d %H:%M:%S"))
@@ -79,7 +79,7 @@ rm(process.data)
 
 
 ##### October PAA Process Data - Grab #####
-oct.paa <- readxl::read_excel("data/Copy of PAA Process Data Clean KN.xlsx", 
+oct.paa <- readxl::read_excel("data/PAA PROFILE DATA_08-12-18.xlsx", 
                               sheet = "Oct 2 to 15, 2018", range = "A1:V170")[-1,]
 n.datetime <- which(colnames(oct.paa) == "Date and Time")
 oct.paa.index <- oct.paa[,n.datetime]
@@ -88,7 +88,7 @@ colnames(oct.paa) <- stringr::str_replace_all(colnames(oct.paa), c(" " = "." , "
 oct.paa <- xts(oct.paa, order.by = oct.paa.index[[1]])
 
 ###### North Carbovis Data #####
-vis.data <- readxl::read_excel("data/NNE Carbovis Data2.xlsx",
+vis.data <- readxl::read_excel("data/NNE Carbovis Data 2018.xlsx",
                                sheet = "Inst DL Data", col_types = c("date",
                                                                      "text", "numeric", "skip", "skip",
                                                                      "skip", "numeric", "skip", "skip",
@@ -112,7 +112,7 @@ vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])
 
 ##### North Secondary - Online #####
 ## North secondary online
-nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/North Secondary and Disinfection Process Data_20190215.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
+nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/North Secondary and Disinfection Process Data_2018.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
                                                                  col_types = c("date", "numeric", "numeric", 
                                                                                "numeric", "numeric", "numeric", 
                                                                                "numeric", "numeric", "numeric", 
