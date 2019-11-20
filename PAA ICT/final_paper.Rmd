@@ -77,7 +77,7 @@ nsec.online <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec
 ```{r Merge Oct 2018 data, include=FALSE}
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   require(xts)
-  
+  if (exists("new.data")) rm(new.data)
   all.data <- do.call(merge, list.x)
   all.data.index <- which(!is.na(all.data[,sort.by]))
   for(i in 1:(length(all.data.index)-1)) {
@@ -423,6 +423,7 @@ if("paa.RData" %in% list.files(path="./data/compiled")) {
   
   # Label sampling campaigns & hour of the day
   sample.count <- vector()
+  min <- vector()
   hour <- vector()
   for(i in 2:nrow(data)){
     if(i == 2) {
@@ -433,9 +434,11 @@ if("paa.RData" %in% list.files(path="./data/compiled")) {
     if(difftime(data[,"date.time"][i],data[,"date.time"][i-1], units = "mins") > 60) {
       if(i == nrow(data)) {
         sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
+        min <- c(min, rep(as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(data$date.time[i],'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min')), length(c(last.row:(i)))))
         hour <- c(hour, rep(format(round(data$date.time[i], units="hours"), "%H"), length(c(last.row:(i)))))
       } else {
         sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:(i-1)))))
+        min <- c(min, rep(as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(data$date.time[i-1],'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min')), length(c(last.row:(i-1)))))
         hour <- c(hour, rep(format(round(data$date.time[i-1], units="hours"), "%H"), length(c(last.row:(i-1)))))
         last.row <- i
         sampling.campaign <- sampling.campaign + 1
@@ -444,11 +447,14 @@ if("paa.RData" %in% list.files(path="./data/compiled")) {
       if(i == nrow(data)) {
         sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
         hour <- c(hour, rep(format(round(data$date.time[i], units="hours"), "%H"), length(c(last.row:(i)))))
+        min <- c(min, rep(as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(data$date.time[i],'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min')), length(c(last.row:(i)))))
       }
     }
   }
-  data2 <- cbind(data, as.data.frame(sample.count, stringsAsFactors=FALSE), as.data.frame(as.numeric(hour)))
-  colnames(data2)[ncol(data2)] <- "hour.of.day"
+  # data2 <- cbind(data, as.data.frame(sample.count, stringsAsFactors=FALSE), as.data.frame(as.numeric(hour)))
+  # colnames(data2)[ncol(data2)] <- "hour.of.day"
+  data2 <- cbind(data, as.data.frame(sample.count, stringsAsFactors=FALSE), as.data.frame(min))
+  colnames(data2)[ncol(data2)] <- "min.of.day"
   paa <- data2
   save(paa, file="./data/compiled/paa.RData")
 }
@@ -685,12 +691,13 @@ for(i in unique(data$sample.count)) {
 
 
 ```{r}
+library(doParallel)
 rmse.calculator <- function(predicted, actual){
   (sum((predicted-actual)^2/length(predicted)))^0.5
 }
 
 # Use paa.wq.ecoli to predict CT
-training.vars <- c("hour.of.day", "DIS.North.Flow", "PAA.Setpoint", "DIS.PAA.N.Upstream.Residual", "NSEC.Aerobic.SRT", "NSEC.Effluent.NH3", "NSEC.Effluent.NO3", "NSEC.Effluent.OP", "NSEC.Effluent.TSS", "NSEC.Effluent.Flow")
+training.vars <- c("min.of.day", "DIS.North.Flow", "PAA.Setpoint", "DIS.PAA.N.Upstream.Residual", "NSEC.Aerobic.SRT", "NSEC.Effluent.NH3", "NSEC.Effluent.NO3", "NSEC.Effluent.OP", "NSEC.Effluent.TSS", "NSEC.Effluent.Flow")
 training.data <- paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),] # first observation of each sampling event
 training.data <- training.data[,sapply(training.vars, function(x) which(colnames(training.data)==x))] # Exclude lab samples, only online data
 training.data <- cbind(Ct.all, training.data)
@@ -745,17 +752,177 @@ print(rmse.calculator(results[,2], results[,1]))
 ```
 
 
+# Real-time simulation
+```{r include=FALSE}
+# Install and load piwebapi package from Github
+# install.packages("devtools")
+# library(devtools)
+# install_github("rbechalany/PI-Web-API-Client-R")
+library(piwebapi)
+
+# Login information
+useKerberos <- TRUE
+username <- "knewhart"
+password <- "Lunabear2@"
+validateSSL <- TRUE
+debug <- TRUE
+piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+
+compile.range <- 9:109
+all.data <- foreach(days=compile.range, .combine = rbind) %do% {
+  # Go from MT to UTC
+date.time <- (Sys.time()-days*60*60*24)-seq(60*60*24,60, by=-60*5) # Pull 1-min date of last 24 hours
+pi.times <- matrix(NA,nrow=length(date.time),ncol=1)
+for(i in 1:length(date.time)) {
+  time.obj <- date.time[i]
+  time.obj <- lubridate::with_tz(time.obj, tzone="UTC")
+  pi.times[i,1] <- paste0(as.character(format(time.obj,"%Y-%m-%d")),"T",
+                          as.character(format(time.obj,"%H:%M:%S")),"Z")
+}
+# Declare with variables/pi tags to pull
+pi.tags <- matrix(c("DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
+                    "PAA Setpoint", "\\\\applepi\\PAA_N_Target_Dose",
+                    "DIS PAA N Upstream Residual", "\\\\applepi\\AI_K826",
+                    "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
+                    "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
+                    "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
+                    "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
+                    "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
+                    # "NSEC Effluent NO5", "\\\\applepi\\AI-K570N", # All zeros
+                    "NSEC Effluent Flow", "\\\\applepi\\FY-F225"), ncol=2, byrow=TRUE)
+# Pull data
+for(tag in 1:nrow(pi.tags)) {
+  pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
+  data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
+                                                                    time = c(pi.times[,1]))[[2]]
+  data.holder <- do.call("rbind", lapply(data.holder, function(x) c(x$Timestamp, x$Value)))
+  if(ncol(data.holder)>2)
+  colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
+  if(tag==1) all.data <- data.holder
+  if(tag>1) {
+    all.data <- cbind(all.data, data.holder[,2])
+    colnames(all.data)[ncol(all.data)] <- make.names(pi.tags[tag,1])
+  }
+}
+# Fix tags from UTC to MT
+date.time <- all.data[,1]
+new.date.time <- .POSIXct(rep(NA, length(date.time)))
+for(i in 1:length(date.time)) {
+  time.obj <- paste(strsplit(date.time[i], "T")[[1]][1], 
+                    strsplit(strsplit(date.time[i], "T")[[1]][2], "Z")[[1]][1])
+  time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+  new.date.time[i] <- time.obj
+}
+all.data <- data.frame(all.data)
+all.data[,1] <- as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(new.date.time,'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min'))
+colnames(all.data)[1] <- "min.of.day"
+
+return(all.data)
+}
+
+```
 
 
 
+```{r}
+training.mean <- apply(training.data, 2, mean)
+training.sd <- apply(scale(training.data, scale=FALSE), 2, sd)
+training.NN <- scale(training.data)
+testing.NN <- sapply(2:ncol(training.data), function(x) (as.numeric(all.data[,(x-1)])-training.mean[x])/training.sd[x])
+NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+predict.NN <-  neuralnet::compute(NN, data.frame(testing.NN))
+predict.NN <- predict.NN$net.result*training.sd[predict.column]+training.mean[predict.column]
+test.CT <- predict.NN
+```
 
 
+```{r plot training data}
+date.time <- paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),1]
+plot.data <- xts(training.data, order.by = date.time)
+par(mfrow=c(5,2), mar=c(2,2,2,1))
+for(i in 2:ncol(plot.data)) {
+  plot(as.zoo(plot.data[,i]), main=colnames(plot.data)[i], ylab="", xlab="", type="p")
+}
+train.CT <- plot.data[,1]
+```
 
 
+```{r plot testing data}
+date.time <- as.vector(sapply(compile.range, function(days) (Sys.time()-days*60*60*24)-seq(60*60*24,60, by=-60*5)))
+date.time <- as.POSIXct(date.time, origin="1970-01-01")
+plot.data <- apply(all.data,2,as.numeric)
+plot.data <- xts(plot.data, order.by = date.time)
+test.CT <- xts(test.CT, order.by=date.time)
+par(mfrow=c(5,2), mar=c(2,2,2,1))
+for(i in 1:ncol(plot.data)) {
+  plot(as.zoo(plot.data[,i]), main=colnames(plot.data)[i], ylab="", xlab="", type="l")
+}
+```
 
 
+```{r plot training and testing CT}
+par(mfrow=c(2,1), mar=c(2,2,2,1))
+r <- range(train.CT)
+plot(as.zoo(train.CT), type="p", ylab="", xlab="", main="Actual CT")
+plot(as.zoo(test.CT), type="p", ylab="", xlab="", main="Predicted CT", ylim=c(r[1],r[2]))
+```
 
 
+```{r Predisinfection Ecoli, include=FALSE}
+library(piwebapi)
+  
+  # Login information
+  useKerberos <- TRUE
+  username <- "knewhart"
+  password <- "Lunabear2@"
+  validateSSL <- TRUE
+  debug <- TRUE
+  piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+  # Go from MT to UTC
+  time.obj <- c(lubridate::with_tz(Sys.time()-365*24*60*60, tzone="UTC"),
+                lubridate::with_tz(Sys.time(), tzone="UTC"))
+  time.obj <-  paste0(as.character(format(time.obj,"%Y-%m-%d")),"T",
+                          as.character(format(time.obj,"%H:%M:%S")),"Z")
+
+  # Declare with variables/pi tags to pull
+  pi.tags <- matrix(c("N PrePAA Ecoli", "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G",
+                      "DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
+                      "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
+                      "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
+                      "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
+                      "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
+                      "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
+                      "NSEC Effluent Flow", "\\\\applepi\\FY-F225"), ncol=2, byrow=TRUE)
+  	
+
+  # Pull data
+  for(tag in 1:nrow(pi.tags)) {
+    if(tag==1) {
+      data.holder <- piWebApiService$data$getRecordedValues(path=pi.tags[tag,2], startTime = time.obj[1], endTime = time.obj[2])[,c(2,1)]
+      colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
+      all.data <- data.holder
+    } else {
+      pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
+      data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
+                                                                      time = c(all.data[,1]))[[2]]
+      data.holder <- do.call("rbind", lapply(data.holder, function(x) x[2]))
+      all.data <- cbind(all.data, data.holder)
+      colnames(all.data)[ncol(all.data)] <- make.names(pi.tags[tag,1])
+    }
+  }
+# Fix tags from UTC to MT
+date.time <- all.data[,1]
+new.date.time <- as.POSIXct(rep(NA, length(date.time)))
+for(i in 1:length(date.time)) {
+  time.obj <- paste(strsplit(date.time[i], "T")[[1]][1], 
+                    strsplit(strsplit(date.time[i], "T")[[1]][2], "Z")[[1]][1])
+  time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+  new.date.time[i] <- time.obj
+}
+all.data <- data.frame(all.data)
+all.data[,1] <- new.date.time
+colnames(all.data)[1] <- "date.time"
+```
 
 
 
