@@ -1,0 +1,669 @@
+---
+title: "weftec_abstract"
+output:
+  word_document:
+    reference_docx: weftec_abstract_template.docx
+---
+```{r Abstract requirements, eval=FALSE, include=FALSE}
+# 
+# Format and Length
+# 
+#     Abstracts are limited in length to 1100 words. This is the equivalent of 4.5 pages, double-space, 11-point font Arial with 1 inch margins. The word count does not include graphics, tables, references or sources.
+#     At a minimum, the abstract must be one full page or at least 250 words.
+#     You will be asked to input one key presentation takeaway. The key takeaway should clearly state what people will learn from your presentation.
+#     There are individual fields for the presentation title, authors, references, keywords, and key takeaway. Use these fields and do not put them in the body of your abstract.
+#     You must copy and paste the body of your abstract into the online system or re-type it. There is no option to upload a document.
+#     Do not attempt to copy and paste headers or footers into the system.
+#     Do not put your document into a PDF.
+#     Formatting of copied and pasted text will be retained. However, simple formatting (such as italics, bold, and underline) can be added using the online submission system. Instructions are provided online during submission.
+# 
+# Images/Graphs
+# 
+#     Images/photos/tables need to be uploaded separately.
+#     We recommend that you save excel tables as a .jpg file before uploading.
+#     It is recommended (not required) that images and tables be no more than 650 pixels wide and 900 pixels high. Simple images/tables can be on the smaller side of the recommended pixel size. More complex images MAY need to be larger than the recommended size. 
+#     Always check the preview tab to make sure your images are readable.
+# 
+
+```
+
+```{r knitr setup, include=FALSE}
+knitr::opts_chunk$set(
+	fig.align = "center",
+	fig.path = "figures/",
+	fig.width = 6.5,
+	dpi = 300
+)
+```
+
+**presentation title, authors, references, keywords, key takeaway**
+
+# Introduction
+
+The goal of this work is to reduce the cost of disinfection using peracetic acid (PAA) at the Robert W. Hite Treatment Facility operated by the Metro Wastewater Reclamation District (MWRD) in Denver, CO. Due to differences between the initial PAA pilot and full-scale disinfection installation (e.g., geometry and residence time of disinfection basin, variable influent E. coli concentrations, variable PAA initial demand), MWRD experienced an instance of exceeding its E. coli discharge limit for a single day (252 MPN/100 mL based on a 7-day geometric mean, 126 MPN/100 mL based on a 30-day geometric mean) while operating in constant CT dosing mode. To ensure an exceedance does not occur and that proper dosing is achieved, MWRD is currently operating at a constant initial dose of PAA (1.2 mg/L PAA at the time of this report. This approach has increased PAA chemical costs substantially and has resulted in a re-evaluation of the PAA dosing strategy. 
+
+Manoli et al. (2019) proposed a novel CT-based PAA dosing strategy derived from first principals. A double-exponential model of microbial inactivation was solved given a first order model of PAA decay and an n-CSTR hydraulic model. The formulation predicted effluent fecal coliform concentrations given influent fecal coliform concentration and the integrated CT (ICT). ICT was solved given the initial concentration of PAA, the PAA decay constant, and the initial demand of PAA. The PAA decay constant was estimated by solving for various ICTs using Excel Solver and in for Manoli et al. ranged from 0.01-0.02 min-1. Given the average ICT for a given hour, fecal coliform samples were taken at the inlet and outlet to fit the microbial inactivation model. The fitted parameters (β, kd, m, kp) varied with each batch, which demonstrates that the first order model may not fully describe PAA demand and decay kinetics in a real water matrix, requiring four degrees of freedom to fit the model to the observed data. 
+
+Alternatives to predicting PAA concentration using first order models are non-deterministic approaches, such as statistical models and neutral network models. Both approaches have the advantage of being able to consider the impact of multiple variables without a known relationship. However, water quality and operational parameters of a wastewater treatment system are too complex for many statistical models (e.g., linear regression, generalized linear models, random forest model, support vector machines). Therefore, neural networks (NN) were used to predict concentrations of PAA throughout the disinfection basin and exponential model fits of the predicted concentrations were used to calculate instantaneous CT. 
+
+# Materials and methods
+```{r Import data and functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+r.sq <- function(pred,act) {
+  a <- cor(pred,act)^2
+  return(a)
+}
+rmse <- function(pred,act) {
+  a <- (sum((pred-act)^2)/length(act))^0.5
+  return(a)
+}
+
+library(xts)
+mergeData <- function(list.x, sort.by = 1, average = FALSE) {
+  all.data <- do.call(merge, list.x)
+  all.data.index <- which(!is.na(all.data[,sort.by]))
+  for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    if((row.stop-row.start) == 1) {
+      next
+    }
+    if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if(average) {
+      data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
+      rownames(data.avg) <- as.character(index(all.data)[row.stop])
+      
+    }
+    if (!exists("new.data")) {
+      if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
+      if(average) new.data <- data.avg
+    }
+    if (exists("new.data")) {
+      if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+      if(average) new.data <- rbind(new.data, data.avg)
+    }
+  }
+  new.data <- na.omit(new.data)
+  na.fix <- which(!is.na(as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S")))
+  new.data.xts <- xts(new.data[na.fix,], order.by = as.POSIXct(rownames(new.data)[na.fix], format = "%Y-%m-%d %H:%M:%S"))
+  
+  return(new.data.xts)
+}
+
+##### PAA Process Data - Grab #####
+delta <- intToUtf8(0x0394)
+# Daily data
+process.data <- readxl::read_excel("data/PAA PROFILE DATA_08-12-18.xlsx", 
+                                   sheet = "Process Data", skip = 1)
+process.data <- process.data[-1,]
+n.paa.grab <- xts::xts(apply(process.data[,c(12:17,19:27)], 2, function(x) as.numeric(x)), order.by =  as.POSIXct(as.data.frame(process.data[,18])[,1], format = "%Y-%m-%d %H:%M:%S"))
+colnames(n.paa.grab) <- c("PAA Dosing Pump Total Flow (gpm)", #1 
+                          "PAA Dose (mg/L)", #2
+                          "PAA Setpoint (mg/L)", #3 
+                          "Upstream  Residual (mg/L)", #4 
+                          # paste0(delta,"PAA (mg/L)"),	#5
+                          "deltaPAA (mg/L)", #5
+                          "Pre-Disinfection E. coli (MPN/100 mL)",  #6
+                          "Effluent Discharge (MGD)", #7
+                          "Contact Tank Volume (MG)", #8
+                          "Detention Time (min)", #9
+                          "Time to Upstream Sample Point (min)", #10
+                          "Log Removal (N0/N)", #11
+                          "Effluent E. coli (MPN/100 mL)", #12
+                          "CT (mg/L*min)", #13
+                          "CuT (mg/L*min)", #14
+                          "Ambient Temperature")#15
+colnames(n.paa.grab) <- stringr::str_replace_all(colnames(n.paa.grab), c(" " = ".", "/" = "." , "-" = "","[(]" = "", "[)]" = "", "[*]"="."))
+rm(process.data)
+
+
+##### October PAA Process Data - Grab #####
+oct.paa <- readxl::read_excel("data/PAA PROFILE DATA_08-12-18.xlsx", 
+                              sheet = "Oct 2 to 15, 2018", range = "A1:V170")[-1,]
+n.datetime <- which(colnames(oct.paa) == "Date and Time")
+oct.paa.index <- oct.paa[,n.datetime]
+oct.paa <- sapply(oct.paa[,-n.datetime], function(x) as.numeric(x))
+colnames(oct.paa) <- stringr::str_replace_all(colnames(oct.paa), c(" " = "." , "-" = "" ))
+oct.paa <- xts(oct.paa, order.by = oct.paa.index[[1]])
+
+###### North Carbovis Data #####
+vis.data <- readxl::read_excel("data/NNE Carbovis Data 2018.xlsx",
+                               sheet = "Inst DL Data", col_types = c("date",
+                                                                     "text", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip"), skip = 6)
+vis.data <- vis.data[which(vis.data[,2] == "Valid"),-2]
+colnames(vis.data) <- c("Time", "CODto (mg/L)", "CODto (V)",
+                        "TSS (mg/L)", "TSS (V)",
+                        "UVT (%)", "UVT (V)",
+                        "CODds (mg/L)", "CODds (V)",
+                        "SACto (1/m)", "SACto (V)")
+vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])[,1], format = "%Y-%m-%d %H-%M-%S"))
+
+
+##### North Secondary - Online #####
+## North secondary online
+nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/North Secondary and Disinfection Process Data_2018.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
+                                                                 col_types = c("date", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric"), 
+                                                                 skip = 4)))
+nsec.online <- xts(nsec.online[,-1], order.by = nsec.online[,1])
+colnames(nsec.online) <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Influent NH3","NSEC Influent TSS","NSEC Influent COD",
+                           "NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3",
+                           "GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow",
+                           "AB-10 Influent Flow","AB-10 A-Pass Temp","AB-10 A-Pass pH","AB-10 A-Pass DO","AB-10 A-Pass NH3","AB-10 A-Pass NO3","AB-10 B-Pass DO","AB-10 C-Pass pH	AB-10","C-Pass DO","AB-10 C-Pass NH3","AB-10 C-Pass NO3","AB-10 MLSS","AB-10 MLR Flow","Quad 4 RAS Flow","Quad 4 Basins in Service","AB-10 RAS Flow","NSEC Aerobic SRT",
+                           "NSEC Effluent NH3","NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS","NSEC Effluent NO5","NSEC Effluent Flow")
+
+
+# nsec.online <- nsec.online["2018-11-04/2018-12-01"]
+cols2remove <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3","GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
+
+nsec.online <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec.online) == x))]
+
+more.nsec <- readxl::read_excel("data/PAA-Ecoli.xlsx", 
+                                sheet = "Sheet1", col_types = c("date", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric"))
+more.nsec <- more.nsec[which(!is.na(more.nsec[,1])),]
+more.nsec <- xts(more.nsec[,-1], order.by = more.nsec[,1][[1]])
+colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North Flow", 
+                         "Temperature NSEC Inf", "ASRT", "NSEC Effluent NH3",
+                         "NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS",
+                         "NSEC Effluent NO5","NSEC Effluent Flow")
+
+all.data <- oct.paa
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+all.data <- mergeData(list.x = list(all.data,vis.data[r],nsec.online[r,22:28]))
+all.data <- na.omit(all.data)
+remove.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples","Sample.Time..1_min.","Detention.Time","PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.", "CODds..V.", "TSS..V.", "UVT..V.", "UVT..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+```
+
+A total of 143 observations were collected for this study. From October 2, 2018 through Oct 15, 2018, three daily grab samples were taken (1) immediately downstream of the PAA dosing location and (2) halfway through the disinfection basin. Online data recorded at the time of collection were also included; specifically from nutrient and total suspended solids (TSS) sensor measurements at the end of the secondary treatment process and ultraviolet-visual spectrum measurements (YSI CarboVis®, Yellow Springs, OH, USA) at influent of the disinfection basin.
+
+```{r Table of variables, echo=FALSE}
+library(flextable)
+table.data <- data.frame("Process Variables"=colnames(all.data),
+                         "Location"=c("Disinfection", "Disinfection", "Disinfection","Disinfection", "Secondary", "Secondary", "Secondary", "Disinfection", "Disinfection", "Disinfection", "Disinfection", "Disinfection", "Disinfection",  "Secondary", "Secondary", "Secondary", "Secondary", "Secondary", "Secondary","Secondary"),
+                         "Sampling"=c("Online", "Grab", "Grab", rep("Online", 17)))
+colnames(table.data) <- gsub("[.]"," ", colnames(table.data))
+table.data[,1] <- gsub("[.]"," ", table.data[,1])
+table.data[,1] <- gsub("  "," ", table.data[,1])
+table.data[,1] <- gsub("  "," ", table.data[,1])
+tb <- flextable(table.data)
+tb <- font(tb, fontname = "Times", part="all")
+tb <- autofit(tb)
+tb
+```
+
+To predict and simulate real-time disinfection, neural networks were trained on 80% of the avalible data (114 observations) and tested on the remaining 20% (29 observations) using a rolling window approach. To illustrate: (1) the neural network model is trained to predict the PAA concentration at one of the two sampling locations using observations 1-114, (2) the trained model is used to predict the next observation in time (115); (3) the rolling window moves forward one timestemp and steps 1 and 2 are repeated using observations 2-115 for training and 116 for testing. The rolling window continues to move forward and the model retrained-tested until all 29 observations have been tested. To evaluate the performance of the neural network approach, the training model fit is calculated using R^2^ and the actual PAA concentration is compared to the model prediction using root mean squared error (RMSE). 
+
+Various neural network configurations are tested in order to determine (1) the optimal model inputs and nodes and (2) which water quality variables impact PAA disinfection potential. For each test, models containing 3-9 process inputs are constructed using 2 hidden layers. The first hidden layer contains half of the number of process inputs and the second hidden layer contains half the number of the first (both rounded up in the case of a fraction). For each configuration, model R^2^ and RMSE are averaged across the 29 predictions and ranked. The best performing models are analyzed for how frequently each process variable is included to identify correlations between PAA concentration in the disinfection basin, water quality, and upstream treatment performance. 
+
+From the PAA concentration predictions at two points in the disinfection basin, total disinfection potential can be calculated by *CT*. CT is the sum of the area of the curve of PAA concentration as a function of time. Assuming a single exponential model describes the consumption of PAA throughout the disinfection basin, CT is calculated from: $$\int_0^t C(t) dt = \int_0^t C_0e^{-kt} dt \rightarrow CT = \frac{C_0}{k}(1-e^{-kt})$$ where $C(t)$ is the concentration of PAA as a function of hydraulic retention time, $t$ is the total hydraulic retention time in the disinfection basin, $k$ is the 1st order exponential decay constant, and $C_0$ is the solution to the 1st order exponential decay at $t=0$. $C_0$ is equivalent to the initial PAA dose minus instantaneous PAA demand ($C_d - D$). The $C(t)$ curve is fit to the two PAA samples collected at each of the 143 sampling events and compared to the $C(t)$ curve fit by the neural network predcition to determine if neural networks could be used in lieu of an online PAA analyzer for CT-based dose control. 
+
+# Results
+NN Models were built to predict PAA at the "1-min" and "1/2 basin" sample point to predict C1 and C2
+```{r NN PAA 1-min, include=FALSE}
+library(doSNOW)
+library(parallel)
+library(neuralnet)
+org.data <- all.data
+predict.col.name <- c("PAA...1.min..Sample", "PAA...1.2.Basin.Sampling")
+percent.train = 0.8
+all.data <- all.data[,which(colnames(all.data) != predict.col.name[2])]
+predict.col.name <- predict.col.name[1]
+
+## Prep data
+predict.column <- which(colnames(all.data) == predict.col.name)
+all.data <- na.omit(data.frame(all.data))
+n.test <- round((1-percent.train)*nrow(all.data))
+
+##  Setup rolling window
+for(step in 1:n.test) {
+  train.index <- step:(nrow(all.data)-n.test+step-1)
+  test.index <- nrow(all.data)-n.test+step
+  
+  ## Scale training data using min-max method
+  max <- apply(all.data[train.index,], 2, max)
+  min <- apply(all.data[train.index,], 2, min)
+  scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+  training.data <- all.data[train.index,]
+  testing.data <- all.data[test.index,]
+  training.NN <- scaled.data[train.index,]
+  testing.NN <- scaled.data[test.index,]
+  
+  ## Find optimum number of variables
+  n <- which(colnames(all.data) != predict.col.name)
+  x.combos <- c(3,4,5,6,7,8,9, (ncol(all.data)-1))
+  for(no.vars in x.combos) {
+    if(paste0("PAA_1min_NN_",no.vars,"_vars_",step,"_steps.csv") %in% list.files(path="results")) next
+    
+    x <- data.frame(combn(n,no.vars))
+    x.index <- seq(1:ncol(x))
+
+    # detect cores with parallel() package
+    nCores <- detectCores(logical = FALSE)
+    # detect threads with parallel()
+    nThreads<- detectCores(logical = TRUE)
+
+    # Create doSNOW compute cluster
+    cluster = makeCluster(nThreads, type = "SOCK")
+
+    # register the cluster
+    registerDoSNOW(cluster)
+
+    results <- foreach::foreach(i = x.index, .combine = rbind) %dopar% {
+      
+      fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~",
+                                paste(colnames(all.data)[x[,i]], collapse= "+")))
+      nodes <- c(round(no.vars/2),round(round(no.vars/2)/2))
+      NN <- neuralnet::neuralnet(fmla, na.omit(training.NN), hidden = nodes, linear.output = FALSE)
+      
+      ## Predict using NN
+      predict.NN <-  tryCatch(neuralnet::compute(NN, na.omit(testing.NN)[,-predict.column]), error = function(e){})
+      if(is.null(predict.NN)){
+        RMSE.NN <- NA
+        r2.NN <- NA
+      } else {
+        train.NN <- (as.numeric(neuralnet::compute(NN, na.omit(training.NN))$net.result) * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+        predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+        # Calculate Root Mean Square Error (RMSE)
+        RMSE.NN <- rmse(predict.NN,testing.data[,predict.column])
+        # Calculate R-sq
+        r2.NN <- r.sq(train.NN, training.data[,predict.column])
+      }
+      data.frame("Fmla" = as.character(fmla[3]),
+                 "RMSE" = RMSE.NN,
+                 "r2" = r2.NN,
+                 "Nodes" = paste(nodes, collapse=","))
+    }
+    
+    # stop cluster and remove clients
+    stopCluster(cluster)
+    
+    # insert serial backend, otherwise error in repetetive tasks
+    registerDoSEQ()
+    
+    # clean up a bit.
+    invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+    
+    write.csv(results, paste0("results/PAA_1min_NN_",no.vars,"_vars_",step,"_steps.csv"))
+  }
+}
+```
+
+```{r NN PAA half-basin, include=FALSE}
+percent.train = 0.8
+predict.col.name <- c("PAA...1.min..Sample", "PAA...1.2.Basin.Sampling")
+all.data <- org.data[,which(colnames(org.data) != predict.col.name[1])]
+predict.col.name <- predict.col.name[2]
+
+## Prep data
+predict.column <- which(colnames(all.data) == predict.col.name)
+all.data <- na.omit(data.frame(all.data))
+n.test <- round((1-percent.train)*nrow(all.data))
+
+##  Setup rolling window
+for(step in 1:n.test) {
+  train.index <- step:(nrow(all.data)-n.test+step-1)
+  test.index <- nrow(all.data)-n.test+step
+  
+  ## Scale training data using min-max method
+  max <- apply(all.data[train.index,], 2, max)
+  min <- apply(all.data[train.index,], 2, min)
+  scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+  training.data <- all.data[train.index,]
+  testing.data <- all.data[test.index,]
+  training.NN <- scaled.data[train.index,]
+  testing.NN <- scaled.data[test.index,]
+  
+  ## Find optimum number of variables
+  n <- which(colnames(all.data) != predict.col.name)
+  x.combos <- c(3,4,5,6,7,8,9, (ncol(all.data)-1))
+  for(no.vars in x.combos) {
+    if(paste0("PAA_halfbasin_NN_",no.vars,"_vars_",step,"_steps.csv") %in% list.files(path="results")) next
+    
+    x <- data.frame(combn(n,no.vars))
+    x.index <- seq(1:ncol(x))
+
+    # detect cores with parallel() package
+    nCores <- detectCores(logical = FALSE)
+    # detect threads with parallel()
+    nThreads<- detectCores(logical = TRUE)
+
+    # Create doSNOW compute cluster
+    cluster = makeCluster(nThreads, type = "SOCK")
+
+    # register the cluster
+    registerDoSNOW(cluster)
+
+    results <- foreach::foreach(i = x.index, .combine = rbind) %dopar% {
+      
+      fmla <- as.formula(paste0(colnames(all.data)[predict.column],"~",
+                                paste(colnames(all.data)[x[,i]], collapse= "+")))
+      nodes <- c(round(no.vars/2),round(round(no.vars/2)/2))
+      NN <- neuralnet::neuralnet(fmla, na.omit(training.NN), hidden = nodes, linear.output = FALSE)
+      
+      ## Predict using NN
+      predict.NN <-  tryCatch(neuralnet::compute(NN, testing.NN[,-predict.column]), error = function(e){})
+      if(is.null(predict.NN)){
+        RMSE.NN <- NA
+        r2.NN <- NA
+      } else {
+        train.NN <- (as.numeric(neuralnet::compute(NN, training.NN)$net.result) * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+        predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+        # Calculate Root Mean Square Error (RMSE)
+        RMSE.NN <- rmse(predict.NN,testing.data[,predict.column])
+        # Calculate R-sq
+        r2.NN <- r.sq(train.NN, training.data[,predict.column])
+      }
+      data.frame("Fmla" = as.character(fmla[3]),
+                 "RMSE" = RMSE.NN,
+                 "r2" = r2.NN,
+                 "Nodes" = paste(nodes, collapse=","))
+    }
+    
+    # stop cluster and remove clients
+    stopCluster(cluster)
+    
+    # insert serial backend, otherwise error in repetetive tasks
+    registerDoSEQ()
+    
+    # clean up a bit.
+    invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+    
+    write.csv(results, paste0("results/PAA_halfbasin_NN_",no.vars,"_vars_",step,"_steps.csv"))
+  }
+}
+```
+
+```{r Compile NN results, eval=FALSE, include=FALSE}
+file <- paste0("results/",list.files(path="results"))
+  for(i in 1:length(file)){
+    raw <- read.csv(file[i], row.names=1, stringsAsFactors=FALSE)
+    if(i ==1) data <- raw
+    if(i != 1)data <- rbind(data,raw)
+  }
+  
+  
+  
+    # detect cores with parallel() package
+    nCores <- detectCores(logical = FALSE)
+    # detect threads with parallel()
+    nThreads<- detectCores(logical = TRUE)
+    
+    # Create doSNOW compute cluster
+    cluster = makeCluster(nThreads, type = "SOCK")
+    class(cluster);
+    
+    # register the cluster
+    registerDoSNOW(cluster)
+    
+    data.avg <- foreach::foreach(i = 1:length(unique(data$Fmla)), .combine = rbind) %dopar% {
+  # for(i in 1:length(unique(data$Fmla))){
+  # for(i in 4594:length(unique(data$Fmla))){
+    # if(i == 1) data.avg <- mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])])
+    # if(i != 1) data.avg <- c(data.avg, mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])]))
+    result <- mean(data$r2[which(data$Fmla == unique(data$Fmla)[i])])
+    data.frame("Fmla" = unique(data$Fmla)[i],
+               "R2" = result)
+    }
+    
+    # stop cluster and remove clients
+    stopCluster(cluster)
+    
+    # insert serial backend, otherwise error in repetetive tasks
+    registerDoSEQ()
+    
+    # clean up a bit.
+    invisible(gc); remove(nCores); remove(nThreads); remove(cluster); 
+    
+
+  
+
+    
+  # data.avg <- sapply(unique(data$Fmla), function(x) mean(data$r2[which(data$Fmla == x)]))
+  # data.avg <- cbind(unique(data$Fmla), sapply(data.index, function(x) mean(data$Fmla[x])))
+
+
+all.data <- oct.paa
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+all.data <- mergeData(list.x = list(all.data,vis.data[r]))
+all.data <- mergeData(list.x = list(all.data, nsec.online[r,22:28]), average = FALSE)
+all.data <- na.omit(all.data)
+remove.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples","Sample.Time..1_min.","Detention.Time","PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.", "CODds..V.", "TSS..V.", "UVT..V.", "UVT..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+
+for(obs in c(10, 30,35,40,45,50,55,60,65,70,90,110)) {
+
+predict.col.name <- c("PAA...1.min..Sample")
+## Prep data
+predict.column <- which(colnames(all.data) == predict.col.name)
+all.data <- na.omit(data.frame(all.data))
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+
+percent.train = obs/nrow(all.data)
+# set.seed(Sys.time())
+# training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  training.NN <- scaled.data[training.index,]
+  testing.NN <- scaled.data[-training.index,]
+  best.fmla <- as.formula("PAA...1.min..Sample ~ Pump.Flow.Based.PAA.Dose + Temp..of.NSEC.Main.Ch. + Temp..of.the.Atmos. + Secondary.Effluent.Flow + NSEC.Effluent.OP + NSEC.Effluent.NO5 + NSEC.Effluent.Flow")
+  fmla <- best.fmla
+  no.vars <- 9
+  nodes <- round(no.vars/2)
+  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+  predict.NN <-  neuralnet::compute(NN, testing.NN[i,])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+# 
+#   
+#   C <- training.data$PAA...1.min..Sample
+#   t <- 130.5293*training.data$N..Basin.Outfall^-0.9495
+#   exponential.model <- lm(log(C) ~ t)
+#   k <- -1*exponential.model$coefficients[2]
+#   C0 <- exp(exponential.model$coefficients[1])
+#   Cp <- as.numeric(C0*exp(-k*130.5293*testing.data$N..Basin.Outfall[i]^-0.9495))
+#   
+  t <- 130.5293*testing.data$N..Basin.Outfall[i]^-0.9495
+  
+
+  if(i == 1) results <- c(testing.data[i,predict.column],
+                          predict.NN,t)
+  if(i > 1) results <- rbind(results, c(testing.data[i,predict.column],
+                          predict.NN,t))
+}
+rownames(results) <- rownames(all.data)[-c(1:(nrow(all.data)*(percent.train)))]
+colnames(results) <- c("Actual", "NN C", "HRT")
+# View(results)
+results.metrics <- c((sum((results[,1] - results[,2])^2) / nrow(results)) ^ 0.5, cor(results[,1],results[,2])^2)
+
+
+
+
+# # Data to test
+# # test.data <- more.nsec[paste0(range(rownames(all.data))[2],"/")]
+# test.data <- more.nsec[paste0(range(index(all.data))[2],"/")]
+# test.data <- test.data[-unique(as.numeric(unlist(apply(test.data,2,function(x) which(is.na(x)))))),]
+# # test.data <- mergeData(list.x=list(more.vis.all[paste0(range(rownames(all.data))[2],"/",range(index(test.data))[2])], 
+# #                                    test.data))
+# test.data <- mergeData(list.x=list(more.vis.all[paste0(range(index(all.data))[2],"/",range(index(test.data))[2])], 
+#                                    test.data))
+# 
+# 
+# 
+
+# C1 <- Neural network prediction
+# C1 <- neuralnet::compute(NN, data.frame(test.data))
+C1 <- results
+# t1 <- HRT to the "1-min sample point"
+t1 <- 130.5293*all.data$N..Basin.Outfall[-c(1:(nrow(all.data)*(1-percent.train)))]^-0.9495
+
+
+
+
+# Build NN for 1/2 basin
+
+
+predict.col.name <- c("PAA...1.2.Basin.Sampling")
+## Prep data
+predict.column <- which(colnames(all.data) == predict.col.name)
+all.data <- na.omit(data.frame(all.data))
+## Scale data using min-max method
+max <- apply(all.data, 2, max)
+min <- apply(all.data, 2, min)
+scaled.data <- as.data.frame(scale(all.data, center = min, scale = max - min))
+
+# percent.train = 0.5
+# set.seed(Sys.time())
+# training.index <- sample(seq_len(nrow(all.data)), size=(percent.train*nrow(all.data)))
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  training.NN <- scaled.data[training.index,]
+  testing.NN <- scaled.data[-training.index,]
+  best.fmla <- as.formula("PAA...1.2.Basin.Sampling ~ N..Eff..TSS.Conc. + N..Basin.Outfall + TSS..mg.L. + UVT.... + NSEC.Aerobic.SRT + NSEC.Effluent.NO3 + NSEC.Effluent.NO5")
+  fmla <- best.fmla
+  no.vars <- 9
+  nodes <- round(no.vars/2)
+  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+  predict.NN <-  neuralnet::compute(NN, testing.NN[i,])
+  predict.NN <- (predict.NN$net.result * (max(all.data[,predict.column]) - min(all.data[,predict.column]))) + min(all.data[,predict.column])
+
+  
+  # C <- training.data$PAA...1.2.Basin.Sampling
+  t <- 1477.2*testing.data$N..Basin.Outfall[i]^-0.958
+
+  
+  
+  
+
+  if(i == 1) results <- c(testing.data[i,predict.column],
+                          predict.NN,t)
+  if(i > 1) results <- rbind(results, c(testing.data[i,predict.column],
+                          predict.NN,t))
+}
+rownames(results) <- rownames(all.data)[-c(1:(nrow(all.data)*(percent.train)))]
+colnames(results) <- c("Actual", "NN C", "HRT")
+# View(results)
+
+results.metrics <- c((sum((results[,1] - results[,2])^2) / nrow(results)) ^ 0.5, cor(results[,1],results[,2])^2)
+
+
+
+
+# # Data to test
+# # test.data <- more.nsec[paste0(range(rownames(all.data))[2],"/")]
+# test.data <- more.nsec[paste0(range(index(all.data))[2],"/")]
+# test.data <- test.data[-unique(as.numeric(unlist(apply(test.data,2,function(x) which(is.na(x)))))),]
+# # test.data <- mergeData(list.x=list(more.vis.all[paste0(range(rownames(all.data))[2],"/",range(index(test.data))[2])], 
+# #                                    test.data))
+# test.data <- mergeData(list.x=list(more.vis.all[paste0(range(index(all.data))[2],"/",range(index(test.data))[2])], 
+#                                    test.data))
+# 
+# 
+# 
+
+# C1 <- Neural network prediction
+# C1 <- neuralnet::compute(NN, data.frame(test.data))
+C3 <- results
+t3 <- 1477.2*all.data$N..Basin.Outfall[-c(1:(nrow(all.data)*(1-percent.train)))]^-.958
+
+
+
+
+
+
+
+
+# Let's plot C1 and C3
+# source("ct.R")
+# actualCt <- calcCt(C1=C1[,1], t1 = t1, C2 = C3[,1], t2=t3)
+# predictedCt <- calcCt(C1=C1[,2], t1 = t1, C2 = C3[,2], t2=t3)
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  C <- c(C1[i,2], C3[i,2]) # NN predicted C
+  t <- c(C1[i,3], C3[i,3]) # HRT
+  exponential.model <- lm(log(C) ~ t) # Exponential model fit of NN predictions
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  t_f <- 2775*testing.data$N..Basin.Outfall[i]^-.959
+  Ct <- C0/k-C0/k*exp(-k*t_f) # Ct under exponential curve to end of basin
+  
+  if(i == 1) results <- Ct
+  if(i > 1) results <- rbind(results, Ct)
+  # 
+  # C <- c(training.data$PAA...1.min..Sample, training.data$PAA...1.2.Basin.Sampling)
+  # t <- c(130.5293*training.data$N..Basin.Outfall^-0.9495, 
+  #        1477.2*training.data$N..Basin.Outfall^-.958)
+  # exponential.model <- lm(log(C) ~ t)
+  # k <- -1*exponential.model$coefficients[2]
+  # C0 <- exp(exponential.model$coefficients[1])
+  # Ct <- C0/k-C0/k*exp(-k*t) # Ct under single exponential curve
+}
+
+Ct.predicted <- results
+
+for (i in 1:(nrow(all.data)*(1-percent.train))) {
+  training.index <- seq(i,(nrow(all.data)*percent.train-1+i),by=1)
+  training.data <- all.data[training.index,]
+  testing.data <- all.data[-training.index,]
+  C <- c(C1[i,1], C3[i,1]) # Actual C
+  t <- c(C1[i,3], C3[i,3]) # HRT
+  exponential.model <- lm(log(C) ~ t) # Exponential model fit of NN predictions
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  t_f <- 2775*testing.data$N..Basin.Outfall[i]^-.959
+  Ct <- C0/k-C0/k*exp(-k*t_f) # Ct under exponential curve to end of basin
+  
+  if(i == 1) results <- Ct
+  if(i > 1) results <- rbind(results, Ct)
+}
+
+Ct.actual <- results
+r2.NN <- cor(Ct.actual, Ct.predicted)^2
+
+
+n.obs <- as.numeric(nrow(all.data) - nrow(Ct.actual))
+png(paste0("Ct_",n.obs,"obs.png"), width = 600, height = 400)
+plot(Ct.actual, type="l", lwd=1.5,xlab = "Sampling Event", ylab="Ct (mg/L*min)", main=paste0("Ct - trained on ",n.obs," obs"))
+points(Ct.predicted, type="l", col = "purple", lwd=1.5)
+legend("topleft", legend = c("Actual Ct", "Predicted Ct"), lty = 1, lwd=1.5,col=c("black", "purple"))
+text(x=nrow(Ct.actual),y=min(Ct.actual), labels=paste("R2 =", as.character(round(r2.NN,2))), adj=1)
+dev.off()
+
+print(paste("For",as.character(n.obs),
+  "obs, R2 =", as.character(round(r2.NN,2))))
+}
+```
