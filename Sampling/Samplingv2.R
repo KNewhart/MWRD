@@ -2,7 +2,7 @@
 {
 library(xts)
 library(xlsx)
-# Load raw data
+# Load raw dat
 PAA.PROFILE.DATA <- read.xlsx("data/PAA PROFILE DATA_08-08-19.xlsx", sheetIndex = 1)
 
 ##### PAA #####
@@ -134,13 +134,17 @@ colnames(data.to.save) <- c("Datetime", "Sample Location", "PAA (mg/L)", "Flow (
     mod.results[i,4] <- C0/k-C0/k*exp(-k*last(xx)) # CT
     
   }
-  
   CT <- mod.results[,4]
   
+  take.two <- matrix(data=NA, nrow=length(unique(data[,"Sampling event"])))
+  for(i in unique(data[,"Sampling event"])) {
+    s <- which(data[,"Sampling event"] %in% i)
+    setpoint <- as.numeric(as.vector(data[s,"PAA Setpoint (mg/L)"]))[1]
+    demand <- setpoint - as.numeric(as.vector(data[s,"Chemscan PAA (mg/L)"]))[1]
+    
+  }
   
 }
-
-
 
 
 
@@ -338,6 +342,7 @@ write.csv(data, file="data/PAA PROFILE DATA_08-08-19_TSS.csv")
 
 ##### If k is constant #####
 avg.k <- mean(mod.results[,2])
+data.to.save
 
 
 ##### PLOTS AND MODELS #####

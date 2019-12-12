@@ -1,0 +1,174 @@
+###### Compile PAA #####
+{
+  library(xts)
+  library(xlsx)
+  # Load raw dat
+  PAA.PROFILE.DATA <- read.xlsx("data/PAA PROFILE DATA_08-08-19.xlsx", sheetIndex = 1)
+  
+  ##### PAA #####
+  # Subset PAA data
+  PAA.PROFILE.DATA <- PAA.PROFILE.DATA[which(PAA.PROFILE.DATA$ANALYSIS_CODE == "PAAR"),]
+  
+  # Remove erroneous data
+  PAA.PROFILE.DATA <- PAA.PROFILE.DATA[which(PAA.PROFILE.DATA$COMBINATION_RESULT != "Scratched"),]
+  PAA.PROFILE.DATA <- PAA.PROFILE.DATA[which(!is.na(PAA.PROFILE.DATA$NUMERIC_RESULT)),]
+  
+  # Fix timestamps
+  date.time <- strptime(paste(as.character(PAA.PROFILE.DATA$COLLECTION_DATE), as.character(PAA.PROFILE.DATA$COLLECTION_TIME)), format="%Y-%m-%d %H:%M")
+  
+  # Clean data objects
+  data <- data.frame(date.time, stringsAsFactors = FALSE)
+  data <- cbind(data, as.data.frame(PAA.PROFILE.DATA$COMMON_NAME, stringsAsFactors = FALSE))
+  data <- cbind(data, as.data.frame(as.numeric(as.character(PAA.PROFILE.DATA$NUMERIC_RESULT)),
+                                    stringsAsFactors = FALSE))
+  colnames(data) <- c("date.time", "COMMON_NAME", "NUMERIC_RESULT")
+  data <- data[order(data[,1]),]
+  
+  # Load Flow and setpoint Data 
+  {
+    # Instasll and load piwebapi package from Github
+    # install.packages("devtools")
+    # library(devtools)
+    # install_github("rbechalany/PI-Web-API-Client-R")
+    library(piwebapi)
+    
+    # Login information
+    useKerberos <- TRUE
+    username <- "knewhart"
+    password <- "REPLACE WITH PASSWORD"
+    validateSSL <- TRUE
+    debug <- TRUE
+    piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+    pi.times <- matrix(NA,nrow=length(date.time),ncol=1)
+    for(i in 1:length(date.time)) {
+      time.obj <- date.time[i]
+      time.obj$hour <- time.obj$hour + 6
+      pi.times[i,1] <- paste0(as.character(format(time.obj,"%Y-%m-%d")),"T",
+                              as.character(format(time.obj,"%H:%M:%S")),"Z")
+    }
+    pi.tags <- matrix(c("DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
+                        "PAA Setpoint", "\\\\applepi\\PAA_N_Target_Dose",
+                        "DIS PAA N Upstream Residual", "\\\\applepi\\AI_K826"), ncol=2, byrow=TRUE)
+    for(tag in 1:nrow(pi.tags)) {
+      pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
+      data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
+                                                                        time = c(pi.times[,1]))[[2]]
+      data.holder <- do.call("rbind", lapply(data.holder, function(x) c(x$Timestamp, x$Value)))
+      colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
+      if(tag==1) all.data <- data.holder
+      if(tag>1) {
+        all.data <- cbind(all.data, data.holder[,2])
+        colnames(all.data)[ncol(all.data)] <- make.names(pi.tags[tag,1])
+      }
+    }
+  }
+  
+  # Merge PI data and PAA data
+  data2 <- cbind(data, as.data.frame(all.data[,2:ncol(all.data)], stringsAsFactors = FALSE))
+  
+  # Calculate hrt
+  hrt <- matrix(data=NA, nrow=nrow(data2), ncol = 1)
+  hrt[grep("NPAA1M", data2$COMMON_NAME)] <- 122.2683*as.numeric(as.vector(data2[c(grep("NPAA1M", data2$COMMON_NAME)),"DIS.North.Flow"]))^(-0.9312)
+  hrt[grep("NPAA10M", data2$COMMON_NAME)] <- 1044.6*as.numeric(as.vector(data2[c(grep("NPAA10M", data2$COMMON_NAME)),"DIS.North.Flow"]))^(-0.956)
+  hrt[grep("NPAA20M", data2$COMMON_NAME)] <- 1909.8*as.numeric(as.vector(data2[c(grep("NPAA20M", data2$COMMON_NAME)),"DIS.North.Flow"]))^(-0.958)
+  hrt[grep("NPAA30M", data2$COMMON_NAME)] <- 2775*as.numeric(as.vector(data2[c(grep("NPAA30M", data2$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+  
+  data3 <- cbind(data2, as.data.frame(hrt, stringsAsFactors = FALSE))
+  colnames(data3)[ncol(data3)] <- "HRT (min)"
+  data3 <- na.omit(data3)
+  
+  # Label sampling campaigns
+  sample.count <- vector()
+  for(i in 2:nrow(data3)){
+    if(i == 2) {
+      last.row <- 1
+      sampling.campaign <- 1
+    }
+    
+    if(difftime(data3[,"date.time"][i],data3[,"date.time"][i-1], units = "mins") > 60) {
+      if(i == nrow(data3)) {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
+      } else {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:(i-1)))))
+        last.row <- i
+        sampling.campaign <- sampling.campaign + 1
+      }
+    } else {
+      if(i == nrow(data3)) {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
+      }
+    }
+  }
+  
+  data4 <- cbind(data3, as.data.frame(sample.count, stringsAsFactors=FALSE))
+  data.to.save <- data4
+  colnames(data.to.save) <- c("Datetime", "Sample Location", "PAA (mg/L)", "Flow (MGD)",
+                              "PAA Setpoint (mg/L)", "Chemscan PAA (mg/L)", "HRT (min)", "Sampling event")
+  # write.csv(data.to.save, file="data/PAA PROFILE DATA_08-08-19_PAA.csv", row.names = FALSE)
+}
+
+##### Calculate k & D #####
+{
+  data <- data.to.save
+  exp.mod.vals <- matrix(data=NA, nrow=nrow(data), ncol=2)
+  mod.results <- matrix(data=NA, nrow=length(unique(data[,"Sampling event"])), ncol=4)
+  # Fit curve
+  for(i in unique(data[,"Sampling event"])) {
+    s <- which(data[,"Sampling event"] %in% i)
+    yy <- log(as.numeric(as.vector(data[s,"PAA (mg/L)"])))
+    xx <- as.numeric(as.vector(data[s,"HRT (min)"]))
+    if(any(is.infinite(yy))) {
+      xx <- xx[!is.infinite(yy)]
+      yy <- yy[!is.infinite(yy)]
+    }
+    mod <- lm(yy~xx)
+    yy.predict <- predict(mod)
+    k <- as.numeric(coef(mod)[2]*-1)
+    C0 <- exp(as.numeric(coef(mod)[1]))
+    D <- as.numeric(as.vector(data[s,"PAA Setpoint (mg/L)"])) - C0
+    exp.mod.vals[s,1] <- D
+    exp.mod.vals[s,2] <- k
+    mod.results[i,1] <- D[1]
+    mod.results[i,2] <- k[1]
+    mod.results[i,3] <- as.POSIXct(data[s,"Datetime"])[1]
+    mod.results[i,4] <- C0/k-C0/k*exp(-k*last(xx)) # CT
+    
+  }
+  CT <- mod.results[,4]
+  
+}
+
+
+
+
+
+
+
+# Boxplot of D & k
+pdf(file="plots/PAA_1storder_boxplots.pdf", width=8.5, height=11)
+par(mfrow=c(1,2), mar=c(1,2,3,1), oma=c(12,2,12,2))
+boxplot(mod.results[,1])
+# , main="Instantaneous Demand (D)")
+mtext(side=3, font=2, line = 1.5,"Instantaneous Demand (D)")
+mtext(side=3, line=0.33, paste("Mean D =",round(mean(mod.results[,1]), 2)))
+points(x=1,y=mean(mod.results[,1]), pch=17)
+# text(x=1.5,y=min(mod.results[,1]), paste("Mean D =",round(mean(mod.results[,1]), 2)),pos=2)
+
+boxplot(mod.results[,2])
+# , main= "1st order Decay (k)")
+mtext(side=3, font=2, line = 1.5,"1st order Decay (k)")
+mtext(side=3, line=0.33, paste("Mean k =",round(mean(mod.results[,2]), 2)))
+points(x=1,y=mean(mod.results[,2]), pch=17)
+# text(x=1.5,y=min(mod.results[,2]), paste("Mean k =",round(mean(mod.results[,2]), 2)),pos=2)
+dev.off()
+
+
+# Plot D & k vs time
+pdf(file="plots/PAA_1storder_parameter_timeseries.pdf", width=8.5, height=11)
+par(mfrow=c(1,1))
+mod.results.df <- as.data.frame(mod.results)
+mod.results.xts <- xts(mod.results.df[,1:2], order.by=as.POSIXct(mod.results.df[,3], origin = lubridate::origin))
+plot(as.zoo(mod.results.xts[,1:2]), plot.type="multiple", type="p", main="1st order model parameters for individual sampling campaigns",
+     ylab=c("D","k"),xlab="", oma = c(3, 0, 3, 0),mar=c(1,4,0,3), pch=20)
+dev.off()
+
