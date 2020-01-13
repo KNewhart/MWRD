@@ -380,7 +380,8 @@ for(step in 1:n.test) {
 }
 ```
 
-```{r Compile NN results, eval=FALSE, include=FALSE}
+```{r Compile NN results, include=FALSE}
+setwd("C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD\\PAA ICT\\weftec_abstract")
 if("data-summary-1.RData" %in% list.files(path="results/")) {
   load("results/data-summary-1.RData")
 } else {
@@ -448,6 +449,8 @@ if("data-summary-half.RData" %in% list.files(path="results/")) {
 ```{r Functions to count instances of variables}
 # Function to count instances in string for all rows
 count.vars <- function(data) {
+  library(dplyr)
+  library(foreach)
   raw.data <- foreach::foreach(i=1:length(data), .combine='c') %do% {
     strsplit(as.character(data[i]),split=" + ", fixed=TRUE)
   }

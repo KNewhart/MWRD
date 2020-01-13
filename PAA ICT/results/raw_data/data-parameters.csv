@@ -1,0 +1,40 @@
+Path,Average
+"\\APPLEPI_AF\MWRD_Production\Labworks Data\012_700_1011-RWH North, Pre-PAA|ECIDX_G",24h
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\02-Flows\INF-Flows|NSEC INF (FY-F25),15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\08-Gravity_Thickeners\GVT_Effluent\GTE_to_SAR-2 Flow|FI_T631 - GTE to SAR-2 Flow,15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\08-Gravity_Thickeners\GVT_Effluent\GTE_to_SAR-4 Flow|FI_T632 - GTE to SAR-4 Flow,15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary\NSEC\Main_Influent_1|Main Inf Channel NSEC (TI_N171),24h
+\\applepi\TI-R3003,60m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary|Quad 1 Basins In Service,24h
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary|Quad 2 Basins In Service,24h
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary|Quad 3 Basins In Service,24h
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary|Quad 4 Basins In Service,24h
+\\applepi\ASRT_ASRT_N,24h
+\\applepi\AI_N99C,60m
+\\applepi\AI_N92A,60m
+\\applepi\AI_N92C,60m
+\\applepi\AI_N92D,60m
+\\applepi\AI_N92H,60m
+\\applepi\AI_N93D,60m
+\\applepi\AC_N94A,60m
+\\applepi\AC_N94B,60m
+\\applepi\AC_N94C,60m
+\\APPLEPI_AF\MWRD_Production\Labworks Data\2500-NSEC Quad 1 MLR|SVI_G,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\2505-NSEC Quad 2 MLR|SVI_G,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\2510-NSEC Quad 3 MLR|SVI_G,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\2515-NSEC Quad 4 MLR|SVI_G,24h
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary\NSEC\SEC_Clar_1C|Quad 1 Ave Blanket Depth NSEC (LI_N561Q),15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary\NSEC\SEC_Clar_2C|Quad 1 Ave Blanket Depth NSEC (LI_N562Q),15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary\NSEC\SEC_Clar_3C|Quad 3 Ave Blanket Depth NSEC (LI_N567Q),15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary\NSEC\SEC_Clar_4C|Quad 4 Ave Blanket Depth NSEC (LI_N568Q),15m
+\\applepi\FC_N231,24h
+\\applepi\FC_N236,24h
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\05-North_Secondary\NSEC\RAS_1|RAS %AE Basin Inf NSEC (FC_N200B2),15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\07-Disinfection\Dis_Plant_Flows|NSEC EFF FLOW (FY-F225),15m
+\\APPLEPI_AF\MWRD_Production\Labworks Data\18-North Nitrification Effluent|ALk_FC24,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\18-North Nitrification Effluent|BOD_FC24,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\18-North Nitrification Effluent|CBOD_FC24,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\18-North Nitrification Effluent|COD_FC24,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\18-North Nitrification Effluent|PW_FC24,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\18-North Nitrification Effluent|TKNH_FC24,24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\18-North Nitrification Effluent|TSS_FC24,24h
