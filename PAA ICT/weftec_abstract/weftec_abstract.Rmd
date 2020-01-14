@@ -380,7 +380,7 @@ for(step in 1:n.test) {
 }
 ```
 
-```{r Compile NN results, eval=FALSE, include=FALSE}
+```{r Compile NN results, include=FALSE}
 if("data-summary-1.RData" %in% list.files(path="results/")) {
   load("results/data-summary-1.RData")
 } else {
@@ -496,6 +496,7 @@ The top `r rank` models, ordered by least RMSE, are considered the best performi
 
 **Table `r tab.1min.var`.** Monitored process variables included in building nerual network model to predict PAA at the 1-min sample point.
 ```{r Count instances of variables at 1-min}
+library(foreach)
 # 1-min point By RMSE
 data.summary.1 <- data.summary.1[order(data.summary.1$RMSE),]
 count.vars.1 <- count.vars(data=data.summary.1[1:rank,1])
