@@ -1,6 +1,7 @@
 # RNN
 # Set wd
 # setwd("C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD\\PAA ICT")
+setwd("C:\\Users\\kbnewhart\\Dropbox\\Code\\MWRD\\PAA ICT")
 
 # Install packages
 {
@@ -25,10 +26,6 @@
 {
   # detect threads with parallel()
   nThreads<- detectCores(logical = TRUE)
-  # Create doSNOW compute cluster
-  cluster = makeCluster(nThreads, type = "SOCK")
-  # register the cluster
-  registerDoSNOW(cluster)
 }
 
 # Initialize dataset
@@ -71,6 +68,11 @@
   start <- round(nrow(all.data)*n_train)
   end <- start+nThreads-1
   while(start < nrow(all.data)) {
+    # Create doSNOW compute cluster
+    cluster = makeCluster(nThreads, type = "SOCK")
+    # register the cluster
+    registerDoSNOW(cluster)
+    
     predictions <- foreach(test.obs=seq(start, end), .combine = "rbind", .packages = c("dplyr", "keras")) %dopar% {
       # Setup training data
       train.start <- 1+test.obs-round(nrow(all.data)*n_train)
@@ -127,6 +129,14 @@
       
       data.frame("R2"=r2, "Prediction.Error"=error)
     } # parallel loop
+    
+    # stop cluster and remove clients
+    stopCluster(cluster)
+    # insert serial backend, otherwise error in repetetive tasks
+    registerDoSEQ()
+    
+    print(paste("Observations", start, "to", end, "completed."))
+    
     all.predictions[[length(all.predictions)+1]] <- predictions
     start <- end + 1
     end <- start + nThreads - 1
