@@ -1,7 +1,7 @@
 ---
 title: "Real-time PAA Disinfection Control in Municipal Wastewater Treament"
 author: "Kate Newhart"
-date: "2019-12-19"
+date: "11/13/2019"
 output: word_document
 ---
 
@@ -10,15 +10,12 @@ knitr::opts_chunk$set(
 	fig.align = "center",
 	fig.path = "figures/",
 	fig.width = 6.5,
-	dpi = 600
+	dpi = 300
 )
 ```
 
 # July 2019 Evaluation
-
-## Step 1: Calculate CT
-For each sampling event and location, HRT was calculated to fit to a first-order decay model to generate PAA concentration as a function of time ($C(t)$). The integral of $C(t)$ and the total disinfection potential ($CT$) is $\frac{1}{k}(C_0-C_0*e^{-kt_{30 min}})$ where $C_0$ is the PAA cocentration at time 0 and $k$ is the model parameter for first-order decay. $C_0$ is not equal to the initial dose of PAA ($C_{dose}$) but the residual after some initial PAA demand ($D$) has been consumed ($C_0=C_{dose}-D$). Model parameters $k$ and $D$ are fit for each sampling event and CT calculated (highlighted in orange below). Of the 66 sampleing events, only event #24 is excluded from further analysis due to poor data (PAA measured at the 1-minute sample location is less than all downstream locations).
-
+Change from PAA setpoint to actual flow-paced concentraiton?
 ```{r Load data, include=FALSE}
 # Load required packages
 library(xts)
@@ -191,15 +188,12 @@ if("wq.RData" %in% list.files(path="./data/compiled")) {
                             as.character(format(time.obj,"%H:%M:%S")),"Z")
   }
   # Declare with variables/pi tags to pull
-  pi.tags <- matrix(c("PAA Flow", "\\\\applepi\\FY_K810",
-    "DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
+  pi.tags <- matrix(c("DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
                       "PAA Setpoint", "\\\\applepi\\PAA_N_Target_Dose",
-                      
                       "DIS PAA N Upstream Residual", "\\\\applepi\\AI_K826",
                       "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
                       "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
                       "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
-                      "NSEC Effluent NO2", "\\\\applepi\\AI_N501G",
                       "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
                       "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
                       # "NSEC Effluent NO5", "\\\\applepi\\AI-K570N", # All zeros
@@ -256,26 +250,9 @@ if("paa-wq-ecoli.RData" %in% list.files(path="./data/compiled")) {
   save(paa.wq.ecoli, file="./data/compiled/paa-wq-ecoli.RData")
 }
 
-# Import CarboVis data
-carbovis_ls <- list()
-carbovis <- data.frame(readr::read_csv("data/NNE Carbovis Data 2019.csv"), stringsAsFactors = FALSE)
-cols <- as.numeric(which(sapply(carbovis[1,], is.numeric)))
-cols <- cols[seq(1,length(cols),by=2)]
-for(i in cols) {
-  new.data <- cbind(as.character(carbovis[,(i-2)]), #date
-                    carbovis[,i])
-  colnames(new.data) <- c("Datetime", carbovis[1,(i+2)])
-  carbovis_ls[[length(carbovis_ls)+1]] <- new.data
-}
-carbovis <- do.call("cbind", carbovis_ls)
-carbovis <- carbovis[-which(duplicated(carbovis[,1])),]
-library(data.table)
-matching.dates <- which(as.POSIXct(carbovis[,1], format="%m/%d/%Y %H:%M") %between% range(paa.wq.ecoli[,1]))
-matching.dates <- c(matching.dates[1]-1, matching.dates, last(matching.dates)+1)
-carbovis <- carbovis[matching.dates,]
-carbovis <- xts(carbovis[,seq(2,ncol(carbovis), by=2)], order.by=as.POSIXct(carbovis[,1], format="%m/%d/%Y %H:%M"))
-paa.wq.ecoli <- na.locf(merge(xts(paa.wq.ecoli[,2:ncol(paa.wq.ecoli)], order.by=paa.wq.ecoli[,1]), carbovis))[paa.wq.ecoli[,1]]
+
 ```
+
 
 ```{r Plot PAA and C(t) curve, echo=FALSE, fig.height=2, fig.width=7}
 plotCt <- function(experiment) {
@@ -327,11 +304,9 @@ plotCt <- function(experiment) {
   new.data <- data.frame(x=seq(min(t), max(experiment[,"HRT (min)"]), length.out=100))
   new.data <- cbind(new.data, exp(-k*new.data+log(C0)))
   points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
-  polygon(x=c(0,new.data[,1],max(new.data[,1]),0), y=c(C0,new.data[,2],0,0), col="orange", border=NA)
-  points(y=C,x=t,pch=20)
+  polygon(x=c(0,max(new.data[,1])), y=c(max(new.data[,2]), min(new.data[,2])))
   mtext(paste("D =", round(D,2)), side=3,line=-1.1,adj = 0.99)
   mtext(paste("k=", round(k,2)), side=3,line=-2.1,adj = 0.99)
-  mtext(paste("CT=", round(Ct,1)), side=3,line=-3.1,adj = 0.99)
   mtext(paste("Trial",i), side=3, line=.25, font=2)
   mtext("PAA (mg/L)", side=2,line=2.5)
   mtext("HRT (min)",side=1,line=2.25)
@@ -352,47 +327,28 @@ for(i in unique(data$sample.count)) {
 
 
 
-```{r Setup CT NN data, include=FALSE}
+```{r}
 library(doParallel)
 rmse.calculator <- function(predicted, actual){
   (sum((predicted-actual)^2/length(predicted)))^0.5
 }
 
 # Use paa.wq.ecoli to predict CT
-training.vars <- c("min.of.day", "DIS.North.Flow", "PAA.Flow", "DIS.PAA.N.Upstream.Residual", "NSEC.Aerobic.SRT", "NSEC.Effluent.NH3", "NSEC.Effluent.NO3","NSEC.Effluent.NO2", "NSEC.Effluent.OP", "NSEC.Effluent.TSS", "NSEC.Effluent.Flow", "CODto", "TSS", "UVT", "CODds", "SACto")
+training.vars <- c("min.of.day", "DIS.North.Flow", "PAA.Setpoint", "DIS.PAA.N.Upstream.Residual", "NSEC.Aerobic.SRT", "NSEC.Effluent.NH3", "NSEC.Effluent.NO3", "NSEC.Effluent.OP", "NSEC.Effluent.TSS", "NSEC.Effluent.Flow")
 training.data <- paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),] # first observation of each sampling event
 training.data <- training.data[,sapply(training.vars, function(x) which(colnames(training.data)==x))] # Exclude lab samples, only online data
 training.data <- cbind(Ct.all, training.data)
 training.data <- apply(training.data, 2, as.numeric)
-rownames(training.data) <- as.character(paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),1])
 
-# REMOVE TRIAL 24: BAD DATA, 1-MIN SAMPLE LESS THAN REST#
-training.data <- training.data[-24,]
-save(training.data, file="results/training-data.RData")
-```
-
-```{r Plot training data, eval=FALSE, include=FALSE}
-# pairs(training.data)
-boxplot(scale(training.data), las=2)
-```
-
-
-## Step 2: Predict CT
-Using artifical neural networks (ANN), CT can be predicted from minute of the day, disinfection basin influent flow, PAA flow, PAA residual from a Chemscan instrument downstream of the 1-minute sample location, aerobic SRT of the secondary process, and a variety of nutrient and water quality measurements taken at the effluent of the secondary process (ammonia, nitrate, nitrite, phosphorus, TSS, COD, UVT, SAC). A rolling window approach is used for testing in which a training dataset of *n* observations is used to fit a 1-layer ANN with 5 nodes. Observation $n+1$ is compared to the ANN prediction at time *n*+1 using root mean squared error (RMSE). The window then moves forward to include observations 2--(*n*+1) and test observation *n*+2. The window moves forward, is re-trained, and tested on a new obseration for the entire dataset (unitl all 65 sampling events have been used for training or testing).
-
-```{r CT NN, echo=FALSE, fig.height=2}
-training.data <- training.data[-13,]
+# Let's try using n% to train the model, and (100-n)% to test
+n <- 90 # percent
 predict.column <- which(colnames(training.data)=="Ct.all")
 fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
                      paste(colnames(training.data)[-c(predict.column)], collapse= "+")))
 
 # Loop shows 5 hidden layers acheive smallest RMSE
 # rmse.results <- foreach(nodes=seq(1,100,by=1), .combine=c) %do% {
-nodes <- c(17,10)
-par(mfrow=c(1,2), family="serif", mar=c(4,4,2,.5)+.1)
-for(n in c(50,90)) {
-# Let's try using n% to train the model, and (100-n)% to test
-# n <- 10 # percent
+nodes <- 5
 
 # Scale variables first
 # Z-score standardization
@@ -401,27 +357,47 @@ results <- foreach(i=1:ceiling(nrow(training.data)*((100-n)/100)), .combine=rbin
   training.sd <- apply(scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], scale=FALSE), 2, sd)
   training.NN <- scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),])
   testing.NN <- sapply(1:ncol(training.data), function(x)
-    (training.data[(floor(nrow(training.data)*n/100)+i),x]-training.mean[x])/training.sd[x]
+    (training.data[ceiling(nrow(training.NN)*n/100)+i-1,x]-training.mean[x])/training.sd[x]
   )
-  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = TRUE)
+  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
   predict.NN <-  neuralnet::compute(NN, t(data.frame(testing.NN[-predict.column])))
   predict.NN <- predict.NN$net.result*training.sd[predict.column]+training.mean[predict.column]
-  return(matrix(data=c(training.data[(floor(nrow(training.data)*n/100)+i),predict.column], predict.NN), nrow=1))
+  return(matrix(data=c(training.data[ceiling(nrow(training.NN)*n/100)+i-1,predict.column], predict.NN), nrow=1))
 }
+print(rmse.calculator(results[,2], results[,1]))
 
-plot(results, ylim=c(min(results), max(results)), xlim=c(min(results), max(results)), pch=20, xlab="Actual", ylab="Predicted", main=paste("Trained on:", floor(nrow(training.data)*n/100), "/",nrow(training.data)))
-abline(a=0, b=1)
-text(x=max(results),y=1+min(results), labels=paste("RMSE =",round(rmse.calculator(results[,2], results[,1]),3)), pos=2)
-}
-
-
+# Min-max normalization
+# Performs worse than Z-score, almost double RMSE!
+# normalize <- function(x) {
+#   return ((x - min(x)) / (max(x) - min(x)))
+# }
+# results <- foreach(i=1:ceiling(nrow(training.data)*((100-n)/100)), .combine=rbind) %do% {
+#   training.max <- apply(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], 2, max)
+#   training.min <- apply(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], 2, min)
+# 
+#   training.NN <- apply(training.data[i:(floor(nrow(training.data)*n/100)+i-1),],2,normalize)
+#   testing.NN <- sapply(1:ncol(training.data), function(x)
+#     (training.data[ceiling(nrow(training.NN)*n/100)+i-1,x]-training.min[x])/(training.max[x]-training.mean[x])
+#   )
+#   NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+#   predict.NN <-  neuralnet::compute(NN, t(data.frame(testing.NN[-predict.column])))
+#   predict.NN <- predict.NN$net.result*(training.max[predict.column]-training.mean[predict.column])+training.min[predict.column]
+#   return(matrix(data=c(training.data[ceiling(nrow(training.NN)*n/100)+i-1,predict.column], predict.NN), nrow=1))
+# }
+# print(rmse.calculator(results[,2], results[,1]))
+# }
 ```
 
 
-```{r real-time CT, eval=FALSE, include=FALSE}
-## Step 3: Real-time CT
-# Login information
+# Real-time simulation
+```{r include=FALSE}
+# Install and load piwebapi package from Github
+# install.packages("devtools")
+# library(devtools)
+# install_github("rbechalany/PI-Web-API-Client-R")
 library(piwebapi)
+
+# Login information
 useKerberos <- TRUE
 username <- "knewhart"
 password <- "Lunabear2@"
@@ -429,9 +405,10 @@ validateSSL <- TRUE
 debug <- TRUE
 piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
 
-# Set time
-date.time <- seq(as.POSIXct("2019-06-28 07:38:00"), as.POSIXct("2019-08-01	13:29"), by="10 mins")
-# Go from MT to UTC
+compile.range <- 9:109
+all.data <- foreach(days=compile.range, .combine = rbind) %do% {
+  # Go from MT to UTC
+date.time <- (Sys.time()-days*60*60*24)-seq(60*60*24,60, by=-60*5) # Pull 1-min date of last 24 hours
 pi.times <- matrix(NA,nrow=length(date.time),ncol=1)
 for(i in 1:length(date.time)) {
   time.obj <- date.time[i]
@@ -441,33 +418,27 @@ for(i in 1:length(date.time)) {
 }
 # Declare with variables/pi tags to pull
 pi.tags <- matrix(c("DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
-                    "PAA Flow", "\\\\applepi\\FY_K810",
+                    "PAA Setpoint", "\\\\applepi\\PAA_N_Target_Dose",
                     "DIS PAA N Upstream Residual", "\\\\applepi\\AI_K826",
                     "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
                     "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
                     "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
-                    "NSEC Effluent NO2", "\\\\applepi\\AI_N501G",
                     "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
                     "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
+                    # "NSEC Effluent NO5", "\\\\applepi\\AI-K570N", # All zeros
                     "NSEC Effluent Flow", "\\\\applepi\\FY-F225"), ncol=2, byrow=TRUE)
 # Pull data
 for(tag in 1:nrow(pi.tags)) {
   pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
-  if(length(pi.times)<101) data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
+  data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
                                                                     time = c(pi.times[,1]))[[2]]
-  if(length(pi.times)>100) {
-    intervals <- cbind(seq(1,length(pi.times), by=100), c(seq(100,length(pi.times),by=100), length(pi.times)))
-    data.holder <- list()
-    for(i in 1:nrow(intervals)) {
-      data.holder <- c(data.holder, piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
-                                                                        time = c(pi.times[intervals[i,1]:intervals[i,2],1]))[[2]])
-    }
-  }
-  data.holder <- data.frame(matrix(unlist(lapply(data.holder, function(x) c(x[[1]], x[[2]]))), ncol=2, byrow=TRUE))
+  data.holder <- do.call("rbind", lapply(data.holder, function(x) c(x$Timestamp, x$Value)))
+  if(ncol(data.holder)>2)
   colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
   if(tag==1) all.data <- data.holder
   if(tag>1) {
-    all.data <- merge(all.data, data.holder, by="Datetime")
+    all.data <- cbind(all.data, data.holder[,2])
+    colnames(all.data)[ncol(all.data)] <- make.names(pi.tags[tag,1])
   }
 }
 # Fix tags from UTC to MT
@@ -483,217 +454,102 @@ all.data <- data.frame(all.data)
 all.data[,1] <- as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(new.date.time,'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min'))
 colnames(all.data)[1] <- "min.of.day"
 
-##### SETUP NN #####
-# Remove min of the day
-all.data <- all.data[,-which(colnames(all.data)=="min.of.day")]
-training.data <- training.data[,-which(colnames(training.data)=="min.of.day")]
-# Create formula
-predict.column <- which(colnames(training.data)=="Ct.all")
-fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
-                          paste(colnames(training.data)[-c(predict.column)], collapse= "+")))
-nodes <- c(7,10)
+return(all.data)
+}
+
+```
+
+
+
+```{r}
 training.mean <- apply(training.data, 2, mean)
 training.sd <- apply(scale(training.data, scale=FALSE), 2, sd)
 training.NN <- scale(training.data)
-testing.NN <- sapply(2:ncol(training.data), function(x)
-  (as.numeric(all.data[,x-1])-as.numeric(training.mean[x]))/as.numeric(training.sd[x])
-)
-
-##### RUN NN #####
-NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = TRUE)
-if(length(pi.times)==1) {
-  predict.NN <-  neuralnet::compute(NN, t(data.frame(testing.NN)))
-} else {
-  predict.NN <-  neuralnet::compute(NN, data.frame(testing.NN))
-}
-predict.NN <- predict.NN$net.result*training.sd[1]+training.mean[1]
-
-
-##### REVIEW RESULTS #####
-date.time <- data.frame(asdate.time, stringsAsFactors = FALSE)
-new.date.time <- .POSIXct(rep(NA, length(date.time)))
-for(i in 1:length(date.time)) {
-  time.obj <- paste(strsplit(date.time[i], "T")[[1]][1], 
-                    strsplit(strsplit(date.time[i], "T")[[1]][2], "Z")[[1]][1])
-  time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
-  new.date.time[i] <- time.obj
-}
-library(xts)
-plot(as.zoo(as.numeric(predict.NN), order.by=new.date.time), type="p", pch=20, ylab="CT (mg/L*min)", xlab="")
-# points(y=training.data[,1])
-
-```
-
-## Predict Predisinfection E.coli
-```{r Setup pre e.coli, include=FALSE}
-# Use paa.wq.ecoli to predict CT
-training.vars <- c("min.of.day", "DIS.North.Flow", "PAA.Flow", "DIS.PAA.N.Upstream.Residual", "NSEC.Aerobic.SRT", "NSEC.Effluent.NH3", "NSEC.Effluent.NO3","NSEC.Effluent.NO2", "NSEC.Effluent.OP", "NSEC.Effluent.TSS", "NSEC.Effluent.Flow", "CODto", "TSS", "UVT", "CODds", "SACto")
-training.data <- paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),] # first observation of each sampling event
-training.data <- training.data[,sapply(training.vars, function(x) which(colnames(training.data)==x))] 
-ecoli.i <- ecoli[grep("N_PREPAA", ecoli$COMMON_NAME),]
-ecoli.f <- ecoli[grep("NPAA30MN", ecoli$COMMON_NAME),]
-training.data <- cbind(ecoli.i[,3], training.data)
-colnames(training.data)[1] <- "Predisinfection.Ecoli"
-training.data <- apply(training.data, 2, as.numeric)
-rownames(training.data) <- as.character(paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),1])
-# REMOVE TRIAL 24: BAD DATA, 1-MIN SAMPLE LESS THAN REST#
-training.data <- training.data[-24,]
+testing.NN <- sapply(2:ncol(training.data), function(x) (as.numeric(all.data[,(x-1)])-training.mean[x])/training.sd[x])
+NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+predict.NN <-  neuralnet::compute(NN, data.frame(testing.NN))
+predict.NN <- predict.NN$net.result*training.sd[predict.column]+training.mean[predict.column]
+test.CT <- predict.NN
 ```
 
 
-```{r Pre Ecoli NN, echo=FALSE, fig.height=2}
-predict.column <- which(colnames(training.data)=="Predisinfection.Ecoli")
-fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
-                     paste(colnames(training.data)[-c(predict.column)], collapse= "+")))
-
-# Loop shows 5 hidden layers acheive smallest RMSE
-# rmse.results <- foreach(nodes=seq(1,100,by=1), .combine=c) %do% {
-nodes <- c(7,10)
-par(mfrow=c(1,3), family="serif", mar=c(4,4,2,.5)+.1)
-for(n in c(10,50,90)) {
-# Let's try using n% to train the model, and (100-n)% to test
-# n <- 10 # percent
-
-# Scale variables first
-# Z-score standardization
-results <- foreach(i=1:ceiling(nrow(training.data)*((100-n)/100)), .combine=rbind) %do% {
-  training.mean <- apply(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], 2, mean)
-  training.sd <- apply(scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], scale=FALSE), 2, sd)
-  training.NN <- scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),])
-  testing.NN <- sapply(1:ncol(training.data), function(x)
-    (training.data[(floor(nrow(training.data)*n/100)+i),x]-training.mean[x])/training.sd[x]
-  )
-  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = TRUE)
-  predict.NN <-  neuralnet::compute(NN, t(data.frame(testing.NN[-predict.column])))
-  predict.NN <- predict.NN$net.result*training.sd[predict.column]+training.mean[predict.column]
-  return(matrix(data=c(training.data[(floor(nrow(training.data)*n/100)+i),predict.column], predict.NN), nrow=1))
+```{r plot training data}
+date.time <- paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),1]
+plot.data <- xts(training.data, order.by = date.time)
+par(mfrow=c(5,2), mar=c(2,2,2,1))
+for(i in 2:ncol(plot.data)) {
+  plot(as.zoo(plot.data[,i]), main=colnames(plot.data)[i], ylab="", xlab="", type="p")
 }
-
-plot(results, ylim=c(min(results), max(results)), xlim=c(min(results), max(results)), pch=20, xlab="Actual", ylab="Predicted", main=paste("Trained on:", floor(nrow(training.data)*n/100), "/ 65"))
-abline(a=0, b=1)
-text(x=max(results),y=1+min(results), labels=paste("RMSE =",round(rmse.calculator(results[,2], results[,1]),0)), pos=2)
-}
-
-
+train.CT <- plot.data[,1]
 ```
 
 
-
-
-
-
-## Predict Final E.coli
-```{r Setup post e.coli, include=FALSE}
-# Use paa.wq.ecoli to predict CT
-training.vars <- c("min.of.day", "DIS.North.Flow", "PAA.Flow", "DIS.PAA.N.Upstream.Residual", "NSEC.Aerobic.SRT", "NSEC.Effluent.NH3", "NSEC.Effluent.NO3","NSEC.Effluent.NO2", "NSEC.Effluent.OP", "NSEC.Effluent.TSS", "NSEC.Effluent.Flow")
-training.data <- paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),] # first observation of each sampling event
-training.data <- training.data[,sapply(training.vars, function(x) which(colnames(training.data)==x))] 
-ecoli.i <- ecoli[grep("N_PREPAA", ecoli$COMMON_NAME),]
-ecoli.f <- ecoli[grep("NPAA30MN", ecoli$COMMON_NAME),]
-training.data <- cbind(ecoli.f[,3], training.data)
-colnames(training.data)[1] <- "Postdisinfection.Ecoli"
-training.data <- apply(training.data, 2, as.numeric)
-rownames(training.data) <- as.character(paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),1])
-# REMOVE TRIAL 24: BAD DATA, 1-MIN SAMPLE LESS THAN REST#
-training.data <- training.data[-24,]
+```{r plot testing data}
+date.time <- as.vector(sapply(compile.range, function(days) (Sys.time()-days*60*60*24)-seq(60*60*24,60, by=-60*5)))
+date.time <- as.POSIXct(date.time, origin="1970-01-01")
+plot.data <- apply(all.data,2,as.numeric)
+plot.data <- xts(plot.data, order.by = date.time)
+test.CT <- xts(test.CT, order.by=date.time)
+par(mfrow=c(5,2), mar=c(2,2,2,1))
+for(i in 1:ncol(plot.data)) {
+  plot(as.zoo(plot.data[,i]), main=colnames(plot.data)[i], ylab="", xlab="", type="l")
+}
 ```
 
 
-```{r post Ecoli NN, echo=FALSE, fig.height=2}
-predict.column <- which(colnames(training.data)=="Postdisinfection.Ecoli")
-fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
-                     paste(colnames(training.data)[-c(predict.column)], collapse= "+")))
-
-# Loop shows 5 hidden layers acheive smallest RMSE
-# rmse.results <- foreach(nodes=seq(1,100,by=1), .combine=c) %do% {
-nodes <- c(7,10)
-par(mfrow=c(1,3), family="serif", mar=c(4,4,2,.5)+.1)
-for(n in c(10,50,90)) {
-# Let's try using n% to train the model, and (100-n)% to test
-# n <- 10 # percent
-
-# Scale variables first
-# Z-score standardization
-results <- foreach(i=1:ceiling(nrow(training.data)*((100-n)/100)), .combine=rbind) %do% {
-  training.mean <- apply(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], 2, mean)
-  training.sd <- apply(scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], scale=FALSE), 2, sd)
-  training.NN <- scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),])
-  testing.NN <- sapply(1:ncol(training.data), function(x)
-    (training.data[(floor(nrow(training.data)*n/100)+i),x]-training.mean[x])/training.sd[x]
-  )
-  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = TRUE)
-  predict.NN <-  neuralnet::compute(NN, t(data.frame(testing.NN[-predict.column])))
-  predict.NN <- predict.NN$net.result*training.sd[predict.column]+training.mean[predict.column]
-  return(matrix(data=c(training.data[(floor(nrow(training.data)*n/100)+i),predict.column], predict.NN), nrow=1))
-}
-
-plot(results, ylim=c(min(results), max(results)), xlim=c(min(results), max(results)), pch=20, xlab="Actual", ylab="Predicted", main=paste("Trained on:", floor(nrow(training.data)*n/100), "/ 65"))
-abline(a=0, b=1)
-text(x=max(results),y=1+min(results), labels=paste("RMSE =",round(rmse.calculator(results[,2], results[,1]),1)), pos=2)
-}
-
+```{r plot training and testing CT}
+par(mfrow=c(2,1), mar=c(2,2,2,1))
+r <- range(train.CT)
+plot(as.zoo(train.CT), type="p", ylab="", xlab="", main="Actual CT")
+plot(as.zoo(test.CT), type="p", ylab="", xlab="", main="Predicted CT", ylim=c(r[1],r[2]))
 ```
 
 
-```{r Predisinfection Ecoli, eval=FALSE, include=FALSE}
-
-## Step 6: Real-time *E. coli*
-# Login information
+```{r Predisinfection Ecoli, include=FALSE}
 library(piwebapi)
-useKerberos <- TRUE
-username <- "knewhart"
-password <- "Lunabear2@"
-validateSSL <- TRUE
-debug <- TRUE
-piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
-
-# Set time
-date.time <- seq(as.POSIXct("2019-06-28 07:38:00"), as.POSIXct("2019-08-01	13:29"), by="10 mins")
-# Go from MT to UTC
-pi.times <- matrix(NA,nrow=length(date.time),ncol=1)
-for(i in 1:length(date.time)) {
-  time.obj <- date.time[i]
-  time.obj <- lubridate::with_tz(time.obj, tzone="UTC")
-  pi.times[i,1] <- paste0(as.character(format(time.obj,"%Y-%m-%d")),"T",
+  
+  # Login information
+  useKerberos <- TRUE
+  username <- "knewhart"
+  password <- "Lunabear2@"
+  validateSSL <- TRUE
+  debug <- TRUE
+  piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+  # Go from MT to UTC
+  time.obj <- c(lubridate::with_tz(Sys.time()-365*24*60*60, tzone="UTC"),
+                lubridate::with_tz(Sys.time(), tzone="UTC"))
+  time.obj <-  paste0(as.character(format(time.obj,"%Y-%m-%d")),"T",
                           as.character(format(time.obj,"%H:%M:%S")),"Z")
-}
-# Declare with variables/pi tags to pull
-pi.tags <- matrix(c("N PrePAA Ecoli", 
-                    "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G",
-                  "DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
-                  "PAA Flow", "\\\\applepi\\FY_K810",
-                  "DIS PAA N Upstream Residual", "\\\\applepi\\AI_K826",
-                  "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
-                  "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
-                  "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
-                  "NSEC Effluent NO2", "\\\\applepi\\AI_N501G",
-                  "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
-                  "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
-                  "NSEC Effluent Flow", "\\\\applepi\\FY-F225"), ncol=2, byrow=TRUE)
+
+  # Declare with variables/pi tags to pull
+  pi.tags <- matrix(c("N PrePAA Ecoli", "af:\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G",
+                      "DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
+                      "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
+                      "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
+                      "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
+                      "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
+                      "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
+                      "NSEC Effluent Flow", "\\\\applepi\\FY-F225"), ncol=2, byrow=TRUE)
   	
-# Pull data
-for(tag in 1:nrow(pi.tags)) {
-  pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
-  if(length(pi.times)<101) data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
-                                                                    time = c(pi.times[,1]))[[2]]
-  if(length(pi.times)>100) {
-    intervals <- cbind(seq(1,length(pi.times), by=100), c(seq(100,length(pi.times),by=100), length(pi.times)))
-    data.holder <- list()
-    for(i in 1:nrow(intervals)) {
-      data.holder <- c(data.holder, piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
-                                                                        time = c(pi.times[intervals[i,1]:intervals[i,2],1]))[[2]])
+
+  # Pull data
+  for(tag in 1:nrow(pi.tags)) {
+    if(tag==1) {
+      data.holder <- piWebApiService$data$getRecordedValues(path=pi.tags[tag,2], startTime = time.obj[1], endTime = time.obj[2])[,c(2,1)]
+      colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
+      all.data <- data.holder
+    } else {
+      pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
+      data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
+                                                                      time = c(all.data[,1]))[[2]]
+      data.holder <- do.call("rbind", lapply(data.holder, function(x) x[2]))
+      all.data <- cbind(all.data, data.holder)
+      colnames(all.data)[ncol(all.data)] <- make.names(pi.tags[tag,1])
     }
   }
-  data.holder <- data.frame(matrix(unlist(lapply(data.holder, function(x) c(x[[1]], x[[2]]))), ncol=2, byrow=TRUE))
-  colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
-  if(tag==1) all.data <- data.holder
-  if(tag>1) {
-    all.data <- merge(all.data, data.holder, by="Datetime")
-  }
-}
 # Fix tags from UTC to MT
 date.time <- all.data[,1]
-new.date.time <- .POSIXct(rep(NA, length(date.time)))
+new.date.time <- as.POSIXct(rep(NA, length(date.time)))
 for(i in 1:length(date.time)) {
   time.obj <- paste(strsplit(date.time[i], "T")[[1]][1], 
                     strsplit(strsplit(date.time[i], "T")[[1]][2], "Z")[[1]][1])
@@ -701,8 +557,22 @@ for(i in 1:length(date.time)) {
   new.date.time[i] <- time.obj
 }
 all.data <- data.frame(all.data)
-all.data[,1] <- as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(new.date.time,'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min'))
-colnames(all.data)[1] <- "min.of.day"
+all.data[,1] <- new.date.time
+colnames(all.data)[1] <- "date.time"
+```
+
+
+
+# Appendix
+```{r Plot CT vs Ecoli, echo=FALSE, fig.height=2, fig.width=6.5}
+plot.data <- data.frame(cbind(Ct.all, sapply(unique(data$sample.count), function(x) last(data[which(data$sample.count==x),"Log Removal"]))))
+colnames(plot.data) <- c("CT", "Log.Removal")
+par(mar=c(3.5,3.5,1,1), family="serif")
+plot(x=plot.data[,1], y=plot.data[,2], pch=20,xlab="",ylab="")
+lm.data <- lm(Log.Removal~CT,plot.data)
+abline(lm.data)
+mtext("CT (mg/L min)", side=1, line=2.5)
+mtext("Log removal", side=2, line=2.5)
 ```
 
 
