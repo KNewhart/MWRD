@@ -1,7 +1,7 @@
 # RNN
 # Set wd
 # setwd("C:\\Users\\KNewhart\\Documents\\GitHub\\MWRD\\PAA ICT")
-setwd("C:\\Users\\kbnewhart\\Dropbox\\Code\\MWRD\\PAA ICT")
+# setwd("C:\\Users\\kbnewhart\\Dropbox\\Code\\MWRD\\PAA ICT")
 
 # Install packages
 {
@@ -58,11 +58,13 @@ setwd("C:\\Users\\kbnewhart\\Dropbox\\Code\\MWRD\\PAA ICT")
   colnames(all.data) <- cols
   predict.col <- which(colnames(all.data)=="ECIDX_G")
   all.data[,predict.col] <- log10(all.data[,predict.col])
+  all.data <- cbind(all.data[2:nrow(all.data),], all.data[1:(nrow(all.data)-1),predict.col]) # lag ecoli
+  # all.data <- all.data[100:nrow(all.data),]
 }
 
 # Use parallel loop for rolling window
 {
-  n_train <- 0.5
+  n_train <- 0.9
   # predictions <- foreach(test.obs=seq(round(nrow(all.data)*n_train), nrow(all.data)), .combine = "rbind", .packages = c("dplyr", "keras")) %dopar% {
   all.predictions <- list()
   start <- round(nrow(all.data)*n_train)
