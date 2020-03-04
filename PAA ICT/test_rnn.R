@@ -200,40 +200,70 @@ compile.data <- function(average.parameters) {
 # Average vs Instantaneous is not significant 
 
 
-# Test 5-45: Log transform E.coli, Average values, remove NAs from one variable at a time, 90%/10% train/test
-obj.list <- list()
-raw.data <- compile.data(average.parameters=TRUE) # Pull data
-for(i in 6:ncol(raw.data)) {
-  all.data <- raw.data[-which(is.na(raw.data[,i])),] # Remove NAs from one column
-  if(nrow(all.data)==0) next
-  all.data <- all.data[,-which(apply(all.data,2, anyNA))] # Remove columns with NAs
-  all.data <- apply(all.data, 2, as.numeric)  # Make numberic
-  ecoli.col <- which(colnames(all.data)=="ECIDX_G") # Select E.coli column
-  all.data[,ecoli.col] <- log10(all.data[,ecoli.col]) # Log transform E.coli
-  assign(paste0("test",i+4,".raw"), all.data)
-  test <- rnn(all.data, predict.col=ecoli.col, train.obs=ceiling(nrow(all.data)*.9))
-  test[,2] <- 10^test[,2] # Undo log transform
-  obj.list[[length(obj.list)+1]] <- test
-}
-lapply(obj.list, function(t) mean(t[,1])) # R2
-lapply(obj.list, function(t) mean((t[,2])^2)^0.5) # RMSE
+# # Test 5-45: Log transform E.coli, Average values, remove NAs from one variable at a time, 90%/10% train/test
+# obj.list <- list()
+# raw.data <- compile.data(average.parameters=TRUE) # Pull data
+# for(i in 6:ncol(raw.data)) {
+#   all.data <- raw.data[-which(is.na(raw.data[,i])),] # Remove NAs from one column
+#   if(nrow(all.data)==0) next
+#   all.data <- all.data[,-which(apply(all.data,2, anyNA))] # Remove columns with NAs
+#   all.data <- apply(all.data, 2, as.numeric)  # Make numberic
+#   ecoli.col <- which(colnames(all.data)=="ECIDX_G") # Select E.coli column
+#   all.data[,ecoli.col] <- log10(all.data[,ecoli.col]) # Log transform E.coli
+#   assign(paste0("test",i+4,".raw"), all.data)
+#   test <- rnn(all.data, predict.col=ecoli.col, train.obs=ceiling(nrow(all.data)*.9))
+#   test[,2] <- 10^test[,2] # Undo log transform
+#   obj.list[[length(obj.list)+1]] <- test
+# }
+# lapply(obj.list, function(t) mean(t[,1])) # R2
+# lapply(obj.list, function(t) mean((t[,2])^2)^0.5) # RMSE
+# 
+# # Test 46-86: Log transform E.coli, Instantaneous values, remove NAs from one variable at a time, 90%/10% train/test
+# raw.data <- compile.data(average.parameters=TRUE) # Pull data
+# for(i in 1:ncol(raw.data)) {
+#   all.data <- raw.data[-which(is.na(raw.data[,i])),] # Remove NAs from one column
+#   all.data <- all.data[,-which(apply(all.data,2, anyNA))] # Remove columns with NAs
+#   all.data <- apply(all.data, 2, as.numeric)  # Make numberic
+#   ecoli.col <- which(colnames(all.data)=="ECIDX_G") # Select E.coli column
+#   all.data[,ecoli.col] <- log10(all.data[,ecoli.col]) # Log transform E.coli
+#   assign(paste0("test",i+45,".raw"), all.data)
+#   test <- rnn(all.data, predict.col=ecoli.col, train.obs=ceiling(nrow(all.data)*.9))
+#   test[,2] <- 10^test[,2] # Undo log transform
+#   obj.list[[length(obj.list)+1]] <- test
+# }
 
-# Test 46-86: Log transform E.coli, Instantaneous values, remove NAs from one variable at a time, 90%/10% train/test
-raw.data <- compile.data(average.parameters=TRUE) # Pull data
-for(i in 1:ncol(raw.data)) {
-  all.data <- raw.data[-which(is.na(raw.data[,i])),] # Remove NAs from one column
-  all.data <- all.data[,-which(apply(all.data,2, anyNA))] # Remove columns with NAs
-  all.data <- apply(all.data, 2, as.numeric)  # Make numberic
-  ecoli.col <- which(colnames(all.data)=="ECIDX_G") # Select E.coli column
-  all.data[,ecoli.col] <- log10(all.data[,ecoli.col]) # Log transform E.coli
-  assign(paste0("test",i+45,".raw"), all.data)
-  test <- rnn(all.data, predict.col=ecoli.col, train.obs=ceiling(nrow(all.data)*.9))
-  test[,2] <- 10^test[,2] # Undo log transform
-  obj.list[[length(obj.list)+1]] <- test
-}
+# Test OP: Log transform E.coli, Average values, Remove OP NAs, 90/10 train/test
+all.data <- compile.data(average.parameters=TRUE) # Pull data
+all.data <- all.data[-which(is.na(all.data$OP_FC24)),]
+all.data <- all.data[,-which(apply(all.data,2, anyNA))] # Remove all NAs by column
+all.data <- apply(all.data, 2, as.numeric)  # Make numberic
+ecoli.col <- which(colnames(all.data)=="ECIDX_G") # Select E.coli column
+all.data[,ecoli.col] <- log10(all.data[,ecoli.col])
+testop.raw <- all.data
+testop.rnn <- rnn(all.data, predict.col=ecoli.col, train.obs=ceiling(nrow(all.data)*.9))
 
+# Results: 
+# No log transform: R2 = 0.7974434, mean error = 2861.55
+# Log transform: R2 = 0.7024646, mean error = 1.638332, RMSE = 2.283897
 
+# Test PW: Log transform E.coli, Average values, Remove OP NAs, 90/10 train/test
+all.data <- compile.data(average.parameters=TRUE) # Pull data
+all.data <- all.data[-which(is.na(all.data$PW_FC24)),]
+all.data <- all.data[,-which(apply(all.data,2, anyNA))] # Remove all NAs by column
+all.data <- apply(all.data, 2, as.numeric)  # Make numberic
+ecoli.col <- which(colnames(all.data)=="ECIDX_G") # Select E.coli column
+all.data[,ecoli.col] <- log10(all.data[,ecoli.col])
+testpw.raw <- all.data
+testpw.rnn <- rnn(all.data, predict.col=ecoli.col, train.obs=ceiling(nrow(all.data)*.9))
 
+# Results:
+# No log transform: R2 = 0.5896662, mean error = 4491.2
+# Log transform: R2 = 0.5741033, mean error = 1.26009, RMSE = 1.41097
+
+# Discussion:
+# Log transform is necessary for an accurate prediction
+# PW outperforms OP using mean error and RMSE, but does not fit well (R2). 
+# This is most likely due to the pure number of samples avalible for PW vs OP (277 vs 98)
 
 # Test N: Lag E.coli
 # all.data <- cbind(all.data[2:nrow(all.data),], all.data[1:(nrow(all.data)-1),predict.col]) # lag ecoli
