@@ -218,6 +218,25 @@ compile.data <- function(average.parameters) {
 # lapply(obj.list, function(t) mean(t[,1])) # R2
 # lapply(obj.list, function(t) mean((t[,2])^2)^0.5) # RMSE
 # 
+# Test 5-45: Log transform E.coli, Average values, remove NAs from one variable at a time, 90%/10% train/test
+rnn.list <- list()
+raw.list <- list() 
+raw.data <- compile.data(average.parameters=TRUE) # Pull data
+for(i in 1:ncol(raw.data)) {
+  all.data <- raw.data[-which(is.na(raw.data[,i])),] # Remove NAs from one column
+  if(nrow(all.data)==0) next
+  all.data <- all.data[,-which(apply(all.data,2, anyNA))] # Remove columns with NAs
+  all.data <- apply(all.data, 2, as.numeric)  # Make numberic
+  ecoli.col <- which(colnames(all.data)=="ECIDX_G") # Select E.coli column
+  all.data[,ecoli.col] <- log10(all.data[,ecoli.col]) # Log transform E.coli
+  raw.list[[length(raw.list)+1]] <- all.data
+  test <- rnn(all.data, predict.col=ecoli.col, train.obs=ceiling(nrow(all.data)*.9))
+  test[,2] <- 10^test[,2] # Undo log transform
+  obj.list[[length(obj.list)+1]] <- test
+}
+unlist(lapply(obj.list, function(t) mean(t[,1]))) # R2
+unlist(lapply(obj.list, function(t) mean((t[,2])^2)^0.5)) # RMSE
+
 # # Test 46-86: Log transform E.coli, Instantaneous values, remove NAs from one variable at a time, 90%/10% train/test
 # raw.data <- compile.data(average.parameters=TRUE) # Pull data
 # for(i in 1:ncol(raw.data)) {
