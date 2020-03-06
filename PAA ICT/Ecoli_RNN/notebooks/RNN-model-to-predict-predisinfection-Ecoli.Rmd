@@ -1,18 +1,166 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "RNN model to predict predisinfection E.coli"
+output:
+  pdf_document: default
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r setup, include=FALSE}
+# Notebook setup
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+# By default, only show output when executing code chunks
+knitr::opts_chunk$set(echo=FALSE)
 
-```{r}
-plot(cars)
+# Change working directory to be "Ecoli_RNN", rather than location of notebook
+wd.path <- getwd()
+if(tail(unlist(strsplit(wd.path,"/")),n=1)=="notebooks") wd.path <- dirname(wd.path)
+knitr::opts_knit$set(root.dir = wd.path)
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+# Data preparation
+## Download all data from PI
+```{r eval=FALSE, include=FALSE}
+# Only run this chunk once to download row data
+# Load function to import a PI tag
+source("src/pi-pull.R")
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+# Import PI tags
+data.parameters <- read.csv("src/data-parameters-south.csv", stringsAsFactors = FALSE)
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+# Create tag names from PI paths
+{
+  tag.names <- sapply(data.parameters[,1], function(x) tail(strsplit(tail(strsplit(x,"[\\]")[[1]],n=1),"[|]")[[1]],n=1))
+
+  # For cleanliness, remove path names from list
+  # names(tag.names) <- NULL 
+  
+  # Rename duplicate tag names by including more characters from the PI path
+  duplicates <- names(which(sapply(unique(tag.names), function(x) length(which(x==tag.names)))>1))
+  for(i in which(tag.names %in% duplicates)) {
+    tag.names[i] <- paste(strsplit(tail(strsplit(data.parameters[i,1],"[\\]")[[1]],n=1),"[|]")[[1]], collapse=" ")
+  }
+}
+
+# Pull E coli data
+master.file <- pi.pull(tag=data.parameters[1,1],  # First tag should always be E.coli
+                       start=as.POSIXct("2019-04-08 00:00:00"), # Earliest  predisinfection E.coli sample
+                       end='*', 
+                       obj.return = TRUE, 
+                       save=FALSE)
+
+# Save E coli data
+write.csv(master.file, file="data/south/predisinfection-ecoli.csv")
+
+# Initialize timestamps from E coli samples
+master.timestamps <- master.file[,1]
+
+# Compile all averaged or raw data (takes 1.5 hours to run serialized, 15 minutes in parallel)
+# Initialize parallelization
+{
+  library(parallel)
+  library(doSNOW)
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  # register the cluster
+  registerDoSNOW(cluster)
+}
+
+library(foreach)
+foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %dopar% {
+  file <- rep(NA, nrow(master.file))
+  file.avg <- rep(NA, nrow(master.file))
+
+  avg <- data.parameters[p,2]
+  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="m") d <- lubridate::dminutes(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="h") d <- lubridate::dhours(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+
+  for(t in 1:length(master.timestamps)) {
+    print(paste("Starting timestamp", t))
+    start <- as.POSIXct(master.timestamps[t]) - as.numeric(d)
+    end <- as.POSIXct(master.timestamps[t])
+
+    test <- pi.pull(tag=data.parameters[p,1], start=start, end=end, save=FALSE, obj.return = TRUE)
+
+    if((nrow(test)==0) || (length(test)==0)) {
+      file[t] <- NA
+      file.avg[t] <- NA
+    } else {
+
+        file[t] <- as.numeric(test[nrow(test),2])
+
+        weights <- as.numeric(difftime(test[,1], start, units="secs"))
+        if(nrow(test) > 1) {
+          for(i in length(weights):2) weights[i] <- weights[i]-weights[i-1]
+          file.avg[t] <- weighted.mean(test[,2], w=weights/sum(weights))
+        } else {
+          file.avg[t] <- as.numeric(test[,2])
+        }
+
+    }
+  }
+  write.csv(cbind(master.timestamps, file), file=paste0("data/south/instant/",tag.names[p],".csv"))
+  write.csv(cbind(master.timestamps, file.avg), file=paste0("data/south/average/",tag.names[p],".csv"))
+}
+
+# Clean up parallel
+{
+  # stop cluster and remove clients
+  stopCluster(cluster)
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  # clean up a bit.
+  invisible(gc); remove(nThreads); remove(cluster);
+
+}
+
+```
+
+## Combine raw data
+```{r}
+source("src/compile-data.R")
+instant.data <- compile.data("data/south/instant")
+average.data <- compile.data("data/south/average")
+```
+
+## Clean raw data
+```{r}
+library(dplyr)
+instant.data <- na.locf(instant.data)[-c(1:3),]
+remove <- instant.data %>% apply(., 2, anyNA) %>% unlist %>% which
+instant.data <- instant.data[,-remove]
+
+average.data <- na.locf(average.data)[-c(1:3),]
+remove <- average.data %>% apply(., 2, anyNA) %>% unlist %>% which
+average.data <- average.data[,-remove]
+```
+
+## Plot all data
+```{r}
+for(i in 1:ncol(average.data)) {
+  png(filename=paste0("figures/south/average/",gsub("[.]","-",colnames(average.data)[i]),".png"))
+  par(mar=c(2,2.5,2.5,.1), cex.main=1)
+  plot(average.data[,i], ylab="", xlab="", main=colnames(average.data)[i])
+  dev.off()
+}
+
+for(i in 1:ncol(instant.data)) {
+  png(filename=paste0("figures/south/instant/",gsub("[.]","-",colnames(average.data)[i]),".png"))
+  par(mar=c(2,2.5,2.5,.1), cex.main=1)
+  plot(average.data[,i], ylab="", xlab="", main=colnames(average.data)[i])
+  dev.off()
+}
+```
+
+# Train and test data
+```{r}
+source("src/rolling-rnn.R")
+test.average <- rolling.rnn(all.data=average.data, 
+                            predict.col=which(colnames(average.data)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average.data)*.9))
+```
+
+
+# Build model
+
+# Results

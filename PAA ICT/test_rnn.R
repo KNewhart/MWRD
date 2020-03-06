@@ -1,4 +1,4 @@
-=# Function to create a rnn, train and test in parallel
+# Function to create a rnn, train and test in parallel
   rnn <- function(all.data, predict.col, train.obs,
                   act.function="softsign") {
     # Load required packages
