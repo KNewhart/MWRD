@@ -21,7 +21,7 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
   all.predictions <- list()
   # Initialize start and end testing observations
   start <- train.obs+1
-  end <- start+nThreads*2-1
+  end <- start+nThreads-1
   if(end > nrow(all.data)) end <- nrow(all.data)
   
   # Start loop
@@ -131,7 +131,7 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
     
     all.predictions[[length(all.predictions)+1]] <- predictions
     start <- end + 1
-    end <- start + nThreads*2 - 1
+    end <- start + nThreads - 1
     if(end > nrow(all.data)) end <- nrow(all.data)
   } # while loop
   
