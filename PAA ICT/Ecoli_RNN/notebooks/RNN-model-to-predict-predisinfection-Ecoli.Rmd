@@ -136,7 +136,7 @@ average.data <- average.data[,-remove]
 ```
 
 ## Plot all data
-```{r}
+```{r eval=FALSE, include=FALSE}
 for(i in 1:ncol(average.data)) {
   png(filename=paste0("figures/south/average/",gsub("[.]","-",colnames(average.data)[i]),".png"))
   par(mar=c(2,2.5,2.5,.1), cex.main=1)
@@ -188,9 +188,11 @@ instant.data.log.lag[,which(colnames(instant.data.log.lag)=="ECIDX_G")] <- log10
 instant.data.log.lag <- cbind(instant.data.log.lag[2:nrow(instant.data.log.lag),], 
                               instant.data.log.lag[1:(nrow(instant.data.log.lag)-1),which(colnames(instant.data.log.lag)=="ECIDX_G")])
 colnames(instant.data.log.lag)[ncol(instant.data.log.lag)] <- "ECIDX_G_Lag"
-test.average <- rolling.rnn(all.data=instant.data.log.lag, 
+instant.data.log.lag <- instant.data.log.lag[-1,]
+test.instant <- rolling.rnn(all.data=instant.data.log.lag, 
                             predict.col=which(colnames(instant.data.log.lag)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(instant.data.log.lag)*.9))
+                            train.obs=ceiling(nrow(instant.data.log.lag)*.9),
+                            n_epoch=500)
 ```
 
 # Build model

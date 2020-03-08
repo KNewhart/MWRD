@@ -1,6 +1,6 @@
 # Function to create a rnn, train and test in parallel/rolling window
 rolling.rnn <- function(all.data, predict.col, train.obs,
-                act.function="softsign") {
+                act.function="softsign", n_epoch=500) {
   # Load required packages
   pkgs <- c("xts", "dplyr", "parallel", "doSNOW", "foreach")
   sapply(pkgs, require, character.only = TRUE)
@@ -13,9 +13,9 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
   }
   
   # How many threads can you run in parallel
-  nThreads<- detectCores(logical = TRUE) 
+  nThreads<- detectCores(logical = TRUE)
   
-  # print(paste(Sys.time(),": Starting training..."))
+  print(paste(Sys.time(),": Starting training..."))
   
   # Initialize where each parallel iteration is to be saved
   all.predictions <- list()
@@ -25,12 +25,14 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
   if(end > nrow(all.data)) end <- nrow(all.data)
   
   # Start loop
-  while(start < nrow(all.data)) {
+  while(start <= nrow(all.data)) {
     
     if(end == nrow(all.data)) nThreads <- end-start
+    if(nThreads<1) nThreads <- 1
     
     # Create doSNOW compute cluster
-    cluster = makeCluster(nThreads, type = "SOCK")
+    # cluster = makeCluster(nThreads, type = "SOCK")
+    cluster = makeCluster(nThreads)
     # register the cluster
     registerDoSNOW(cluster)
     
@@ -46,10 +48,14 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
       train.x <- scale(all.data[train.start:train.end,], center=train.mean, scale=train.sd)[,-predict.col]
       train.x <- train.x[,-which(apply(train.x,2,anyNA))]
       train.x <- simplify2array(list(train.x))
-      
+      if(length(dim(train.x)) < 3) {
+        data.frame("R2"=NA, 
+                   "Prediction"=NA,
+                   "Actual"=NA,
+                   "Persistance"=NA)
+      }
       train.y <- simplify2array(list(scale(all.data[train.start:train.end,], center=train.mean, scale=train.sd)[,predict.col]))
       n_batch <- dim(train.x)[1]
-      n_epoch <- 2000
       
       # Setup model
       model <- keras_model_sequential() %>%
@@ -116,12 +122,12 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
       # Calculate prediction error (in E. coli units)
       # error <- pred*train.sd[predict.col]+train.mean[predict.col]-as.numeric(test.y*train.sd[predict.col]+train.mean[predict.col])
       
-      data.frame("R2"=r2, 
+      data.frame("R2"=r2,
                  "Prediction"=pred*train.sd[predict.col]+train.mean[predict.col],
                  "Actual"=all.data[test.obs,predict.col],
                  "Persistance"=all.data[(test.obs-1),predict.col])
     } # parallel loop
-    
+    predictions <- do.call("rbind", results)
     # stop cluster and remove clients
     stopCluster(cluster)
     # insert serial backend, otherwise error in repetetive tasks
