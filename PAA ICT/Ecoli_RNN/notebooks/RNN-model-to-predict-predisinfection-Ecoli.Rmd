@@ -160,6 +160,25 @@ test.average <- rolling.rnn(all.data=average.data,
                             train.obs=ceiling(nrow(average.data)*.9))
 ```
 
+```{r}
+source("src/rolling-rnn.R")
+average.data.log <- average.data
+average.data.log[,which(colnames(average.data.log)=="ECIDX_G")] <- log10(average.data.log[,which(colnames(average.data.log)=="ECIDX_G")])
+test.average <- rolling.rnn(all.data=average.data.log, 
+                            predict.col=which(colnames(average.data.log)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average.data.log)*.9))
+```
+
+```{r}
+source("src/rolling-rnn.R")
+average.data.log.lag <- average.data
+average.data.log.lag[,which(colnames(average.data.log.lag)=="ECIDX_G")] <- log10(average.data.log.lag[,which(colnames(average.data.log.lag)=="ECIDX_G")])
+average.data.log.lag <- cbind(average.data.log.lag[2:nrow(average.data.log.lag),], 
+                              average.data.log.lag[1:(nrow(average.data.log.lag)-1),which(colnames(average.data.log.lag)=="ECIDX_G")])
+test.average <- rolling.rnn(all.data=average.data.log.lag, 
+                            predict.col=which(colnames(average.data.log)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average.data.log)*.9))
+```
 
 # Build model
 
