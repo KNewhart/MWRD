@@ -127,13 +127,14 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
     # insert serial backend, otherwise error in repetetive tasks
     registerDoSEQ()
     
-    # print(paste(Sys.time(),": Observations", start, "to", end, "completed."))
+    print(paste(Sys.time(),": Observations", start, "to", end, "completed."))
     
     all.predictions[[length(all.predictions)+1]] <- predictions
     start <- end + 1
     end <- start + nThreads*2 - 1
     if(end > nrow(all.data)) end <- nrow(all.data)
   } # while loop
+  
   all.predictions <- do.call("rbind", all.predictions)
   return(all.predictions)
 }
