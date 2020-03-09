@@ -153,48 +153,90 @@ for(i in 1:ncol(instant.data)) {
 ```
 
 # Train and test data
-```{r}
-source("src/rolling-rnn.R")
-test.average <- rolling.rnn(all.data=average.data, 
-                            predict.col=which(colnames(average.data)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(average.data)*.9))
-```
 
-```{r}
-source("src/rolling-rnn.R")
-average.data.log <- average.data
-average.data.log[,which(colnames(average.data.log)=="ECIDX_G")] <- log10(average.data.log[,which(colnames(average.data.log)=="ECIDX_G")])
-test.average <- rolling.rnn(all.data=average.data.log, 
-                            predict.col=which(colnames(average.data.log)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(average.data.log)*.9))
-```
-
-```{r}
+```{r Average log lag}
 source("src/rolling-rnn.R")
 average.data.log.lag <- average.data
 average.data.log.lag[,which(colnames(average.data.log.lag)=="ECIDX_G")] <- log10(average.data.log.lag[,which(colnames(average.data.log.lag)=="ECIDX_G")])
-average.data.log.lag <- cbind(average.data.log.lag[2:nrow(average.data.log.lag),], 
-                              average.data.log.lag[1:(nrow(average.data.log.lag)-1),which(colnames(average.data.log.lag)=="ECIDX_G")])
+average.data.log.lag <- cbind(average.data.log.lag[3:nrow(average.data.log.lag),], 
+                              average.data.log.lag[1:(nrow(average.data.log.lag)-2),which(colnames(average.data.log.lag)=="ECIDX_G")])
 colnames(average.data.log.lag)[ncol(average.data.log.lag)] <- "ECIDX_G_Lag"
+average.data.log.lag <- average.data.log.lag[-which(apply(average.data.log.lag, 1, anyNA)),]
+
 test.average <- rolling.rnn(all.data=average.data.log.lag, 
                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(average.data.log.lag)*.9))
+                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                            n_epoch=300)
 ```
 
-```{r}
+```{r Instant log lag}
 source("src/rolling-rnn.R")
 instant.data.log.lag <- instant.data
 instant.data.log.lag[,which(colnames(instant.data.log.lag)=="ECIDX_G")] <- log10(instant.data.log.lag[,which(colnames(instant.data.log.lag)=="ECIDX_G")])
-instant.data.log.lag <- cbind(instant.data.log.lag[2:nrow(instant.data.log.lag),], 
-                              instant.data.log.lag[1:(nrow(instant.data.log.lag)-1),which(colnames(instant.data.log.lag)=="ECIDX_G")])
+instant.data.log.lag <- cbind(instant.data.log.lag[3:nrow(instant.data.log.lag),], 
+                              instant.data.log.lag[1:(nrow(instant.data.log.lag)-2),which(colnames(instant.data.log.lag)=="ECIDX_G")])
 colnames(instant.data.log.lag)[ncol(instant.data.log.lag)] <- "ECIDX_G_Lag"
-instant.data.log.lag <- instant.data.log.lag[-1,]
+instant.data.log.lag <- instant.data.log.lag[-which(apply(instant.data.log.lag, 1, anyNA)),]
+
 test.instant <- rolling.rnn(all.data=instant.data.log.lag, 
                             predict.col=which(colnames(instant.data.log.lag)=="ECIDX_G"),
                             train.obs=ceiling(nrow(instant.data.log.lag)*.9),
-                            n_epoch=500)
+                            n_epoch=300)
 ```
 
-# Build model
-
 # Results
+```{r Average results}
+results <- test.average
+
+# plot(results$R2, main="R2", pch=20)
+
+r2 <- mean(results$R2)
+rmse.log <- data.frame("Prediction"=mean((results$Prediction-results$Actual)^2)^0.5,
+                       "Persistance"=mean((results$Persistance-results$Actual)^2)^0.5)
+rmse <- data.frame("Prediction"=mean((10^results$Prediction-10^results$Actual)^2)^0.5,
+                   "Persistance"=mean((10^results$Persistance-10^results$Actual)^2)^0.5)
+
+source("src/actual-predicted-plot.R")
+
+label <- "Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], 10^results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],10^results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
+
+label <- "Log Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+  
+plot(x=results$Actual, y=results$Prediction, pch=20, main="Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+
+```
+
+```{r Instant results}
+results <- test.instant
+
+r2 <- mean(results$R2)
+rmse.log <- data.frame("Prediction"=mean((results$Prediction-results$Actual)^2)^0.5,
+                       "Persistance"=mean((results$Persistance-results$Actual)^2)^0.5)
+rmse <- data.frame("Prediction"=mean((10^results$Prediction-10^results$Actual)^2)^0.5,
+                   "Persistance"=mean((10^results$Persistance-10^results$Actual)^2)^0.5)
+
+source("src/actual-predicted-plot.R")
+
+label <- "Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], 10^results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],10^results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
+
+label <- "Log Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+  
+plot(x=results$Actual, y=results$Prediction, pch=20, main="Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+
+```
