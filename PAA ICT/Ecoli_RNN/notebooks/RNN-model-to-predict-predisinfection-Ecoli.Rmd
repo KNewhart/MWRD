@@ -25,7 +25,8 @@ source("src/pi-pull.R")
 
 # Import PI tags
 data.parameters <- read.csv("src/data-parameters-south.csv", stringsAsFactors = FALSE)
-
+## This analysis is just for predisinfection Ecoli, remove second row with post-disinfection Ecoli
+data.parameters <- data.parameters[-2,]
 # Create tag names from PI paths
 {
   tag.names <- sapply(data.parameters[,1], function(x) tail(strsplit(tail(strsplit(x,"[\\]")[[1]],n=1),"[|]")[[1]],n=1))
@@ -157,32 +158,61 @@ for(i in 1:ncol(instant.data)) {
 ```{r Average log lag}
 source("src/rolling-rnn.R")
 average.data.log.lag <- average.data
-average.data.log.lag[,which(colnames(average.data.log.lag)=="ECIDX_G")] <- log10(average.data.log.lag[,which(colnames(average.data.log.lag)=="ECIDX_G")])
+average.times <- index(average.data)
+predict.col <- which(colnames(average.data.log.lag)=="ECIDX_G") # Select Ecoli column
+average.data.log.lag[,predict.col] <- log10(average.data.log.lag[,predict.col]) # Log transform Ecoli
 average.data.log.lag <- cbind(average.data.log.lag[3:nrow(average.data.log.lag),], 
-                              average.data.log.lag[1:(nrow(average.data.log.lag)-2),which(colnames(average.data.log.lag)=="ECIDX_G")])
+                              as.numeric(average.data.log.lag[1:(nrow(average.data.log.lag)-2),predict.col]))
 colnames(average.data.log.lag)[ncol(average.data.log.lag)] <- "ECIDX_G_Lag"
-average.data.log.lag <- average.data.log.lag[-which(apply(average.data.log.lag, 1, anyNA)),]
+average.data.log.lag <- average.data.log.lag[which(!apply(average.data.log.lag, 1, anyNA)),]
 
-test.average <- rolling.rnn(all.data=average.data.log.lag, 
-                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
-                            n_epoch=300)
+# test.average <- rolling.rnn(all.data=average.data.log.lag, 
+#                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+#                             train.obs=ceiling(nrow(average.data.log.lag)*.9),
+#                             n_epoch=300)
 ```
 
-```{r Instant log lag}
+```{r}
 source("src/rolling-rnn.R")
-instant.data.log.lag <- instant.data
-instant.data.log.lag[,which(colnames(instant.data.log.lag)=="ECIDX_G")] <- log10(instant.data.log.lag[,which(colnames(instant.data.log.lag)=="ECIDX_G")])
-instant.data.log.lag <- cbind(instant.data.log.lag[3:nrow(instant.data.log.lag),], 
-                              instant.data.log.lag[1:(nrow(instant.data.log.lag)-2),which(colnames(instant.data.log.lag)=="ECIDX_G")])
-colnames(instant.data.log.lag)[ncol(instant.data.log.lag)] <- "ECIDX_G_Lag"
-instant.data.log.lag <- instant.data.log.lag[-which(apply(instant.data.log.lag, 1, anyNA)),]
+feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*.9),
+                        act.function="softsign", n_epoch=500) {
 
-test.instant <- rolling.rnn(all.data=instant.data.log.lag, 
-                            predict.col=which(colnames(instant.data.log.lag)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(instant.data.log.lag)*.9),
-                            n_epoch=300)
+  perturbation <- rnorm(n=nrow(all.data), mean=0, sd=0.2)
+  
+  perturbed.results <- list()
+  for(n in seq(1,ncol(all.data))[-predict.col]) {
+    test.data <- all.data
+    test.data[,n] <- test.data[,n]+perturbation
+    test.results <- rolling.rnn(all.data=test.data,
+                                predict.col=predict.col,
+                                train.obs=train.obs, 
+                                n_epoch=n_epoch)
+    perturbed.results[[length(perturbed.results)+1]] <- test.results
+  }
+  
+  org.results <- rolling.rnn(all.data=all.data,
+                                predict.col=predict.col,
+                                train.obs=train.obs, 
+                                n_epoch=n_epoch)
+  
+  perturbed.r2 <- do.call("rbind", lapply(perturbed.results, function(x) mean(x[,1])))
+  perturbed.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,2]-x[,3])^2)^0.5))
+  persistance.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,4]-x[,3])^2)^0.5))
+  
+  org.r2 <- mean(org.results[,1])
+  org.rmse <- mean((org.results[,2]-org.results[,3])^2)^0.5
+  org.persistance.rmse <- mean((org.results[,4]-org.results[,3])^2)^0.5
+  
+  all <- list(org.r2, org.rmse, org.persistance.rmse, 
+              perturbed.r2, perturbed.rmse, persistance.rmse)
+  return(all)
+}
+
+train.average <- feature.rnn(all.data=average.data.log.lag, 
+                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                             n_epoch=500)
 ```
+
 
 # Results
 ```{r Average results}

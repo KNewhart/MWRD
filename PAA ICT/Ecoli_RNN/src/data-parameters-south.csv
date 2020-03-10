@@ -1,5 +1,6 @@
 Path,Average
 "\\APPLEPI_AF\MWRD_Production\Labworks Data\011_530_1061-RWH South, Pre-PAA|ECIDX_G",24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\4B-South Final Effluent Platform|ECIDX_G,24h
 \\applepi\PAA_South_Plant_Flow,15m
 \\applepi\FC_T621,24h
 \\applepi\TI-R3003,60m
@@ -68,3 +69,7 @@ Path,Average
 "\\APPLEPI_AF\MWRD_Production\Labworks Data\011_712_1011-RWH South, Disinfection, Eff|TSS_FC24",24h
 "\\APPLEPI_AF\MWRD_Production\Labworks Data\011_712_1011-RWH South, Disinfection, Eff|TSS_G",24h
 "\\APPLEPI_AF\MWRD_Production\Labworks Data\011_712_1011-RWH South, Disinfection, Eff|TSSM_G",24h
+\\APPLEPI_AF\MWRD_Production\Labworks Data\4B-South Final Effluent Platform|PW_FC24,24h
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\07-Disinfection\Dis_Outfall_Samplers\Dis_South_Outfall|South Outfall Temperature,15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\07-Disinfection\Dis_PAA\South_PAA\South_PAA_Analyzers\S PAA Analyzers_Upstream\K871_PAA_Analyzyer|DIS PAA S Upstream Hach CL17 #1 - (AI_K871),15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\07-Disinfection\Dis_PAA\South_PAA\South_PAA_Dose_Cntrl|DIS S PAA Total Flow (FY_K860),15m
