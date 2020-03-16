@@ -166,13 +166,24 @@ average.data.log.lag <- cbind(average.data.log.lag[3:nrow(average.data.log.lag),
 colnames(average.data.log.lag)[ncol(average.data.log.lag)] <- "ECIDX_G_Lag"
 average.data.log.lag <- average.data.log.lag[which(!apply(average.data.log.lag, 1, anyNA)),]
 
-# test.average <- rolling.rnn(all.data=average.data.log.lag, 
-#                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-#                             train.obs=ceiling(nrow(average.data.log.lag)*.9),
-#                             n_epoch=300)
+# Identify best n_epoch: 
+# Are we overfitting? Underfitting?
+test.average.1 <- rolling.rnn(all.data=average.data.log.lag,
+                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                            n_epoch=150)
+test.average.2 <- rolling.rnn(all.data=average.data.log.lag,
+                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                            n_epoch=300)
+test.average.3 <- rolling.rnn(all.data=average.data.log.lag,
+                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                            n_epoch=450)
 ```
 
 ```{r}
+# Not working...
 source("src/rolling-rnn.R")
 feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*.9),
                         act.function="softsign", n_epoch=500) {
@@ -210,7 +221,7 @@ feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*
 
 train.average <- feature.rnn(all.data=average.data.log.lag, 
                              predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                             n_epoch=500)
+                             n_epoch=2000)
 ```
 
 
