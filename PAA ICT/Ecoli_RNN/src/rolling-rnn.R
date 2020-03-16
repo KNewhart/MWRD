@@ -32,115 +32,100 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
     
     # Create doSNOW compute cluster
     cluster = makeCluster(nThreads, type = "SOCK")
-    # cluster = makeCluster(nThreads)
     # register the cluster
     registerDoSNOW(cluster)
     
     predictions <- foreach(test.obs=seq(start, end),
-                           # .combine = "rbind",
                            .packages = c("dplyr", "keras","zoo")) %dopar% {
-    #   # tryCatch(
-        # expr = {
-    # results <- list()
-    # for(test.obs in seq(start,end)) {                         
-                # Setup training data
-                train.start <- test.obs-train.obs
-                train.end <- test.obs-1
-                # train.data <- all.data[train.start:train.end,] # Not included to save memory
-                # Scale training data
-                train.mean <- apply(all.data[train.start:train.end,],2,mean)
-                train.sd <- apply(all.data[train.start:train.end,],2,sd)
-                # Create 3D array of training data to simulate time sequence in batches of 1
-                train.x <- scale(all.data[train.start:train.end,], center=train.mean, scale=train.sd)[,-predict.col]
-                train.x <- train.x[,-which(apply(train.x,2,anyNA))]
-                train.x <- simplify2array(list(train.x))
-                if(length(dim(train.x)) == 3) {
-                  
-                  train.y <- simplify2array(list(scale(all.data[train.start:train.end,], center=train.mean, scale=train.sd)[,predict.col]))
-                  n_batch <- dim(train.x)[1]
-                  
-                  # Setup model
-                  model <- keras_model_sequential() %>%
-                    layer_lstm(units=dim(train.x)[2], input_shape=list(dim(train.x)[2],dim(train.x)[3]), activation = act.function) %>%
-                    layer_dense(units = 1)
-                  model %>% compile(
-                    optimizer = optimizer_rmsprop(),
-                    loss = "mean_squared_error"
-                  )
-                  
-                  # Train model
-                  # history.loss <- vector(length=n_epoch)
-                  for(i in seq(1,n_epoch)) {
-                    history <- model %>% fit(
-                      x=train.x,
-                      y=train.y,
-                      batch_size=n_batch,
-                      epochs=1,
-                      shuffle=FALSE, 
-                      stateful=TRUE
-                    )
-                    # history.loss[i] <- history$metrics$loss
-                    model %>% reset_states()
-                  }
-                  
-                  # # Testing...
-                  #   history <- model %>% fit(
-                  #     x=train.x,
-                  #     y=train.y,
-                  #     batch_size=n_batch,
-                  #     epochs=n_epoch,
-                  #     shuffle=FALSE, 
-                  #     stateful=TRUE
-                  #   )
-                  #   validation <- model %>% fit(
-                  #     x=train.x,
-                  #     y=train.y,
-                  #     batch_size=n_batch,
-                  #     epochs=n_epoch,
-                  #     shuffle=FALSE, 
-                  #     stateful=TRUE
-                  #   )
-                  # plot(history$metric$loss,pch=20, ylim=c(0,1));points(validation$metrics$loss, col="red", pch=20)
-                  
-                  # Calculate model fit to training data
-                  validation <- model %>% predict(
-                    x=train.x,
-                    batch_size=1
-                  )
-                  
-                  r2 <- cor(validation, train.y)^2
-                  
-                  # Setup testing data
-                  test.x <- scale(all.data, center=train.mean, scale=train.sd)[test.obs,-predict.col]
-                  test.x <- test.x[,which(colnames(test.x) %in% colnames(train.x[,,1]))]
-                  # test.y <- scale(all.data, center=train.mean, scale=train.sd)[test.obs,predict.col]
-                  
-                  # Predict E coli
-                  pred <- model %>% predict(
-                    x=array_reshape(test.x, c(1,length(test.x),1)),
-                    batch_size=1
-                  )
-                  
-                  # Calculate prediction error (in E. coli units)
-                  # error <- pred*train.sd[predict.col]+train.mean[predict.col]-as.numeric(test.y*train.sd[predict.col]+train.mean[predict.col])
-                  
-                  # results[[length(results)+1]] <- 
-                    data.frame("R2"=r2,
-                             "Prediction"=pred*train.sd[predict.col]+train.mean[predict.col],
-                             "Actual"=all.data[test.obs,predict.col],
-                             "Persistance"=all.data[(test.obs-1),predict.col])
-                } else {
-                  # results[[length(results)+1]] <- 
-                    data.frame("R2"=NA, 
-                             "Prediction"=NA,
-                             "Actual"=NA,
-                             "Persistance"=NA)
-                }
-        # }
-      # )
+      # Setup training data
+      train.start <- test.obs-train.obs
+      train.end <- test.obs-1
+      # Scale training data
+      train.mean <- apply(all.data[train.start:train.end,],2,mean)
+      train.sd <- apply(all.data[train.start:train.end,],2,sd)
+      # Create 3D array of training data to simulate time sequence in batches of 1
+      train.x <- scale(all.data[train.start:train.end,], center=train.mean, scale=train.sd)[,-predict.col]
+      train.x <- train.x[,-which(apply(train.x,2,anyNA))]
+      train.x <- simplify2array(list(train.x))
+      if(length(dim(train.x)) == 3) {
+        
+        train.y <- simplify2array(list(scale(all.data[train.start:train.end,], center=train.mean, scale=train.sd)[,predict.col]))
+        n_batch <- dim(train.x)[1]
+        
+        # Setup model
+        model <- keras_model_sequential() %>%
+          layer_lstm(units=dim(train.x)[2], input_shape=list(dim(train.x)[2],dim(train.x)[3]), activation = act.function) %>%
+          layer_dense(units = 1)
+        model %>% compile(
+          optimizer = optimizer_rmsprop(),
+          loss = "mean_squared_error"
+        )
+        
+        # Train model
+        # history.loss <- vector(length=n_epoch)
+        for(i in seq(1,n_epoch)) {
+          history <- model %>% fit(
+            x=train.x,
+            y=train.y,
+            batch_size=n_batch,
+            epochs=1,
+            shuffle=FALSE, 
+            stateful=TRUE
+          )
+          # history.loss[i] <- history$metrics$loss
+          model %>% reset_states()
+        }
+        
+        # # Testing...
+        #   history <- model %>% fit(
+        #     x=train.x,
+        #     y=train.y,
+        #     batch_size=n_batch,
+        #     epochs=n_epoch,
+        #     shuffle=FALSE, 
+        #     stateful=TRUE
+        #   )
+        #   validation <- model %>% fit(
+        #     x=train.x,
+        #     y=train.y,
+        #     batch_size=n_batch,
+        #     epochs=n_epoch,
+        #     shuffle=FALSE, 
+        #     stateful=TRUE
+        #   )
+        # plot(history$metric$loss,pch=20, ylim=c(0,1));points(validation$metrics$loss, col="red", pch=20)
+        
+        # Calculate model fit to training data
+        validation <- model %>% predict(
+          x=train.x,
+          batch_size=1
+        )
+        
+        r2 <- cor(validation, train.y)^2
+        
+        # Setup testing data
+        test.x <- scale(all.data, center=train.mean, scale=train.sd)[test.obs,-predict.col]
+        test.x <- test.x[,which(colnames(test.x) %in% colnames(train.x[,,1]))]
+        # test.y <- scale(all.data, center=train.mean, scale=train.sd)[test.obs,predict.col]
+        
+        # Predict E coli
+        pred <- model %>% predict(
+          x=array_reshape(test.x, c(1,length(test.x),1)),
+          batch_size=1
+        )
+        
+          data.frame("R2"=r2,
+                   "Prediction"=pred*train.sd[predict.col]+train.mean[predict.col],
+                   "Actual"=all.data[test.obs,predict.col],
+                   "Persistance"=all.data[(test.obs-1),predict.col])
+      } else {
+          data.frame("R2"=NA, 
+                   "Prediction"=NA,
+                   "Actual"=NA,
+                   "Persistance"=NA)
+      }
     }
     
-    # predictions <- do.call("rbind", results)
     # stop cluster and remove clients
     stopCluster(cluster)
     # insert serial backend, otherwise error in repetetive tasks
