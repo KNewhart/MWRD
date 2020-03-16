@@ -18,7 +18,7 @@ knitr::opts_knit$set(root.dir = wd.path)
 
 # Data preparation
 ## Download all data from PI
-```{r eval=FALSE, include=FALSE}
+```{r}
 # Only run this chunk once to download row data
 # Load function to import a PI tag
 source("src/pi-pull.R")
@@ -72,9 +72,13 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
   file <- rep(NA, nrow(master.file))
   file.avg <- rep(NA, nrow(master.file))
 
-  avg <- data.parameters[p,2]
-  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="m") d <- lubridate::dminutes(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
-  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="h") d <- lubridate::dhours(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  # Original: Variable averages
+  # avg <- data.parameters[p,2]
+  # if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="m") d <- lubridate::dminutes(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  # if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="h") d <- lubridate::dhours(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  
+  # Testing: 24h avg for all paramters
+  d <- lubridate::dhours(24)
 
   for(t in 1:length(master.timestamps)) {
     print(paste("Starting timestamp", t))
@@ -100,8 +104,9 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
 
     }
   }
-  write.csv(cbind(master.timestamps, file), file=paste0("data/south/instant/",tag.names[p],".csv"))
-  write.csv(cbind(master.timestamps, file.avg), file=paste0("data/south/average/",tag.names[p],".csv"))
+  # write.csv(cbind(master.timestamps, file), file=paste0("data/south/instant/",tag.names[p],".csv"))
+  # write.csv(cbind(master.timestamps, file.avg), file=paste0("data/south/average/",tag.names[p],".csv"))
+  write.csv(cbind(master.timestamps, file.avg), file=paste0("data/south/average-24/",tag.names[p],".csv"))
 }
 
 # Clean up parallel
