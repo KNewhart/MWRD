@@ -18,7 +18,7 @@ knitr::opts_knit$set(root.dir = wd.path)
 
 # Data preparation
 ## Download all data from PI (north)
-```{r}
+```{r eval=FALSE, include=FALSE}
 # Only run this chunk once to download row data
 # Load function to import a PI tag
 source("src/pi-pull.R")
@@ -123,7 +123,7 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
 
 
 ## Download all data from PI (south)
-```{r}
+```{r eval=FALSE, include=FALSE}
 # Only run this chunk once to download row data
 # Load function to import a PI tag
 source("src/pi-pull.R")
@@ -232,6 +232,7 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
 source("src/compile-data.R")
 instant.data <- compile.data("data/south/instant")
 average.data <- compile.data("data/south/average")
+average24.data <- compile.data("data/south/average-24")
 ```
 
 ## Clean raw data
@@ -244,6 +245,10 @@ instant.data <- instant.data[,-remove]
 average.data <- na.locf(average.data)[-c(1:3),]
 remove <- average.data %>% apply(., 2, anyNA) %>% unlist %>% which
 average.data <- average.data[,-remove]
+
+average24.data <- na.locf(average24.data)[-c(1:3),]
+remove <- average24.data %>% apply(., 2, anyNA) %>% unlist %>% which
+average24.data <- average24.data[,-remove]
 ```
 
 ## Plot all data
@@ -252,6 +257,13 @@ for(i in 1:ncol(average.data)) {
   png(filename=paste0("figures/south/average/",gsub("[.]","-",colnames(average.data)[i]),".png"))
   par(mar=c(2,2.5,2.5,.1), cex.main=1)
   plot(average.data[,i], ylab="", xlab="", main=colnames(average.data)[i])
+  dev.off()
+}
+
+for(i in 1:ncol(average24.data)) {
+  png(filename=paste0("figures/south/average-24/",gsub("[.]","-",colnames(average24.data)[i]),".png"))
+  par(mar=c(2,2.5,2.5,.1), cex.main=1)
+  plot(average24.data[,i], ylab="", xlab="", main=colnames(average24.data)[i])
   dev.off()
 }
 
@@ -278,21 +290,72 @@ average.data.log.lag <- average.data.log.lag[which(!apply(average.data.log.lag, 
 
 # Identify best n_epoch: 
 # Are we overfitting? Underfitting?
-test.average.1 <- rolling.rnn(all.data=average.data.log.lag,
-                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
-                            n_epoch=150)
-test.average.2 <- rolling.rnn(all.data=average.data.log.lag,
-                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
-                            n_epoch=300)
-test.average.3 <- rolling.rnn(all.data=average.data.log.lag,
-                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
-                            n_epoch=450)
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=average.data.log.lag,
+                                                        predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                                                        train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                                                        n_epoch=250)
+}
+test.average.1 <- test.average
+unlist(lapply(test.average.1, function(result) {
+  paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
+}))
+
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=average.data.log.lag,
+                                                        predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                                                        train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                                                        n_epoch=500)
+}
+test.average.2 <- test.average
+
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=average.data.log.lag,
+                                                        predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                                                        train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                                                        n_epoch=750)
+}
+test.average.3 <- test.average
+source("src/save-results.R")
+test.average <- list(test.average.1, test.average.2, test.average.3)
+names(test.average) <- c("250", "500", "750")
+save.results(test.average, obj.folder="Over-under fit",obj.name="average-log-lag")
 ```
 
-```{r}
+
+```{r Average log lag results}
+# Compare results:
+lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+  lapply(results.list, function(results) {
+    paste("R2 =",mean(results[,1]),", RMSE =",mean((results[,2]-results[,3])^2)^0.5)
+  })
+})
+
+l <- lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean(results[,1])
+  }))
+})
+r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
+colnames(r2) <- c("250", "500", "750")
+
+l <- lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean((results[,2]-results[,3])^2)^0.5
+  }))
+})
+rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
+colnames(rmse) <- c("250", "500", "750")
+
+par(mfrow=c(1,2))
+boxplot(r2)
+boxplot(rmse)
+```
+
+```{r eval=FALSE, include=FALSE}
 # Not working...
 source("src/rolling-rnn.R")
 feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*.9),
