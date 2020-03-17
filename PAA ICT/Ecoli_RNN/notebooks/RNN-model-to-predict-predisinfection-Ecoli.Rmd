@@ -17,8 +17,113 @@ knitr::opts_knit$set(root.dir = wd.path)
 ```
 
 # Data preparation
-## Download all data from PI
-```{r eval=FALSE, include=FALSE}
+## Download all data from PI (north)
+```{r}
+# Only run this chunk once to download row data
+# Load function to import a PI tag
+source("src/pi-pull.R")
+
+# Import PI tags
+data.parameters <- read.csv("src/data-parameters-north.csv", stringsAsFactors = FALSE)
+
+# Create tag names from PI paths
+{
+  tag.names <- sapply(data.parameters[,1], function(x) tail(strsplit(tail(strsplit(x,"[\\]")[[1]],n=1),"[|]")[[1]],n=1))
+
+  # For cleanliness, remove path names from list
+  # names(tag.names) <- NULL 
+  
+  # Rename duplicate tag names by including more characters from the PI path
+  duplicates <- names(which(sapply(unique(tag.names), function(x) length(which(x==tag.names)))>1))
+  for(i in which(tag.names %in% duplicates)) {
+    tag.names[i] <- paste(strsplit(tail(strsplit(data.parameters[i,1],"[\\]")[[1]],n=1),"[|]")[[1]], collapse=" ")
+  }
+}
+
+# Pull E coli data
+master.file <- pi.pull(tag=data.parameters[1,1],  # First tag should always be E.coli
+                       start=as.POSIXct("2019-04-08 00:00:00"), # Earliest  predisinfection E.coli sample
+                       end='*', 
+                       obj.return = TRUE, 
+                       save=FALSE)
+
+# Save E coli data
+write.csv(master.file, file="data/north/predisinfection-ecoli.csv")
+
+# Initialize timestamps from E coli samples
+master.timestamps <- master.file[,1]
+
+# Compile all averaged or raw data (takes 1.5 hours to run serialized, 15 minutes in parallel)
+# Initialize parallelization
+{
+  library(parallel)
+  library(doSNOW)
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  # register the cluster
+  registerDoSNOW(cluster)
+}
+
+library(foreach)
+foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %dopar% {
+  file <- rep(NA, nrow(master.file))
+  file.avg <- rep(NA, nrow(master.file))
+
+  # Original: Variable averages
+  avg <- data.parameters[p,2]
+  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="m") d <- lubridate::dminutes(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="h") d <- lubridate::dhours(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  
+  # Testing: 24h avg for all paramters
+  # d <- lubridate::dhours(24)
+
+  for(t in 1:length(master.timestamps)) {
+    print(paste("Starting timestamp", t))
+    start <- as.POSIXct(master.timestamps[t]) - as.numeric(d)
+    end <- as.POSIXct(master.timestamps[t])
+
+    test <- pi.pull(tag=data.parameters[p,1], start=start, end=end, save=FALSE, obj.return = TRUE)
+
+    if((nrow(test)==0) || (length(test)==0)) {
+      file[t] <- NA
+      file.avg[t] <- NA
+    } else {
+
+        file[t] <- as.numeric(test[nrow(test),2])
+
+        weights <- as.numeric(difftime(test[,1], start, units="secs"))
+        if(nrow(test) > 1) {
+          for(i in length(weights):2) weights[i] <- weights[i]-weights[i-1]
+          file.avg[t] <- weighted.mean(test[,2], w=weights/sum(weights))
+        } else {
+          file.avg[t] <- as.numeric(test[,2])
+        }
+
+    }
+  }
+  write.csv(cbind(master.timestamps, file), file=paste0("data/north/instant/",tag.names[p],".csv"))
+  write.csv(cbind(master.timestamps, file.avg), file=paste0("data/north/average/",tag.names[p],".csv"))
+  # write.csv(cbind(master.timestamps, file.avg), file=paste0("data/north/average-24/",tag.names[p],".csv"))
+}
+
+# Clean up parallel
+{
+  # stop cluster and remove clients
+  stopCluster(cluster)
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  # clean up a bit.
+  invisible(gc); remove(nThreads); remove(cluster);
+
+}
+
+```
+
+
+## Download all data from PI (south)
+```{r}
 # Only run this chunk once to download row data
 # Load function to import a PI tag
 source("src/pi-pull.R")
@@ -72,9 +177,13 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
   file <- rep(NA, nrow(master.file))
   file.avg <- rep(NA, nrow(master.file))
 
-  avg <- data.parameters[p,2]
-  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="m") d <- lubridate::dminutes(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
-  if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="h") d <- lubridate::dhours(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  # Original: Variable averages
+  # avg <- data.parameters[p,2]
+  # if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="m") d <- lubridate::dminutes(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  # if(substr(x=avg,start=nchar(avg), stop=nchar(avg))=="h") d <- lubridate::dhours(x=as.numeric(substr(x=avg, start=1, stop=nchar(avg)-1)))
+  
+  # Testing: 24h avg for all paramters
+  d <- lubridate::dhours(24)
 
   for(t in 1:length(master.timestamps)) {
     print(paste("Starting timestamp", t))
@@ -100,8 +209,9 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
 
     }
   }
-  write.csv(cbind(master.timestamps, file), file=paste0("data/south/instant/",tag.names[p],".csv"))
-  write.csv(cbind(master.timestamps, file.avg), file=paste0("data/south/average/",tag.names[p],".csv"))
+  # write.csv(cbind(master.timestamps, file), file=paste0("data/south/instant/",tag.names[p],".csv"))
+  # write.csv(cbind(master.timestamps, file.avg), file=paste0("data/south/average/",tag.names[p],".csv"))
+  write.csv(cbind(master.timestamps, file.avg), file=paste0("data/south/average-24/",tag.names[p],".csv"))
 }
 
 # Clean up parallel
