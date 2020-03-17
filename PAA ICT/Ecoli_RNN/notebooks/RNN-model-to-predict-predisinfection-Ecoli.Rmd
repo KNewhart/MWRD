@@ -18,7 +18,7 @@ knitr::opts_knit$set(root.dir = wd.path)
 
 # Data preparation
 ## Download all data from PI (north)
-```{r}
+```{r eval=FALSE, include=FALSE}
 # Only run this chunk once to download row data
 # Load function to import a PI tag
 source("src/pi-pull.R")
@@ -123,7 +123,7 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
 
 
 ## Download all data from PI (south)
-```{r}
+```{r eval=FALSE, include=FALSE}
 # Only run this chunk once to download row data
 # Load function to import a PI tag
 source("src/pi-pull.R")
@@ -232,6 +232,7 @@ foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %do
 source("src/compile-data.R")
 instant.data <- compile.data("data/south/instant")
 average.data <- compile.data("data/south/average")
+average24.data <- compile.data("data/south/average-24")
 ```
 
 ## Clean raw data
@@ -244,6 +245,10 @@ instant.data <- instant.data[,-remove]
 average.data <- na.locf(average.data)[-c(1:3),]
 remove <- average.data %>% apply(., 2, anyNA) %>% unlist %>% which
 average.data <- average.data[,-remove]
+
+average24.data <- na.locf(average24.data)[-c(1:3),]
+remove <- average24.data %>% apply(., 2, anyNA) %>% unlist %>% which
+average24.data <- average24.data[,-remove]
 ```
 
 ## Plot all data
@@ -252,6 +257,13 @@ for(i in 1:ncol(average.data)) {
   png(filename=paste0("figures/south/average/",gsub("[.]","-",colnames(average.data)[i]),".png"))
   par(mar=c(2,2.5,2.5,.1), cex.main=1)
   plot(average.data[,i], ylab="", xlab="", main=colnames(average.data)[i])
+  dev.off()
+}
+
+for(i in 1:ncol(average24.data)) {
+  png(filename=paste0("figures/south/average-24/",gsub("[.]","-",colnames(average24.data)[i]),".png"))
+  par(mar=c(2,2.5,2.5,.1), cex.main=1)
+  plot(average24.data[,i], ylab="", xlab="", main=colnames(average24.data)[i])
   dev.off()
 }
 
@@ -291,6 +303,38 @@ test.average.3 <- rolling.rnn(all.data=average.data.log.lag,
                             train.obs=ceiling(nrow(average.data.log.lag)*.9),
                             n_epoch=450)
 ```
+
+## Compare average vs 24h average
+```{r}
+source("src/rolling-rnn.R")
+average.data.log.lag <- average.data
+average.times <- index(average.data)
+predict.col <- which(colnames(average.data.log.lag)=="ECIDX_G") # Select Ecoli column
+average.data.log.lag[,predict.col] <- log10(average.data.log.lag[,predict.col]) # Log transform Ecoli
+average.data.log.lag <- cbind(average.data.log.lag[3:nrow(average.data.log.lag),], 
+                              as.numeric(average.data.log.lag[1:(nrow(average.data.log.lag)-2),predict.col]))
+colnames(average.data.log.lag)[ncol(average.data.log.lag)] <- "ECIDX_G_Lag"
+average.data.log.lag <- average.data.log.lag[which(!apply(average.data.log.lag, 1, anyNA)),]
+
+average24.data.log.lag <- average24.data
+average24.times <- index(average24.data)
+predict.col <- which(colnames(average24.data.log.lag)=="ECIDX_G") # Select Ecoli column
+average24.data.log.lag[,predict.col] <- log10(average24.data.log.lag[,predict.col]) # Log transform Ecoli
+average24.data.log.lag <- cbind(average24.data.log.lag[3:nrow(average24.data.log.lag),], 
+                              as.numeric(average24.data.log.lag[1:(nrow(average24.data.log.lag)-2),predict.col]))
+colnames(average24.data.log.lag)[ncol(average24.data.log.lag)] <- "ECIDX_G_Lag"
+average24.data.log.lag <- average24.data.log.lag[which(!apply(average24.data.log.lag, 1, anyNA)),]
+
+test.average.1 <- rolling.rnn(all.data=average.data.log.lag,
+                            predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                            n_epoch=150)
+test.average.2 <- rolling.rnn(all.data=average24.data.log.lag,
+                            predict.col=which(colnames(average24.data.log.lag)=="ECIDX_G"),
+                            train.obs=ceiling(nrow(average24.data.log.lag)*.9),
+                            n_epoch=150)
+```
+
 
 ```{r}
 # Not working...
