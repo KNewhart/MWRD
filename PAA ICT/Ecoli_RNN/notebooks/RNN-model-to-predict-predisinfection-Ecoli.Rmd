@@ -322,19 +322,21 @@ test.average.3 <- test.average
 source("src/save-results.R")
 test.average <- list(test.average.1, test.average.2, test.average.3)
 names(test.average) <- c("250", "500", "750")
-save.results(test.average, obj.folder="Over-under fit",obj.name="average-log-lag")
+# save.results(test.average, obj.folder="Over-under fit",obj.name="average-log-lag")
+load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
+test.average <- obj;rm(obj)
 ```
 
 
 ```{r Average log lag results}
 # Compare results:
-lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+lapply(test.average, function(results.list) {
   lapply(results.list, function(results) {
     paste("R2 =",mean(results[,1]),", RMSE =",mean((results[,2]-results[,3])^2)^0.5)
   })
 })
 
-l <- lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
     mean(results[,1])
   }))
@@ -342,7 +344,7 @@ l <- lapply(list(test.average.1, test.average.2, test.average.3), function(resul
 r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
 colnames(r2) <- c("250", "500", "750")
 
-l <- lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
     mean((results[,2]-results[,3])^2)^0.5
   }))
