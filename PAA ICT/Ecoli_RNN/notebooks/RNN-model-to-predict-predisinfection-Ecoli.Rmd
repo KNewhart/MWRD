@@ -277,7 +277,7 @@ for(i in 1:ncol(instant.data)) {
 
 # Train and test data
 
-```{r Average log lag}
+```{r Average log lag, eval=FALSE, include=FALSE}
 source("src/rolling-rnn.R")
 average.data.log.lag <- average.data
 average.times <- index(average.data)
@@ -348,6 +348,29 @@ names(test.average) <- c("250", "500", "750", "2000")
 save.results(test.average, obj.folder="Over-under fit",obj.name="average-log-lag")
 ```
 
+```{r}
+source("src/rolling-rnn.R")
+average.data.log.lag <- average.data
+average.times <- index(average.data)
+predict.col <- which(colnames(average.data.log.lag)=="ECIDX_G") # Select Ecoli column
+average.data.log.lag[,predict.col] <- log10(average.data.log.lag[,predict.col]) # Log transform Ecoli
+average.data.log.lag <- cbind(average.data.log.lag[3:nrow(average.data.log.lag),], 
+                              as.numeric(average.data.log.lag[1:(nrow(average.data.log.lag)-2),predict.col]))
+colnames(average.data.log.lag)[ncol(average.data.log.lag)] <- "ECIDX_G_Lag"
+average.data.log.lag <- average.data.log.lag[which(!apply(average.data.log.lag, 1, anyNA)),]
+
+test.average.5 <- list()
+for(i in 1:10) {
+  test.average.5[[length(test.average.5)+1]] <- rolling.rnn(all.data=average.data.log.lag,
+                                                        predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                                                        train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                                                        n_epoch=100)
+}
+save.results(test.average.5, obj.folder="Over-under fit",obj.name="average-log-lag-5")
+load(file=file.path(wd.path,"results","Over-under fit","average-log-lag-5.RData"))
+test.average.5 <- obj;rm(obj)
+```
+
 
 ```{r Average log lag results}
 # Compare results:
@@ -377,49 +400,6 @@ par(mfrow=c(1,2))
 boxplot(r2)
 boxplot(rmse)
 ```
-
-```{r eval=FALSE, include=FALSE}
-# Not working...
-source("src/rolling-rnn.R")
-feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*.9),
-                        act.function="softsign", n_epoch=500) {
-
-  perturbation <- rnorm(n=nrow(all.data), mean=0, sd=0.2)
-  
-  perturbed.results <- list()
-  for(n in seq(1,ncol(all.data))[-predict.col]) {
-    test.data <- all.data
-    test.data[,n] <- test.data[,n]+perturbation
-    test.results <- rolling.rnn(all.data=test.data,
-                                predict.col=predict.col,
-                                train.obs=train.obs, 
-                                n_epoch=n_epoch)
-    perturbed.results[[length(perturbed.results)+1]] <- test.results
-  }
-  
-  org.results <- rolling.rnn(all.data=all.data,
-                                predict.col=predict.col,
-                                train.obs=train.obs, 
-                                n_epoch=n_epoch)
-  
-  perturbed.r2 <- do.call("rbind", lapply(perturbed.results, function(x) mean(x[,1])))
-  perturbed.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,2]-x[,3])^2)^0.5))
-  persistance.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,4]-x[,3])^2)^0.5))
-  
-  org.r2 <- mean(org.results[,1])
-  org.rmse <- mean((org.results[,2]-org.results[,3])^2)^0.5
-  org.persistance.rmse <- mean((org.results[,4]-org.results[,3])^2)^0.5
-  
-  all <- list(org.r2, org.rmse, org.persistance.rmse, 
-              perturbed.r2, perturbed.rmse, persistance.rmse)
-  return(all)
-}
-
-train.average <- feature.rnn(all.data=average.data.log.lag, 
-                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                             n_epoch=2000)
-```
-
 
 # Results
 ```{r Average results}
@@ -477,3 +457,47 @@ mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
 plot(x=results$Actual, y=results$Prediction, pch=20, main="Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
 
 ```
+
+
+```{r eval=FALSE, include=FALSE}
+# Feature extraction Not working...
+source("src/rolling-rnn.R")
+feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*.9),
+                        act.function="softsign", n_epoch=500) {
+
+  perturbation <- rnorm(n=nrow(all.data), mean=0, sd=0.2)
+  
+  perturbed.results <- list()
+  for(n in seq(1,ncol(all.data))[-predict.col]) {
+    test.data <- all.data
+    test.data[,n] <- test.data[,n]+perturbation
+    test.results <- rolling.rnn(all.data=test.data,
+                                predict.col=predict.col,
+                                train.obs=train.obs, 
+                                n_epoch=n_epoch)
+    perturbed.results[[length(perturbed.results)+1]] <- test.results
+  }
+  
+  org.results <- rolling.rnn(all.data=all.data,
+                                predict.col=predict.col,
+                                train.obs=train.obs, 
+                                n_epoch=n_epoch)
+  
+  perturbed.r2 <- do.call("rbind", lapply(perturbed.results, function(x) mean(x[,1])))
+  perturbed.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,2]-x[,3])^2)^0.5))
+  persistance.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,4]-x[,3])^2)^0.5))
+  
+  org.r2 <- mean(org.results[,1])
+  org.rmse <- mean((org.results[,2]-org.results[,3])^2)^0.5
+  org.persistance.rmse <- mean((org.results[,4]-org.results[,3])^2)^0.5
+  
+  all <- list(org.r2, org.rmse, org.persistance.rmse, 
+              perturbed.r2, perturbed.rmse, persistance.rmse)
+  return(all)
+}
+
+train.average <- feature.rnn(all.data=average.data.log.lag, 
+                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                             n_epoch=2000)
+```
+

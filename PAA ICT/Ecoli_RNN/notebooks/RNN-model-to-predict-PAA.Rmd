@@ -1,0 +1,485 @@
+---
+title: "RNN model to predict predisinfection E.coli"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+# Notebook setup
+
+# By default, only show output when executing code chunks
+knitr::opts_chunk$set(echo=FALSE)
+
+# Change working directory to be "Ecoli_RNN", rather than location of notebook
+wd.path <- getwd()
+if(tail(unlist(strsplit(wd.path,"/")),n=1)=="notebooks") wd.path <- dirname(wd.path)
+knitr::opts_knit$set(root.dir = wd.path)
+```
+
+```{r Import data and functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+library(xts)
+mergeData <- function(list.x, sort.by = 1, average = FALSE) {
+  all.data <- do.call(merge, list.x)
+  all.data.index <- which(!is.na(all.data[,sort.by]))
+  for(i in 1:(length(all.data.index)-1)) {
+    row.start <- all.data.index[i]
+    row.stop <- all.data.index[i+1]
+    if((row.stop-row.start) == 1) {
+      next
+    }
+    if(!average) data.locf <- na.locf(all.data[(row.start+1):row.stop,])
+    if(average) {
+      data.avg <- t(data.frame(sapply(all.data[(row.start+1):row.stop,], function(x) mean(na.omit(x)))))
+      rownames(data.avg) <- as.character(index(all.data)[row.stop])
+      
+    }
+    if (!exists("new.data")) {
+      if(!average) new.data <- data.frame(data.locf[nrow(data.locf),])
+      if(average) new.data <- data.avg
+    }
+    if (exists("new.data")) {
+      if(!average) new.data <- rbind(new.data, data.frame(data.locf[nrow(data.locf),]))
+      if(average) new.data <- rbind(new.data, data.avg)
+    }
+  }
+  new.data <- na.omit(new.data)
+  na.fix <- which(!is.na(as.POSIXct(rownames(new.data), format = "%Y-%m-%d %H:%M:%S")))
+  new.data.xts <- xts(new.data[na.fix,], order.by = as.POSIXct(rownames(new.data)[na.fix], format = "%Y-%m-%d %H:%M:%S"))
+  
+  return(new.data.xts)
+}
+
+##### PAA Process Data - Grab #####
+delta <- intToUtf8(0x0394)
+# Daily data
+process.data <- readxl::read_excel("data/paa/PAA PROFILE DATA_08-12-18.xlsx", 
+                                   sheet = "Process Data", skip = 1)
+process.data <- process.data[-1,]
+n.paa.grab <- xts::xts(apply(process.data[,c(12:17,19:27)], 2, function(x) as.numeric(x)), order.by =  as.POSIXct(as.data.frame(process.data[,18])[,1], format = "%Y-%m-%d %H:%M:%S"))
+colnames(n.paa.grab) <- c("PAA Dosing Pump Total Flow (gpm)", #1 
+                          "PAA Dose (mg/L)", #2
+                          "PAA Setpoint (mg/L)", #3 
+                          "Upstream  Residual (mg/L)", #4 
+                          # paste0(delta,"PAA (mg/L)"),	#5
+                          "deltaPAA (mg/L)", #5
+                          "Pre-Disinfection E. coli (MPN/100 mL)",  #6
+                          "Effluent Discharge (MGD)", #7
+                          "Contact Tank Volume (MG)", #8
+                          "Detention Time (min)", #9
+                          "Time to Upstream Sample Point (min)", #10
+                          "Log Removal (N0/N)", #11
+                          "Effluent E. coli (MPN/100 mL)", #12
+                          "CT (mg/L*min)", #13
+                          "CuT (mg/L*min)", #14
+                          "Ambient Temperature")#15
+colnames(n.paa.grab) <- stringr::str_replace_all(colnames(n.paa.grab), c(" " = ".", "/" = "." , "-" = "","[(]" = "", "[)]" = "", "[*]"="."))
+rm(process.data)
+
+
+##### October PAA Process Data - Grab #####
+oct.paa <- readxl::read_excel("data/paa/PAA PROFILE DATA_08-12-18.xlsx", 
+                              sheet = "Oct 2 to 15, 2018", range = "A1:V170")[-1,]
+n.datetime <- which(colnames(oct.paa) == "Date and Time")
+oct.paa.index <- oct.paa[,n.datetime]
+oct.paa <- sapply(oct.paa[,-n.datetime], function(x) as.numeric(x))
+colnames(oct.paa) <- stringr::str_replace_all(colnames(oct.paa), c(" " = "." , "-" = "" ))
+oct.paa <- xts(oct.paa, order.by = oct.paa.index[[1]])
+
+###### North Carbovis Data #####
+vis.data <- readxl::read_excel("data/paa/NNE Carbovis Data 2018.xlsx",
+                               sheet = "Inst DL Data", col_types = c("date",
+                                                                     "text", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "numeric", "skip", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "numeric", "skip",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip", "skip", "skip", "numeric",
+                                                                     "skip"), skip = 6)
+vis.data <- vis.data[which(vis.data[,2] == "Valid"),-2]
+colnames(vis.data) <- c("Time", "CODto (mg/L)", "CODto (V)",
+                        "TSS (mg/L)", "TSS (V)",
+                        "UVT (%)", "UVT (V)",
+                        "CODds (mg/L)", "CODds (V)",
+                        "SACto (1/m)", "SACto (V)")
+vis.data <- xts(vis.data[,-1], order.by = as.POSIXct(as.data.frame(vis.data[,1])[,1], format = "%Y-%m-%d %H-%M-%S"))
+
+
+##### North Secondary - Online #####
+## North secondary online
+nsec.online <- as.data.frame(suppressWarnings(readxl::read_excel("data/paa/North Secondary and Disinfection Process Data_2018.xlsx", sheet = "NSEC Online Data", col_names = FALSE,
+                                                                 col_types = c("date", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric", 
+                                                                               "numeric", "numeric", "numeric"), 
+                                                                 skip = 4)))
+nsec.online <- xts(nsec.online[,-1], order.by = nsec.online[,1])
+colnames(nsec.online) <- c("NSEC Influent Flow", "NSEC Influent Temp","NSEC Influent NH3","NSEC Influent TSS","NSEC Influent COD",
+                           "NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3",
+                           "GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow",
+                           "AB-10 Influent Flow","AB-10 A-Pass Temp","AB-10 A-Pass pH","AB-10 A-Pass DO","AB-10 A-Pass NH3","AB-10 A-Pass NO3","AB-10 B-Pass DO","AB-10 C-Pass pH	AB-10","C-Pass DO","AB-10 C-Pass NH3","AB-10 C-Pass NO3","AB-10 MLSS","AB-10 MLR Flow","Quad 4 RAS Flow","Quad 4 Basins in Service","AB-10 RAS Flow","NSEC Aerobic SRT",
+                           "NSEC Effluent NH3","NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS","NSEC Effluent NO5","NSEC Effluent Flow")
+
+
+# nsec.online <- nsec.online["2018-11-04/2018-12-01"]
+cols2remove <- c("NSEC CaRRB-1 Centrate Flow","NSEC CaRRB-1 NH3","NSEC CaRRB-3 Centrate Flow","NSEC CaRRB-3 NH3","GTE Flow","GTE to SSEC Flow","GTE to NSEC Flow")
+
+nsec.online <- nsec.online[,-sapply(cols2remove, function(x) which(colnames(nsec.online) == x))]
+
+more.nsec <- readxl::read_excel("data/paa/PAA-Ecoli.xlsx", 
+                                sheet = "Sheet1", col_types = c("date", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric"))
+more.nsec <- more.nsec[which(!is.na(more.nsec[,1])),]
+more.nsec <- xts(more.nsec[,-1], order.by = more.nsec[,1][[1]])
+colnames(more.nsec) <- c("PAA Upstream Residual", "PAA Total Flow", "Dis North Flow", 
+                         "Temperature NSEC Inf", "ASRT", "NSEC Effluent NH3",
+                         "NSEC Effluent NO3","NSEC Effluent OP","NSEC Effluent TSS",
+                         "NSEC Effluent NO5","NSEC Effluent Flow")
+
+all.data <- oct.paa
+r <- paste0(range(index(all.data))[1],"/",range(index(all.data))[2])
+all.data <- mergeData(list.x = list(all.data,vis.data[r],nsec.online[r,22:28]))
+all.data <- na.omit(all.data)
+remove.cols.names <- c("Initial.PAA.Demand.or.Decay", "DPAA.Samples","Sample.Time..1_min.","Detention.Time","PAA.Pump.Total.Flow", "PAA.Set.Point.Dose.Algorithm", "...10" , "Volume.to.1.min..Sample" , "Time.to.1.min..Sample", "Total.Basin.Volume", "DT.of.1.2.Basin", "SPBased.Disinfection.CT",     "CalcBased.Disinfection.CT", "CODto..V.", "CODds..V.", "TSS..V.", "UVT..V.", "UVT..V.", "SACto..V.")
+remove.cols <- sapply(remove.cols.names, function(x) which(colnames(all.data) == x))
+all.data <- all.data[,-remove.cols]
+paa.data <- all.data
+```
+
+
+
+## Plot all data
+```{r eval=FALSE, include=FALSE}
+for(i in 1:ncol(paa.data)) {
+  png(filename=paste0("figures/paa/",gsub("[.]","-",colnames(paa.data)[i]),".png"))
+  par(mar=c(2,2.5,2.5,.1), cex.main=1)
+  plot(paa.data[,i], ylab="", xlab="", main=colnames(paa.data)[i])
+  dev.off()
+}
+```
+
+# Train and test data
+
+```{r PAA 1-min}
+source("src/rolling-rnn.R")
+data <- paa.data[,-which(colnames(paa.data)=="PAA...1.2.Basin.Sampling")]
+
+# Identify best n_epoch: 
+# Are we overfitting? Underfitting?
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                        predict.col=which(colnames(data)=="PAA...1.min..Sample"),
+                                                        train.obs=ceiling(nrow(data)*.9),
+                                                        n_epoch=250)
+}
+test.average.1 <- test.average
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                        predict.col=which(colnames(data)=="PAA...1.min..Sample"),
+                                                        train.obs=ceiling(nrow(data)*.9),
+                                                        n_epoch=175)
+}
+test.average.2 <- test.average
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                        predict.col=which(colnames(data)=="PAA...1.min..Sample"),
+                                                        train.obs=ceiling(nrow(data)*.9),
+                                                        n_epoch=100)
+}
+test.average.3 <- test.average
+# unlist(lapply(test.average.1, function(result) {
+#   paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
+# }))
+# 
+source("src/save-results.R")
+test.average <- list(test.average.3, test.average.2, test.average.1)
+names(test.average) <- c("100", "175", "250")
+save.results(test.average, obj.folder="Over-under fit",obj.name="paa-1")
+```
+
+```{r results 1-min, echo=FALSE}
+load(file=file.path(wd.path,"results","Over-under fit","paa-1.RData"))
+test.average <- obj;rm(obj)
+# Compare results:
+# lapply(test.average, function(results.list) {
+#   lapply(results.list, function(results) {
+#     paste("R2 =",mean(results[,1]),", RMSE =",mean((results[,2]-results[,3])^2)^0.5)
+#   })
+# })
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean(results[,1])
+  }))
+})
+r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(r2) <- names(test.average)
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean((results[,2]-results[,3])^2)^0.5
+  }))
+})
+rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    (mean((results[,4]-results[,3])^2))^0.5
+  }))
+})
+rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+
+# R2 and Actual RMSE
+layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(r2), function(i) {
+  data <- r2[,i]
+  data <- data.frame(rep(colnames(r2)[i], nrow(r2)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+mtext("Model R-squared", side=2, line=2.25)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
+  data <- rmse[,i]
+  data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+abline(h=rmse.p[1,1], col="red", lty=2, lwd=2)
+mtext("Test RMSE", side=2, line=2.25)
+mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
+mtext("PAA at 1-min", side=3, font=2, line=-1,  outer=TRUE)
+
+```
+
+
+
+
+```{r PAA half}
+source("src/rolling-rnn.R")
+data <- paa.data[,-which(colnames(paa.data)=="PAA...1.min..Sample")]
+
+# Identify best n_epoch: 
+# Are we overfitting? Underfitting?
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                        predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
+                                                        train.obs=ceiling(nrow(data)*.9),
+                                                        n_epoch=250)
+}
+test.average.1 <- test.average
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                        predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
+                                                        train.obs=ceiling(nrow(data)*.9),
+                                                        n_epoch=175)
+}
+test.average.2 <- test.average
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                        predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
+                                                        train.obs=ceiling(nrow(data)*.9),
+                                                        n_epoch=100)
+}
+test.average.3 <- test.average
+unlist(lapply(test.average.1, function(result) {
+  paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
+}))
+
+source("src/save-results.R")
+test.average <- list(test.average.3, test.average.2, test.average.1)
+names(test.average) <- c("100", "175", "250")
+save.results(test.average, obj.folder="Over-under fit",obj.name="paa-half")
+```
+
+
+
+
+
+
+
+
+```{r results half, echo=FALSE}
+load(file=file.path(wd.path,"results","Over-under fit","paa-half.RData"))
+test.average <- obj;rm(obj)
+# Compare results:
+# lapply(test.average, function(results.list) {
+#   lapply(results.list, function(results) {
+#     paste("R2 =",mean(results[,1]),", RMSE =",mean((results[,2]-results[,3])^2)^0.5)
+#   })
+# })
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean(results[,1])
+  }))
+})
+r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(r2) <- names(test.average)
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean((results[,2]-results[,3])^2)^0.5
+  }))
+})
+rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    (mean((results[,4]-results[,3])^2))^0.5
+  }))
+})
+rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+
+# R2 and Actual RMSE
+layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(r2), function(i) {
+  data <- r2[,i]
+  data <- data.frame(rep(colnames(r2)[i], nrow(r2)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+mtext("Model R-squared", side=2, line=2.25)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
+  data <- rmse[,i]
+  data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+abline(h=rmse.p[1,1], col="red", lty=2, lwd=2)
+mtext("Test RMSE", side=2, line=2.25)
+mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
+mtext("PAA at half basin", side=3, font=2, line=-1,  outer=TRUE)
+
+```
+
+```{r eval=FALSE, include=FALSE}
+# Not working...
+source("src/rolling-rnn.R")
+feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*.9),
+                        act.function="softsign", n_epoch=500) {
+
+  perturbation <- rnorm(n=nrow(all.data), mean=0, sd=0.2)
+  
+  perturbed.results <- list()
+  for(n in seq(1,ncol(all.data))[-predict.col]) {
+    test.data <- all.data
+    test.data[,n] <- test.data[,n]+perturbation
+    test.results <- rolling.rnn(all.data=test.data,
+                                predict.col=predict.col,
+                                train.obs=train.obs, 
+                                n_epoch=n_epoch)
+    perturbed.results[[length(perturbed.results)+1]] <- test.results
+  }
+  
+  org.results <- rolling.rnn(all.data=all.data,
+                                predict.col=predict.col,
+                                train.obs=train.obs, 
+                                n_epoch=n_epoch)
+  
+  perturbed.r2 <- do.call("rbind", lapply(perturbed.results, function(x) mean(x[,1])))
+  perturbed.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,2]-x[,3])^2)^0.5))
+  persistance.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,4]-x[,3])^2)^0.5))
+  
+  org.r2 <- mean(org.results[,1])
+  org.rmse <- mean((org.results[,2]-org.results[,3])^2)^0.5
+  org.persistance.rmse <- mean((org.results[,4]-org.results[,3])^2)^0.5
+  
+  all <- list(org.r2, org.rmse, org.persistance.rmse, 
+              perturbed.r2, perturbed.rmse, persistance.rmse)
+  return(all)
+}
+
+train.average <- feature.rnn(all.data=average.data.log.lag, 
+                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                             n_epoch=2000)
+```
+
+
+# Results
+```{r Average results}
+results <- test.average
+
+# plot(results$R2, main="R2", pch=20)
+
+r2 <- mean(results$R2)
+rmse.log <- data.frame("Prediction"=mean((results$Prediction-results$Actual)^2)^0.5,
+                       "Persistance"=mean((results$Persistance-results$Actual)^2)^0.5)
+rmse <- data.frame("Prediction"=mean((10^results$Prediction-10^results$Actual)^2)^0.5,
+                   "Persistance"=mean((10^results$Persistance-10^results$Actual)^2)^0.5)
+
+source("src/actual-predicted-plot.R")
+
+label <- "Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], 10^results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],10^results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
+
+label <- "Log Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+  
+plot(x=results$Actual, y=results$Prediction, pch=20, main="Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+
+```
+
+```{r Instant results}
+results <- test.instant
+
+r2 <- mean(results$R2)
+rmse.log <- data.frame("Prediction"=mean((results$Prediction-results$Actual)^2)^0.5,
+                       "Persistance"=mean((results$Persistance-results$Actual)^2)^0.5)
+rmse <- data.frame("Prediction"=mean((10^results$Prediction-10^results$Actual)^2)^0.5,
+                   "Persistance"=mean((10^results$Persistance-10^results$Actual)^2)^0.5)
+
+source("src/actual-predicted-plot.R")
+
+label <- "Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], 10^results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],10^results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
+
+label <- "Log Predisinfection E.coli"
+actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], results$Actual)
+predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+  
+plot(x=results$Actual, y=results$Prediction, pch=20, main="Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+
+```
