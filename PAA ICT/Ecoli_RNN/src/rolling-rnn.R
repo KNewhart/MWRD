@@ -45,7 +45,7 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
       train.sd <- apply(all.data[train.start:train.end,],2,sd)
       # Create 3D array of training data to simulate time sequence in batches of 1
       train.x <- scale(all.data[train.start:train.end,], center=train.mean, scale=train.sd)[,-predict.col]
-      train.x <- train.x[,-which(apply(train.x,2,anyNA))]
+      if(length(which(apply(train.x,2,anyNA)))>0) train.x <- train.x[,-which(apply(train.x,2,anyNA))]
       train.x <- simplify2array(list(train.x))
       if(length(dim(train.x)) == 3) {
         
