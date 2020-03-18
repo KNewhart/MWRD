@@ -4,7 +4,8 @@ subtitle: "Analysis and Prediction"
 date: "2020-03-18"
 output:
   word_document:
-     reference_docx: C:/Users/KNewhart/Documents/GitHub/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
+     #reference_docx: C:/Users/KNewhart/Documents/GitHub/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
+     reference_docx: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
 #bibliography: src/bibliography.bib
 #link-citations: yes
 #csl: src/science-of-the-total-environment.csl
@@ -109,11 +110,7 @@ tab <-0;fig<-0
     * Online instrumentation of upstream treatment processes
     * Daily-weekly samples of upstream treatment processes, both instantaneous grab and 24-hour flow-weighted composites
 
-### PAA model input data
-
-* Add PAA timeseries
-
-```{r Import data and functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+```{r Import data and functions, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 library(xts)
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   all.data <- do.call(merge, list.x)
@@ -257,8 +254,8 @@ all.data <- all.data[,-remove.cols]
 paa.data <- all.data
 ```
 
-**Table `r tab<-tab+1;tab`.** Monitored process variables included in building nerual network model to predict PAA.
-```{r Table of variables, echo=FALSE}
+<!-- **Table `r tab<-tab+1;tab`.** Monitored process variables included in building nerual network model to predict PAA. -->
+```{r Table of variables, eval=FALSE, include=FALSE}
 library(dplyr)
 all.data.names <- colnames(all.data) %>% gsub("[.]"," ", .) %>% gsub("  "," ", .) %>% gsub("  "," ", .)
 data <- data.frame("North Variable"=all.data.names,
@@ -275,14 +272,15 @@ ft
 
     
 ### *E. coli* model input data
-* Add Ecoli timeseries
+
 ```{r Import data, include=FALSE}
 source("src/compile-data.R")
-north.data <- compile.data("data/north/average-24")
-south.data <- compile.data("data/south/average-24")
+north.data <- compile.data("data/north/average")
+south.data <- compile.data("data/south/average")
 ```
 
 Table `r tab<-tab+1;tab`: Variables monitored in the North to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
+
 ```{r Table north variables, warning=FALSE}
 north.variables <- sapply(strsplit(unlist(strsplit(colnames(north.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
 north.variables <- sapply(north.variables, function(x) {
@@ -312,11 +310,41 @@ colnames(data) <- c("North Variable", "Collection Method", "Number of Observatio
 ft <- flextable(data)
 ft <- theme_kate(ft)
 ft <- align(ft, align="left", part="all")
-ft <- width(ft,width=flextable_dim(ft)$widths/2)
 ft
 ```
 
+
+
+Figure `r fig<-fig+1;fig`: North *E. coli* for training and testing period
+
+```{r}
+# layout.matrix <- matrix(c(1,2,3,3,4,4), nrow=3, byrow=TRUE)
+# layout(mat=layout.matrix)
+layout.matrix <- matrix(c(1,2,3,4), ncol=2, byrow=TRUE)
+layout(mat=layout.matrix, widths = c(0.67, 0.33))
+par(mar=c(3,2,2.1,1.5),family="serif")
+plot(north.data$ECIDX_G, ylab="")
+mtext("Predis E. coli (CFU/mL)", side=3,line=.5, font=2)
+abline(v=index(north.data)[ceiling(nrow(north.data)*0.9)], col="purple")
+
+par(mar=c(1,2,2,1), family="serif")
+boxplot(as.vector(north.data$ECIDX_G))
+mtext("Predis E.coli (CFU/mL)", side=3, line=0.5, font=2)
+
+par(mar=c(3,2,2.1,1.5),family="serif")
+plot(log10(north.data$ECIDX_G), ylab="")
+mtext("LOG10 Predis E. coli", side=3,line=.5, font=2)
+abline(v=index(north.data)[ceiling(nrow(north.data)*0.9)], col="purple")
+
+par(mar=c(1,2,2,1), family="serif")
+boxplot(as.vector(log10(north.data$ECIDX_G)))
+mtext("LOG10 Predis E.coli", side=3, line=0.5, font=2)
+```
+
+
+
 Table `r tab<-tab+1;tab`: Variables monitored in the South to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
+
 ```{r Table sorth variables, warning=FALSE}
 south.variables <- sapply(strsplit(unlist(strsplit(colnames(south.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
 south.variables <- sapply(south.variables, function(x) {
@@ -349,11 +377,39 @@ ft <- align(ft, align="left", part="all")
 ft
 ```
 
+Figure `r fig<-fig+1;fig`: South *E. coli* for training and testing period
+
+```{r}
+# layout.matrix <- matrix(c(1,2,3,3,4,4), nrow=3, byrow=TRUE)
+# layout(mat=layout.matrix)
+layout.matrix <- matrix(c(1,2,3,4), ncol=2, byrow=TRUE)
+layout(mat=layout.matrix, widths = c(0.67, 0.33))
+par(mar=c(3,2,2.1,1.5),family="serif")
+plot(south.data$ECIDX_G, ylab="")
+mtext("Predis E. coli (CFU/mL)", side=3,line=.5, font=2)
+abline(v=index(south.data)[ceiling(nrow(south.data)*0.9)], col="purple")
+
+par(mar=c(1,2,2,1), family="serif")
+boxplot(as.vector(south.data$ECIDX_G))
+mtext("Predis E.coli (CFU/mL)", side=3, line=0.5, font=2)
+
+par(mar=c(3,2,2.1,1.5),family="serif")
+plot(log10(south.data$ECIDX_G), ylab="")
+mtext("LOG10 Predis E. coli", side=3,line=.5, font=2)
+abline(v=index(south.data)[ceiling(nrow(south.data)*0.9)], col="purple")
+
+par(mar=c(1,2,2,1), family="serif")
+boxplot(as.vector(log10(south.data$ECIDX_G)))
+mtext("LOG10 Predis E.coli", side=3, line=0.5, font=2)
+```
+
+
+## Recurrent neural networks
+
 
 # Results
-## PAA prediction
+## *E. coli* prediction
 
-## *E. coli* predition
 ### Predisinfection *E. coli*
 ```{r South Predisinfection E.coli model fit, echo=FALSE}
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
@@ -433,7 +489,7 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-# colnames(r2) <- c("250", "500", "750")
+colnames(r2) <- names(test.average)
 
 l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
@@ -441,7 +497,7 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-# colnames(rmse) <- c("250", "500", "750")
+colnames(rmse) <- names(test.average)
 
 l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
@@ -449,7 +505,8 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-# colnames(rmse) <- c("250", "500", "750")
+colnames(rmse) <- names(test.average)
+
 
 # R2 and Actual RMSE
 layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
@@ -502,7 +559,7 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-colnames(rmse) <- c("250", "500", "750")
+colnames(rmse) <- names(test.average)
 results <- test.average[[(ceiling(which(rmse==min(rmse))/nrow(rmse)))]][[(which(rmse==min(rmse)) %% nrow(rmse))]]
 
 # plot(results$R2, main="R2", pch=20)
@@ -520,14 +577,14 @@ actual <- data.frame(as.POSIXct(rownames(results)), 10^results$Actual)
 predicted <- data.frame(as.POSIXct(rownames(results)),10^results$Prediction)
 actual.predicted.plot(actual, predicted, label)
 mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
-
-label <- "South Log Predisinfection E.coli"
-actual <- data.frame(as.POSIXct(rownames(results)), results$Actual)
-predicted <- data.frame(as.POSIXct(rownames(results)),results$Prediction)
-actual.predicted.plot(actual, predicted, label)
-mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
-  
-plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="South Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+# 
+# label <- "South Log Predisinfection E.coli"
+# actual <- data.frame(as.POSIXct(rownames(results)), results$Actual)
+# predicted <- data.frame(as.POSIXct(rownames(results)),results$Prediction)
+# actual.predicted.plot(actual, predicted, label)
+# mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+#   
+# plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="South Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
 ```
 
 ```{r North Predisinfection E.coli model performance, eval=FALSE, include=FALSE}
@@ -558,13 +615,15 @@ actual <- data.frame(as.POSIXct(rownames(results)), 10^results$Actual)
 predicted <- data.frame(as.POSIXct(rownames(results)),10^results$Prediction)
 actual.predicted.plot(actual, predicted, label)
 mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
-
-label <- "North Log Predisinfection E.coli"
-actual <- data.frame(as.POSIXct(rownames(results)), results$Actual)
-predicted <- data.frame(as.POSIXct(rownames(results)),results$Prediction)
-actual.predicted.plot(actual, predicted, label)
-mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
-  
-plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="North Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+# 
+# label <- "North Log Predisinfection E.coli"
+# actual <- data.frame(as.POSIXct(rownames(results)), results$Actual)
+# predicted <- data.frame(as.POSIXct(rownames(results)),results$Prediction)
+# actual.predicted.plot(actual, predicted, label)
+# mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+#   
+# plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="North Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
 ```
 
+
+### Postdisinfection *E. coli*
