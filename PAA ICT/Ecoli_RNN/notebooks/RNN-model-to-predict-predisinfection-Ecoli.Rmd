@@ -323,8 +323,20 @@ source("src/save-results.R")
 test.average <- list(test.average.1, test.average.2, test.average.3)
 names(test.average) <- c("250", "500", "750")
 # save.results(test.average, obj.folder="Over-under fit",obj.name="average-log-lag")
+
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
 test.average <- obj;rm(obj)
+
+test.average.4 <- list()
+for(i in 1:10) {
+  test.average.4[[length(test.average.4)+1]] <- rolling.rnn(all.data=average.data.log.lag,
+                                                        predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
+                                                        train.obs=ceiling(nrow(average.data.log.lag)*.9),
+                                                        n_epoch=2000)
+}
+test.average <- list(test.average, test.average.4)
+names(test.average) <- c("250", "500", "750", "2000")
+save.results(test.average, obj.folder="Over-under fit",obj.name="average-log-lag")
 ```
 
 
