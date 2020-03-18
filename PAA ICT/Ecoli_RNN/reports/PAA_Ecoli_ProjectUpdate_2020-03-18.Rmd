@@ -1,0 +1,189 @@
+---
+title: "PAA Disinfection Performance"
+subtitle: "Analysis and Prediction"
+date: "2020-03-18"
+output:
+  word_document:
+     reference_docx: C:/Users/KNewhart/Documents/GitHub/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
+#bibliography: src/bibliography.bib
+#link-citations: yes
+#csl: src/science-of-the-total-environment.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.path="figures/", fig.align="center", fig.fullwidth=TRUE, dev = 'png', dpi=600, fig.width = 6.5)
+
+# Change working directory to be "Ecoli_RNN", rather than location of notebook
+# wd.path <- "C:/Users/KNewhart/Documents/GitHub/MWRD/PAA ICT/Ecoli_RNN/"
+wd.path <- getwd()
+if(tail(unlist(strsplit(wd.path,"/")),n=1)!="Ecoli_RNN") wd.path <- dirname(wd.path)
+knitr::opts_knit$set(root.dir = wd.path)
+
+library(flextable)
+library(dplyr)
+theme_kate <- function(x, fontsize = 12){
+  if( !inherits(x, "flextable") ) stop("theme_kate supports only flextable objects.")
+  
+  big_border <- officer::fp_border(width = 1)
+  std_border <- officer::fp_border(width = 1)
+  h_nrow <- flextable:::nrow_part(x, "header")
+  f_nrow <- flextable:::nrow_part(x, "footer")
+  b_nrow <- flextable:::nrow_part(x, "body")
+
+  x <- border_remove(x)
+
+  if(h_nrow > 0 ){
+    x <- hline_top(x, border = big_border, part = "header")
+    x <- hline(x, border = std_border, part = "header")
+    x <- hline_bottom(x, border = big_border, part = "header")
+    x <- bold(x = x, bold = TRUE, part = "header")
+  }
+  if(f_nrow > 0 ){
+    # x <- hline(x, border = std_border, part = "footer")
+    x <- hline_bottom(x, border = big_border, part = "footer")
+  }
+  if(b_nrow > 0 ){
+    # x <- hline(x, border = std_border, part = "body")
+    x <- hline_bottom(x, border = big_border, part = "body")
+  }
+
+  x <- padding(x = x, padding.left = 4, padding.right = 4,
+               padding.bottom = 1, padding.top = 1, part = "all")
+  x <- align_text_col(x, align = "left", header = TRUE)
+  x <- align_nottext_col(x, align = "right", header = TRUE)
+  x <- bg(x = x, bg = "transparent", part = "all")
+  x <- fontsize(x, size = fontsize, part = "all")
+  x <- font(x, fontname="Times", part="all")
+  x <- autofit(x)
+  x
+}
+tab <-0;fig<-0
+```
+
+
+# Introduction
+
+## Traditional WWTP disinfection process and control
+
+### Regulations
+* *E. coli*
+  * WTD/MTD
+  * Measured in the lab, results two-days later. 
+  * Real-time instrumentation is too costly for even the largest municipal WWTPs
+
+### Disinfectant
+* Chlorine
+  * Pros: Cheap
+  * Cons: Produces DBPs that are harmful to aquatic life that receive the waters and human life when drinking water sources are threatended
+* PAA
+  * Pros: Fewer DBP
+  * Cons: Difficult to control, does not follow same simple decay kinetics as chlorine
+
+### Control
+* Flow-paced
+  * Caculated dose based on mass flow rate to achieve concentration setpoint, easy to operate
+  * Does not account for instantaneous chemical demand or decay changes due to changing water quality, leads to overdosing during periods of low flow
+* CT-based
+  * Calculates dose based on mass flow rate and retention time to achieve a CT setpoint, more difficult to program
+  * Relies on fitting of first order kinetic parameters that change with time.
+  * Online analyzers are costly to purchase and maintain, reactive
+  
+### TL;DR
+* Need a cheap, real-time measure of PAA and E.coli concentrations for accurate disinfection control in WWTP
+** Need to understand the environmental and operational conditions that impact (1) PAA demand and decay and (2) pre- and post-disinfection E.coli.
+** Need to use unconventional modeling approaches, such as machine learning, to (1) estimate first order decay parameters for PAA and (2) model *E. coli* removal
+
+
+## Machine learning approaches to disinfection modeling
+* Not a lot of literature
+* We propose a nonlinear, real time method of estimating first order decay parameters
+
+# Materials and Methods
+
+## RWHTP
+  * Two separate treatment trains: North and South 
+  * Data collected:
+    * PAA profiles from X-Y
+    * Daily E. coli measurements from X-Y
+    * Online instrumentation of upstream treatment processes
+    * Daily-weekly samples of upstream treatment processes, both instantaneous grab and 24-hour flow-weighted composites
+    
+### *E. coli* model input data
+```{r Import data, include=FALSE}
+source("src/compile-data.R")
+north.data <- compile.data("data/north/average-24")
+south.data <- compile.data("data/south/average-24")
+```
+
+Table `r tab<-tab+1;tab`: Variables monitored in the North to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
+```{r Table north variables, warning=FALSE}
+north.variables <- sapply(strsplit(unlist(strsplit(colnames(north.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
+north.variables <- sapply(north.variables, function(x) {
+  i <- 1
+  while(!is.na(as.numeric(substr(x,1,i)))) i <- i+1
+  if(!is.na(as.numeric(substr(x,i,i)))) {
+    j <- i
+    while(!is.na(as.numeric(substr(x,i,j)))) j <- j+1
+    if(!is.na(as.numeric(substr(x,j,j)))) {
+      k <- j
+      while(!is.na(as.numeric(substr(x,j,k)))) k <- k+1
+      return(substr(x,k,nchar(x)))
+    } else {
+      return(substr(x,j,nchar(x)))
+    }
+  } else {
+    return(substr(x,i, nchar(x)))
+  }
+})
+data <- data.frame(north.variables,
+                   rep("Online",ncol(north.data)),
+                    apply(north.data,2,function(x) length(which(!is.na(x)))),
+                    stringsAsFactors = FALSE)
+data[grep("FC24",colnames(north.data)),2] <- "FC24"
+data[grep("_G",colnames(north.data)),2] <- "Grab"
+colnames(data) <- c("North Variable", "Collection Method", "Number of Observations")
+ft <- flextable(data)
+ft <- theme_kate(ft)
+ft <- align(ft, align="left", part="all")
+ft <- width(ft,width=flextable_dim(ft)$widths/2)
+ft
+```
+
+Table `r tab<-tab+1;tab`: Variables monitored in the South to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
+```{r Table sorth variables, warning=FALSE}
+south.variables <- sapply(strsplit(unlist(strsplit(colnames(south.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
+south.variables <- sapply(south.variables, function(x) {
+  i <- 1
+  while(!is.na(as.numeric(substr(x,1,i)))) i <- i+1
+  if(!is.na(as.numeric(substr(x,i,i)))) {
+    j <- i
+    while(!is.na(as.numeric(substr(x,i,j)))) j <- j+1
+    if(!is.na(as.numeric(substr(x,j,j)))) {
+      k <- j
+      while(!is.na(as.numeric(substr(x,j,k)))) k <- k+1
+      return(substr(x,k,nchar(x)))
+    } else {
+      return(substr(x,j,nchar(x)))
+    }
+  } else {
+    return(substr(x,i, nchar(x)))
+  }
+})
+data <- data.frame(south.variables,
+                   rep("Online",ncol(south.data)),
+                    apply(south.data,2,function(x) length(which(!is.na(x)))),
+                    stringsAsFactors = FALSE)
+data[grep("FC24",colnames(south.data)),2] <- "FC24"
+data[grep("_G",colnames(south.data)),2] <- "Grab"
+colnames(data) <- c("Sorth Variable", "Collection Method", "Number of Observations")
+ft <- flextable(data)
+ft <- theme_kate(ft)
+ft <- align(ft, align="left", part="all")
+ft
+```
+
+
+# Results
+## *E. coli* predition
+### Predisinfection *E. coli*
