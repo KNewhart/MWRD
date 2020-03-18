@@ -367,6 +367,8 @@ for(i in 1:10) {
                                                         n_epoch=100)
 }
 save.results(test.average.5, obj.folder="Over-under fit",obj.name="average-log-lag-5")
+load(file=file.path(wd.path,"results","Over-under fit","average-log-lag-5.RData"))
+test.average.5 <- obj;rm(obj)
 ```
 
 
