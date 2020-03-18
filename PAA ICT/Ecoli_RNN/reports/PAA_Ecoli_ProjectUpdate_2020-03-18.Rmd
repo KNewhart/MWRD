@@ -187,3 +187,79 @@ ft
 # Results
 ## *E. coli* predition
 ### Predisinfection *E. coli*
+```{r}
+load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
+test.average <- obj;rm(obj)
+# Compare results:
+lapply(test.average, function(results.list) {
+  lapply(results.list, function(results) {
+    paste("R2 =",mean(results[,1]),", RMSE =",mean((10^results[,2]-10^results[,3])^2)^0.5)
+  })
+})
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean(results[,1])
+  }))
+})
+r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
+# colnames(r2) <- c("250", "500", "750")
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean((10^results[,2]-10^results[,3])^2)^0.5
+  }))
+})
+rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
+# colnames(rmse) <- c("250", "500", "750")
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    (mean((10^results[,4]-10^results[,3])^2))^0.5
+  }))
+})
+rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
+# colnames(rmse) <- c("250", "500", "750")
+
+# R2 and Actual RMSE
+layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(r2), function(i) {
+  data <- r2[,i]
+  data <- data.frame(rep(colnames(r2)[i], nrow(r2)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+mtext("Model R-squared", side=2, line=2.25)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
+  data <- rmse[,i]
+  data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+mtext("Test RMSE", side=2, line=2.25)
+mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
+mtext("South predisinfection E. coli: averaged, log-transformed, lagged", side=3, font=2, line=-1,  outer=TRUE)
+
+
+# Actual RMSE and Persistence RMSE
+# layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
+  data <- rmse[,i]
+  data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+abline(h=rmse.p[1,1], col="red", lty=2, lwd=2)
+mtext("Test RMSE", side=2, line=2.25)
+mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
+mtext("South predisinfection E. coli: averaged, log-transformed, lagged", side=3, font=2, line=-1,  outer=TRUE)
+
+## Narrow boxplot ranges by increasing number of model iterations from 10->100
+```
+
