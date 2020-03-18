@@ -276,6 +276,33 @@ for(i in 1:ncol(instant.data)) {
 ```
 
 # Train and test data
+```{r Average log lag, eval=FALSE, include=FALSE}
+source("src/rolling-rnn.R")
+instant.data.log.lag <- instant.data
+instant.times <- index(instant.data)
+predict.col <- which(colnames(instant.data.log.lag)=="ECIDX_G") # Select Ecoli column
+instant.data.log.lag[,predict.col] <- log10(instant.data.log.lag[,predict.col]) # Log transform Ecoli
+instant.data.log.lag <- cbind(instant.data.log.lag[3:nrow(instant.data.log.lag),], 
+                              as.numeric(instant.data.log.lag[1:(nrow(instant.data.log.lag)-2),predict.col]))
+colnames(instant.data.log.lag)[ncol(instant.data.log.lag)] <- "ECIDX_G_Lag"
+instant.data.log.lag <- instant.data.log.lag[which(!apply(instant.data.log.lag, 1, anyNA)),]
+
+# Identify best n_epoch: 
+# Are we overfitting? Underfitting?
+test.average <- list()
+for(i in 1:10) {
+  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=instant.data.log.lag,
+                                                        predict.col=which(colnames(instant.data.log.lag)=="ECIDX_G"),
+                                                        train.obs=ceiling(nrow(instant.data.log.lag)*.9),
+                                                        n_epoch=250)
+}
+save.results(test.average, obj.folder="Over-under fit",obj.name="instant-log-lag-south-postdis")
+test.average.1 <- test.average
+unlist(lapply(test.average.1, function(result) {
+  paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
+}))
+```
+
 
 ```{r Average log lag, eval=FALSE, include=FALSE}
 source("src/rolling-rnn.R")
