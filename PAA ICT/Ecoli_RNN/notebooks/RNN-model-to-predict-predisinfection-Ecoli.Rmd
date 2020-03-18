@@ -326,6 +326,15 @@ names(test.average) <- c("250", "500", "750")
 
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
 test.average <- obj;rm(obj)
+source("src/rolling-rnn.R")
+average.data.log.lag <- average.data
+average.times <- index(average.data)
+predict.col <- which(colnames(average.data.log.lag)=="ECIDX_G") # Select Ecoli column
+average.data.log.lag[,predict.col] <- log10(average.data.log.lag[,predict.col]) # Log transform Ecoli
+average.data.log.lag <- cbind(average.data.log.lag[3:nrow(average.data.log.lag),], 
+                              as.numeric(average.data.log.lag[1:(nrow(average.data.log.lag)-2),predict.col]))
+colnames(average.data.log.lag)[ncol(average.data.log.lag)] <- "ECIDX_G_Lag"
+average.data.log.lag <- average.data.log.lag[which(!apply(average.data.log.lag, 1, anyNA)),]
 
 test.average.4 <- list()
 for(i in 1:10) {
