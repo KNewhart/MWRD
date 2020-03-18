@@ -296,6 +296,7 @@ for(i in 1:10) {
                                                         train.obs=ceiling(nrow(instant.data.log.lag)*.9),
                                                         n_epoch=250)
 }
+source("src/save-results.R")
 save.results(test.average, obj.folder="Over-under fit",obj.name="instant-log-lag-south-postdis")
 test.average.1 <- test.average
 unlist(lapply(test.average.1, function(result) {
