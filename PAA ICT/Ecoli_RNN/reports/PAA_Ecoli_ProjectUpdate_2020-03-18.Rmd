@@ -91,8 +91,8 @@ tab <-0;fig<-0
   
 ### TL;DR
 * Need a cheap, real-time measure of PAA and E.coli concentrations for accurate disinfection control in WWTP
-** Need to understand the environmental and operational conditions that impact (1) PAA demand and decay and (2) pre- and post-disinfection E.coli.
-** Need to use unconventional modeling approaches, such as machine learning, to (1) estimate first order decay parameters for PAA and (2) model *E. coli* removal
+  * Need to understand the environmental and operational conditions that impact (1) PAA demand and decay and (2) pre- and post-disinfection E.coli.
+  * Need to use unconventional modeling approaches, such as machine learning, to (1) estimate first order decay parameters for PAA and (2) model *E. coli* removal
 
 
 ## Machine learning approaches to disinfection modeling
@@ -110,6 +110,9 @@ tab <-0;fig<-0
     * Daily-weekly samples of upstream treatment processes, both instantaneous grab and 24-hour flow-weighted composites
 
 ### PAA model input data
+
+* Add PAA timeseries
+
 ```{r Import data and functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 library(xts)
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
@@ -272,6 +275,7 @@ ft
 
     
 ### *E. coli* model input data
+* Add Ecoli timeseries
 ```{r Import data, include=FALSE}
 source("src/compile-data.R")
 north.data <- compile.data("data/north/average-24")
@@ -367,7 +371,7 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-colnames(r2) <- c("250", "500", "750")
+colnames(r2) <- names(test.average)
 
 l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
@@ -375,7 +379,7 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-colnames(rmse) <- c("250", "500", "750")
+colnames(rmse) <- names(test.average)
 
 l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
@@ -383,7 +387,7 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-colnames(rmse) <- c("250", "500", "750")
+colnames(rmse) <- names(test.average)
 
 # R2 and Actual RMSE
 layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)

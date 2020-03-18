@@ -214,7 +214,70 @@ names(test.average) <- c("100", "175", "250")
 save.results(test.average, obj.folder="Over-under fit",obj.name="paa-1")
 ```
 
-```{r PAA 1-min}
+```{r results 1-min, echo=FALSE}
+load(file=file.path(wd.path,"results","Over-under fit","paa-1.RData"))
+test.average <- obj;rm(obj)
+# Compare results:
+# lapply(test.average, function(results.list) {
+#   lapply(results.list, function(results) {
+#     paste("R2 =",mean(results[,1]),", RMSE =",mean((results[,2]-results[,3])^2)^0.5)
+#   })
+# })
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean(results[,1])
+  }))
+})
+r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(r2) <- names(test.average)
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean((results[,2]-results[,3])^2)^0.5
+  }))
+})
+rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    (mean((results[,4]-results[,3])^2))^0.5
+  }))
+})
+rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+
+# R2 and Actual RMSE
+layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(r2), function(i) {
+  data <- r2[,i]
+  data <- data.frame(rep(colnames(r2)[i], nrow(r2)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+mtext("Model R-squared", side=2, line=2.25)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
+  data <- rmse[,i]
+  data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+abline(h=rmse.p[1,1], col="red", lty=2, lwd=2)
+mtext("Test RMSE", side=2, line=2.25)
+mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
+mtext("PAA at 1-min", side=3, font=2, line=-1,  outer=TRUE)
+
+```
+
+
+
+
+```{r PAA half}
 source("src/rolling-rnn.R")
 data <- paa.data[,-which(colnames(paa.data)=="PAA...1.min..Sample")]
 
@@ -244,43 +307,81 @@ for(i in 1:10) {
                                                         n_epoch=100)
 }
 test.average.3 <- test.average
-# unlist(lapply(test.average.1, function(result) {
-#   paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
-# }))
-# 
+unlist(lapply(test.average.1, function(result) {
+  paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
+}))
+
 source("src/save-results.R")
 test.average <- list(test.average.3, test.average.2, test.average.1)
 names(test.average) <- c("100", "175", "250")
 save.results(test.average, obj.folder="Over-under fit",obj.name="paa-half")
 ```
 
-```{r Average log lag results, eval=FALSE, include=FALSE}
-# Compare results:
-lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
-  lapply(results.list, function(results) {
-    paste("R2 =",mean(results[,1]),", RMSE =",mean((results[,2]-results[,3])^2)^0.5)
-  })
-})
 
-l <- lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+
+
+
+
+
+
+```{r results half, echo=FALSE}
+load(file=file.path(wd.path,"results","Over-under fit","paa-half.RData"))
+test.average <- obj;rm(obj)
+# Compare results:
+# lapply(test.average, function(results.list) {
+#   lapply(results.list, function(results) {
+#     paste("R2 =",mean(results[,1]),", RMSE =",mean((results[,2]-results[,3])^2)^0.5)
+#   })
+# })
+
+l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
     mean(results[,1])
   }))
 })
-r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
-colnames(r2) <- c("250", "500", "750")
+r2 <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(r2) <- names(test.average)
 
-l <- lapply(list(test.average.1, test.average.2, test.average.3), function(results.list) {
+l <- lapply(test.average, function(results.list) {
   unlist(lapply(results.list, function(results) {
     mean((results[,2]-results[,3])^2)^0.5
   }))
 })
-rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=T),stringsAsFactors=FALSE)
-colnames(rmse) <- c("250", "500", "750")
+rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
 
-par(mfrow=c(1,2))
-boxplot(r2)
-boxplot(rmse)
+l <- lapply(test.average, function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    (mean((results[,4]-results[,3])^2))^0.5
+  }))
+})
+rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+
+# R2 and Actual RMSE
+layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(r2), function(i) {
+  data <- r2[,i]
+  data <- data.frame(rep(colnames(r2)[i], nrow(r2)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+mtext("Model R-squared", side=2, line=2.25)
+par(mar=c(3.5,4,1.5, 0.1), family="serif")
+data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
+  data <- rmse[,i]
+  data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
+}))
+colnames(data)[1] <- "epoch"
+boxplot(data~epoch, data=data, ylab="", xlab="")
+points(data)
+abline(h=rmse.p[1,1], col="red", lty=2, lwd=2)
+mtext("Test RMSE", side=2, line=2.25)
+mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
+mtext("PAA at half basin", side=3, font=2, line=-1,  outer=TRUE)
+
 ```
 
 ```{r eval=FALSE, include=FALSE}
