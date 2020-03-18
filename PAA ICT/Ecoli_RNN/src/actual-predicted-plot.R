@@ -1,5 +1,5 @@
 actual.predicted.plot <- function(actual, predicted, label) {
-  par(mar=c(3, 3, 3, 1) + 0.1)
+  par(mar=c(3, 3, 3, 1) + 0.1, family="serif")
   r <- c(min(c(actual[,2], predicted[,2])), max(c(actual[,2], predicted[,2])))
   plot(x=actual[,1], y=actual[,2], main=label, pch=20,xlab="", ylab="", ylim=c(r[1], r[2]))
   points(x=predicted[,1], y=predicted[,2], pch=20, col="purple")
