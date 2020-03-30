@@ -1,0 +1,275 @@
+---
+title: "North PAA ICT Investigation"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    fig_width: 9
+    fig_height: 7
+date: "March 26, 2020"
+---
+
+```{r Download data from PI, include=FALSE}
+library(xts)
+# Function to import pi data
+pi.pull <- function(tag, label=NULL, save=TRUE, obj.return = FALSE, start='*-365d', end='*') {
+  # Initialize R-PI connection
+  library(piwebapi)
+  
+  # Login information
+  useKerberos <- TRUE
+  username <- "knewhart"
+  password <- ""
+  validateSSL <- TRUE
+  debug <- TRUE
+  piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+  
+  # If time is a POSIXct object, convert start and end time to character string that PI understands
+  if(inherits(start, "POSIXct")) start <- paste0(as.character(format(lubridate::with_tz(start, tzone="UTC"),"%Y-%m-%d")),"T",
+                                                 as.character(format(lubridate::with_tz(start, tzone="UTC"),"%H:%M:%S")),"Z")
+  if(inherits(end, "POSIXct")) end <- paste0(as.character(format(lubridate::with_tz(end, tzone="UTC"),"%Y-%m-%d")),"T",
+                                             as.character(format(lubridate::with_tz(end, tzone="UTC"),"%H:%M:%S")),"Z")
+  
+  # Pull WebID associated with PI tag
+  pi.points <- piWebApiService$attribute$getByPath(path=tag)
+  
+  # Pull PI tag/WebID from "start"
+  pi.data <- piWebApiService$stream$getRecorded(webId = pi.points$WebId, startTime=start, endTime=end)[[2]]
+  
+  # Transform list of observations into dataframe with time and value
+  pi.data <- do.call("rbind", lapply(pi.data, function(x) {
+    time.obj <- paste(strsplit(as.character(x[1]), "T")[[1]][1], 
+                      strsplit(strsplit(as.character(x[1]), "T")[[1]][2], "Z")[[1]][1])
+    time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+    value.obj <- x[[2]]
+    if(length(value.obj) > 1) value.obj <- NA
+    return(data.frame("Timestamp"=time.obj, 
+                      "Value" = value.obj))
+  })
+  )
+  
+  # Remove NAs
+  all.pi.data <- na.omit(pi.data)
+  
+  # If there are no observations, break now by returning a NULL object
+  if(is.null(all.pi.data)) return(NULL)
+  
+  # "getRecorded" PI function is limited to 1000 observations per iteration
+  # If the number of rows in "pi.data" is equal to 1000, 
+  # then there are most likely more observations to pull before the "end"
+  if(nrow(pi.data)==1000) {
+    
+    # Loop over the data pull until the "pi.data" object has fewer than 1000 observations
+    needsUpdating <- TRUE
+    while(needsUpdating) {
+      
+      # What time was the last observation pulled?
+      time.obj <- as.POSIXct(all.pi.data[nrow(all.pi.data), 1], tz=Sys.timezone())
+      
+      # Make the last time the new start time
+      begin <- paste0(as.character(format(lubridate::with_tz(time.obj, tzone="UTC"),"%Y-%m-%d")),"T",
+                      as.character(format(lubridate::with_tz(time.obj, tzone="UTC"),"%H:%M:%S")),"Z")
+      
+      # Pull PI tag/WebID from "begin"
+      pi.data <- piWebApiService$stream$getRecorded(webId = pi.points$WebId, startTime=begin, endTime=end)[[2]]
+      
+      # Transform list of observations into dataframe with time and value
+      pi.data <- do.call("rbind", lapply(pi.data, function(x) {
+        time.obj <- paste(strsplit(as.character(x[1]), "T")[[1]][1], 
+                          strsplit(strsplit(as.character(x[1]), "T")[[1]][2], "Z")[[1]][1])
+        time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+        value.obj <- x[[2]]
+        if(length(value.obj) > 1) value.obj <- NA
+        return(data.frame("Timestamp"=time.obj, 
+                          "Value" = value.obj))
+      })
+      )
+      
+      # Combine previous and most recent observations
+      all.pi.data <- rbind(all.pi.data, na.omit(pi.data))
+      
+      # Check if there are more observations to pull
+      # If "pi.data" = 1000 observations, there there are most likely more
+      if(nrow(pi.data) < 1000) needsUpdating <- FALSE
+    }
+  }
+  
+  # Use the last character string from the PI tag as the variable name, unless another label has been provided
+  if(is.null(label)) label <- gsub("[.]", "_", make.names(tail(strsplit(tag,"[\\]")[[1]],n=1)))
+  
+  # If we want to save the compiled data, save to CSV
+  if(save) write.csv(all.pi.data, file=paste0(label,".csv"), row.names = FALSE)
+  
+  # If we want to return the compiled data, return the dataframe
+  if(obj.return) return(all.pi.data)
+}
+
+# Raw pi.data
+pi.paths <- c("\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|DIS PAA N Upstream Residual - (AI_K826)",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|N CMPLX OUTFALL WEIR (FI-F350)",
+              # "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|N SBS PAA Decay SP (XC_K380A)",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_N_FlowRate",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_Applied_CT_Demo",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_N_iCT_CT",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_N_iCT_Demand",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_N_iCT_Dose_Actual",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_N_iCT_Dose_Predict",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_N_iCT_HRT_Tank",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|PAA_N_iCT_HRT_Upstr",
+              "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|SBS Flow Rate")
+              # "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|SBS_Dose_Actual",
+              # "\\\\APPLEPI_AF\\MWRD_Production\\Hite Treatment Plant\\07-Disinfection\\Dis_PAA\\North_PAA\\North_PAA_Dose_Cntrl\\CT_Demonstration|SBS_Dose_Calc")
+pi.data <- lapply(pi.paths, function(p) pi.pull(p, save=FALSE, obj.return = TRUE, start=as.POSIXct("2020-03-20")))
+
+```
+
+```{r Clean up data from PI, include=FALSE}
+# Non-zero pi.data
+keep.these <- which(unlist(lapply(pi.data, length))!=0) # no new data in this timeframe
+pi.paths <- pi.paths[keep.these]
+pi.data <- lapply(keep.these, function(n) pi.data[[n]])
+pi.data <- lapply(pi.data, function(p) xts(p[,2], order.by=p[,1]))
+
+# Raw all.data
+all.data <- do.call("merge", pi.data)
+colnames(all.data) <- sapply(pi.paths, function(p) tail(strsplit(p, "[|]")[[1]], n=1))
+
+# Just PAA ICT timestamps
+remove.these <- which(is.na(all.data$PAA_Applied_CT_Demo))
+all.data <- na.locf(all.data)
+all.data <- all.data[-remove.these, ]
+all.data <- all.data[which(!apply(all.data,1,anyNA)),]
+all.data <- xts(all.data, order.by = lubridate::round_date(index(all.data), "min"))
+```
+
+# All process variables
+```{r Plot all variables, echo=FALSE, warning=FALSE, fig.width = 7, fig.height=4}
+for(i in 1:ncol(all.data)) {
+  plot.data <- as.zoo(all.data[,i])
+  plot(plot.data, main=colnames(all.data)[i], ylab="")
+}
+```
+
+# All CT and residual
+```{r Plot all CT and residual, echo=FALSE, warning=FALSE}
+# We see high applied CT (>10) when redisual is declining
+par(mfrow=c(1,1), mar=c(4,4,1,4.5))
+plot(as.zoo(all.data$`DIS PAA N Upstream Residual - (AI_K826`), ylab="PAA N Upstream Residual (mg/L)")
+par(new=T)
+plot(as.zoo(all.data$PAA_Applied_CT_Demo), col="blue", xaxt="n", yaxt="n", xlab="", ylab="")
+mtext("PAA N Applied CT", side=4, col="blue", line=3)
+axis(side=4)
+```
+
+# 1-d CT, residual, HRT
+```{r, echo=FALSE, warning=FALSE}
+dates <- "2020-03-25/"
+par(mfrow=c(1,1), mar=c(4,4,1,4.5))
+plot(as.zoo(all.data$`DIS PAA N Upstream Residual - (AI_K826`[dates]), 
+     ylab="PAA N Upstream Residual (mg/L)",
+     ylim=c(0,0.6))
+par(new=T)
+plot(as.zoo(all.data$PAA_Applied_CT_Demo[dates]), 
+     col="blue", 
+     xaxt="n", yaxt="n", xlab="", ylab="", 
+     ylim=c(10,40))
+mtext("PAA N Applied CT (mg/L*min)", side=4, col="blue", line=3, adj=0)
+at = c(10,15,20)
+axis(side=4, at=at, labels=FALSE)
+mtext(side = 4, text = at, at = at, col = "blue", line = 1)
+par(new=T)
+plot(as.zoo(all.data$PAA_N_iCT_HRT_Upstr[dates]), col="red", 
+     xaxt="n", yaxt="n", xlab="", ylab="", 
+     ylim=c(0,max(all.data$PAA_N_iCT_HRT_Upstr[dates])))
+at = c(5,7,9,11)
+axis(side=4, at=at, labels=FALSE)
+mtext(side = 4, text = at, at = at, col = "red", line = 1)
+mtext("HRT (min)", side=4, col="red", line=3, adj=.8)
+
+```
+
+# 1-d CT, residual, dose
+```{r, echo=FALSE, warning=FALSE}
+dates <- "2020-03-25/"
+par(mfrow=c(1,1), mar=c(4,4,1,4.5))
+plot(as.zoo(all.data$`DIS PAA N Upstream Residual - (AI_K826`[dates]), 
+     ylab="PAA N Upstream Residual (mg/L)",
+     ylim=c(0,0.9))
+par(new=T)
+plot(as.zoo(all.data$PAA_Applied_CT_Demo[dates]), 
+     col="blue", 
+     xaxt="n", yaxt="n", xlab="", ylab="", 
+     ylim=c(10,40))
+mtext("PAA N Applied CT (mg/L*min)", side=4, col="blue", line=3, adj=0)
+at = c(10,15,20)
+axis(side=4, at=at, labels=FALSE)
+mtext(side = 4, text = at, at = at, col = "blue", line = 1)
+par(new=T)
+plot(as.zoo(all.data$PAA_N_iCT_Dose_Actual[dates]), col="red", 
+     xaxt="n", yaxt="n", xlab="", ylab="", 
+     ylim=c(0,max(all.data$PAA_N_iCT_Dose_Actual[dates])))
+at = c(1, 1.25, 1.5)
+axis(side=4, at=at, labels=FALSE)
+mtext(side = 4, text = at, at = at, col = "red", line = 1)
+mtext("Dose (mg/L)", side=4, col="red", line=3, adj=1)
+
+```
+
+
+# Smoothing PAA Analyzer
+```{r echo=FALSE, warning=FALSE}
+library(TTR)
+par(mfrow=c(4,1),mar=c(3,3,2,1))
+for(n in c(3,10)) {
+  # Simple moving average (SMA)
+  plot(as.zoo(all.data$`DIS PAA N Upstream Residual - (AI_K826`[dates]), 
+       ylab="", xlab="")
+  smoothed.paa <- all.data$`DIS PAA N Upstream Residual - (AI_K826`
+  smoothed.paa <- SMA(smoothed.paa, n=n) 
+  lines(as.zoo(smoothed.paa[dates]), col="red", lwd=2)
+  mtext(side=3,paste("PAA Analyzer MA where n =",n),font=2, line=.5)
+  
+  
+  # Exponential moving average (EMA)
+  plot(as.zoo(all.data$`DIS PAA N Upstream Residual - (AI_K826`[dates]), 
+       ylab="", xlab="")
+  smoothed.paa <- all.data$`DIS PAA N Upstream Residual - (AI_K826`
+  smoothed.paa <- EMA(smoothed.paa, n=n, wilder=TRUE) # weights = 1/n
+  lines(as.zoo(smoothed.paa[dates]), col="red", lwd=2)
+  smoothed.paa <- all.data$`DIS PAA N Upstream Residual - (AI_K826`
+  smoothed.paa <- EMA(smoothed.paa, n=n, wilder=FALSE) # weights = 2/(n+1)
+  lines(as.zoo(smoothed.paa[dates]), col="blue", lwd=2)
+  mtext(side=3,paste("PAA Analyzer EWMA where n =",n),font=2, line=.5)
+}
+
+```
+
+# Smoothing Residuals
+```{r echo=FALSE, warning=FALSE}
+par(mfrow=c(4,1),mar=c(3,3,2,1))
+for(n in c(3,10)) {
+  # SMA
+  smoothed.paa <- all.data$`DIS PAA N Upstream Residual - (AI_K826`
+  smoothed.paa <- SMA(smoothed.paa, n=n) 
+  residuals <- smoothed.paa[dates]-all.data$`DIS PAA N Upstream Residual - (AI_K826`[dates]
+  plot(as.zoo(residuals), col="red", lwd=2, ylim=c(-0.2,0.2))
+  mtext(text=round(sum(abs(residuals)),2), side=3, line=-1.3,adj=0.005, col="red")
+  mtext(side=3,paste("MA Residuals where n =",n),font=2, line=.5)
+  abline(h=0, lty=2)
+  
+  # EMA
+  smoothed.paa <- all.data$`DIS PAA N Upstream Residual - (AI_K826`
+  smoothed.paa <- EMA(smoothed.paa, n=n, wilder=TRUE) # 1/n
+  residuals <- smoothed.paa[dates]-all.data$`DIS PAA N Upstream Residual - (AI_K826`[dates]
+  plot(as.zoo(residuals), col="red", lwd=2, ylim=c(-0.2,0.2))
+  mtext(text=round(sum(abs(residuals)),2), side=3, line=-1.3,adj=0.005, col="red")
+  smoothed.paa <- all.data$`DIS PAA N Upstream Residual - (AI_K826`
+  smoothed.paa <- EMA(smoothed.paa, n=n, wilder=FALSE) # 2/(n+1)
+  residuals <- smoothed.paa[dates]-all.data$`DIS PAA N Upstream Residual - (AI_K826`[dates]
+  lines(as.zoo(residuals), col="blue", lwd=2)
+  mtext(text=round(sum(abs(residuals)),2), side=3, line=-2.6,adj=0.005, col="blue")
+  mtext(side=3,paste("EWMA Residuals where n =",n),font=2, line=.5)
+  abline(h=0, lty=2)
+}
+```
+
