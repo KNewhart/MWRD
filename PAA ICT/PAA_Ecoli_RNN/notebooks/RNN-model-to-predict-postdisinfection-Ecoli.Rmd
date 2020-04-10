@@ -137,7 +137,7 @@ data.parameters <- data.parameters[-1,]
   tag.names <- sapply(data.parameters[,1], function(x) tail(strsplit(tail(strsplit(x,"[\\]")[[1]],n=1),"[|]")[[1]],n=1))
 
   # For cleanliness, remove path names from list
-  # names(tag.names) <- NULL 
+  names(tag.names) <- NULL
   
   # Rename duplicate tag names by including more characters from the PI path
   duplicates <- names(which(sapply(unique(tag.names), function(x) length(which(x==tag.names)))>1))
@@ -154,7 +154,7 @@ master.file <- pi.pull(tag=data.parameters[1,1],  # First tag should always be E
                        save=FALSE)
 
 # Save E coli data
-write.csv(master.file, file="data/south/postdisinfection-ecoli.csv")
+write.csv(master.file, file="data/postdisinfection-ecoli/south/postdisinfection-ecoli.csv")
 
 # Initialize timestamps from E coli samples
 master.timestamps <- master.file[,1]

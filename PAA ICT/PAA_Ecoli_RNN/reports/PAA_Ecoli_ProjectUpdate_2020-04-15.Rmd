@@ -4,8 +4,8 @@ subtitle: "Analysis and Prediction"
 date: "2020-04-15"
 output:
   word_document:
-     reference_docx: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
-bibliography: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/Ecoli_RNN/src/bibliography.bib
+     reference_docx: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/src/word_template.docx
+bibliography: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/src/bibliography.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -90,12 +90,14 @@ tab <-0;fig<-0
 ## Machine learning approaches to disinfection modeling
 * Literature review of PAA
   * ANN modeling of chlorine dosing and residuals has been widely explored for drinking water (@serodes2001) and wastewater treatment (@gibbs2006). 
+  * @wei2017 was able to replicate a CFD-based PAA disinfection model (a chemically reactive time-dependent three-dimensional turbulent flow model) for a conventional 5-pass disinfection basin, using physical mixing and chemical decay kinetic parameters as ANN model inputs. The ANN was very simple, 11 inputs, 1-4 nodes in the hidden layer, and 2 outputs, fit by 40 observations and tested on 14. 
 * Literature review of *E. coli*
   * E.coli disinfection by chlorine and PAA follow an *n*th order kinetic reaction... 
   * Most results are for total coliforms, not *E. coli*:
   * @lin2012 used an ANN to predict effluent total coliforms in a bench-scale UV disinfection system (combined with a linear model of UV dose and log inactivation) to control disinfection. However, the authors defend the strength of their model by the correlation coeffient (R^2^) between measured and predicted values rather than the magnitude of the error (e.g., root-mean-squared-error or RMSE). In practice, the error surrounding two of the three goal effluent total coliform counts was large (208-278 and 583-778 measured effluent total coliform counts, for the 200 and 1000 CFU/100 mL goals respectively). The third goal to achieve nondetect concentrations achieved a range of 0-25 CFU/100 mL).
   * @yu2008 used ANN to control a bench-scale chlorination-dechlorination system. 5 ANN models were built from pH and ORP in the influent, chlorination reactor and dechlorination reactor.  The first model predicted the chlorine dose based on the influent quality and target effluent total coliform for feedforward control. The second model predicted effluent total coliform from the actual chlorine dose (5 minute delay from dose change predicted by first model) and influent quality to provide feedback control. A similar combination of dose-response models were built for dechlorination. Total coliform goals were acheived for a variety of reuse scenerios, but residual chlorine was much more difficult to achieve precise control. 
   * @carvajal2017 investigated the realtionship between dose, time, pH, turbidity, and viral log inactivation on a bench-scale batch chlorination system for secondary treated wastewater using a Bayesian belief network (BBN). @carvagal2017 seeded water with viruses and measured log inactivation to train Bayesian multilayer perceptron (BMLP) models to predict the required CT, one for each type of virus. 
+
 
 
 <!-- @Lin2012: Also used high number of epochs for a very low number of samples, two layers: 8-6/5-1 -->
