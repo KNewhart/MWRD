@@ -1,10 +1,9 @@
 ---
-title: "PAA Disinfection Performance"
+title: "Predisinfection E. coli Modeling"
 subtitle: "Analysis and Prediction"
 date: "2020-03-18"
 output:
   word_document:
-     #reference_docx: C:/Users/KNewhart/Documents/GitHub/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
      reference_docx: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
 #bibliography: src/bibliography.bib
 #link-citations: yes
@@ -89,16 +88,16 @@ tab <-0;fig<-0
   * Calculates dose based on mass flow rate and retention time to achieve a CT setpoint, more difficult to program
   * Relies on fitting of first order kinetic parameters that change with time.
   * Online analyzers are costly to purchase and maintain, reactive
-  
-### TL;DR
-* Need a cheap, real-time measure of PAA and E.coli concentrations for accurate disinfection control in WWTP
-  * Need to understand the environmental and operational conditions that impact (1) PAA demand and decay and (2) pre- and post-disinfection E.coli.
-  * Need to use unconventional modeling approaches, such as machine learning, to (1) estimate first order decay parameters for PAA and (2) model *E. coli* removal
-
 
 ## Machine learning approaches to disinfection modeling
-* Not a lot of literature
-* We propose a nonlinear, real time method of estimating first order decay parameters
+* Some literature exists, but with 5-10 years of data and never implemented in real-time
+* Artificial neural networks (ANN) are a nonlinear modeling method that identifies patterns between input and output data by (1) using a large number of obervations, (2) mulitple nonlinear functions that combine different process variables, (3) trial-and-error to adjust the parameters of the nonlinear functions to accurately map input to output. 
+* ANN are not constructed for time-series data, i.e., correlation to previous timesteps. Recurrent neural networks (RNN) have internal memory nodes that can train based on a *sequence* of observations rather than a series of individual observations. Long short-term memory (LSTM) nodes are one example of a RNN that have been used in process data. 
+
+## Objectives
+* Need a cheap, real-time measure of PAA and E.coli concentrations for accurate disinfection control in WWTP
+  * Need to understand the environmental and operational conditions that impact (1) PAA demand and decay and (2) pre- and post-disinfection E.coli.
+  * Need to use unconventional modeling approaches, such as RNN, to (1) estimate first order decay parameters for PAA and (2) model *E. coli* removal
 
 # Materials and Methods
 
@@ -278,8 +277,9 @@ source("src/compile-data.R")
 north.data <- compile.data("data/north/average")
 south.data <- compile.data("data/south/average")
 ```
+Data from the North and South that are used to predict *E. coli* are summaried below in Tables `r tab<-tab+1;tab.n.var <- tab;tab.n.var` and `r tab<-tab+1;tab.s.var <- tab;tab.s.var`. Figures `r fig<-fig+1;fig.n.ecoli<-fig;fig.n.ecoli` and `r fig<-fig+1;fig.s.ecoli<-fig;fig.s.ecoli` show the predisinfection *E. coli* and the log~10~-transformed predisinfection *E. coli* as a timeseries and boxplot. The boxplot illustrates that the raw predisinfection *E. coli* is heavily skewed (i.e., many outliers on one side of the median). By using a log~10~-transformation, the data is more normally distributed. 
 
-Table `r tab<-tab+1;tab`: Variables monitored in the North to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
+**Table `r tab.n.var`.** Variables monitored in the North to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
 
 ```{r Table north variables, warning=FALSE}
 north.variables <- sapply(strsplit(unlist(strsplit(colnames(north.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
@@ -310,12 +310,13 @@ colnames(data) <- c("North Variable", "Collection Method", "Number of Observatio
 ft <- flextable(data)
 ft <- theme_kate(ft)
 ft <- align(ft, align="left", part="all")
+ft <- width(ft, j=1:3, width = c(3.35, 1.37, 1.78))
 ft
 ```
 
 
 
-Figure `r fig<-fig+1;fig`: North *E. coli* for training and testing period
+**Figure `r fig.n.ecoli`.** North predisinfection *E. coli* for training (before purple line) and testing (after purple line) period. A log~10~-transform approximates normally distributed training and testing data. 
 
 ```{r}
 # layout.matrix <- matrix(c(1,2,3,3,4,4), nrow=3, byrow=TRUE)
@@ -343,7 +344,7 @@ mtext("LOG10 Predis E.coli", side=3, line=0.5, font=2)
 
 
 
-Table `r tab<-tab+1;tab`: Variables monitored in the South to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
+**Table `r tab.s.var`.** Variables monitored in the South to predict predisinfection *E. coli* performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the *E. coli* sample
 
 ```{r Table sorth variables, warning=FALSE}
 south.variables <- sapply(strsplit(unlist(strsplit(colnames(south.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
@@ -374,10 +375,11 @@ colnames(data) <- c("Sorth Variable", "Collection Method", "Number of Observatio
 ft <- flextable(data)
 ft <- theme_kate(ft)
 ft <- align(ft, align="left", part="all")
+ft <- width(ft, j=1:3, width = c(3.35, 1.37, 1.78))
 ft
 ```
 
-Figure `r fig<-fig+1;fig`: South *E. coli* for training and testing period
+**Figure `r fig.s.ecoli`.** South predisinfection *E. coli* for training (before purple line) and testing (after purple line) period. A log~10~-transform approximates normally distributed training and testing data. 
 
 ```{r}
 # layout.matrix <- matrix(c(1,2,3,3,4,4), nrow=3, byrow=TRUE)
@@ -405,12 +407,26 @@ mtext("LOG10 Predis E.coli", side=3, line=0.5, font=2)
 
 
 ## Recurrent neural networks
-
+* First 90% of data is used to train a recurrent nerual network (RNN)
+* Last 10% of data is used to test RNN
+* Single layer of *n* long short-term memory (LSTM) nodes, where *n* is the number of variables in the model
 
 # Results
+
 ## *E. coli* prediction
 
 ### Predisinfection *E. coli*
+
+A few data transformations were used to improve model fit: 
+* average process data to better represent *E. coli* sampling conditions, ranging from 15-minutes to 24-hours
+* log~10~-transform of *E. coli*
+* lag *E. coli* by 2-days
+While *E. coli* is more highly correlated to the previous *E. coli* observation (1-day), the average time from when a sample is taken to a result is 2-days. Thus, to simulate the use of this model in "real-time" a lag of 2 observations was used. 
+
+A common problem in machine learning is *overfitting*. Overfitting occurs when the model-building method continues to adjust model parameters beyond the general trends and instead fits to error within the training dataset. This causes a deceptively high training R^2^, as the testing root-mean-squared-error (RMSE) is also very high. RMSE can be interpreted as the standard deviation of the unexplained variance and is used to measure testing error here. A good model for real-time prediction minimizes RMSE. Thus, here we examined different number of training periods, from 100-2000. Figure `r fig<-fig+1;fig.s.retrain<-fig;fig.s.retrain` illustrates how R^2^ is not a good predictor of test RMSE. Currently, *E. coli* is 'predicted' by assuming the last known value approximates current conditions. In modeling, this is refered to as *persistence* and is represented as the red, dashed line in Figure `r fig.s.retrain`. Because the model error is less than persistence for 100-750 epochs, and minimized for 100-500 epochs, the ideal number of training epochs being between 100-500.
+
+**Figure `r fig.s.retrain`.** South predisinfection *E. coli* is predicted using a simple RNN, using a various number of epoch (e.g., "re-train" parameter estimations). The red line is the *persistence* RMSE, which is the RMSE calculated from the previously known *E. coli* value. Compared to the model predicted RMSE (black circles), 100-500 training epochs improve upon the current method of estimating *E. coli* (being less than the persistance prediction). 
+
 ```{r South Predisinfection E.coli model fit, echo=FALSE}
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
 test.average <- obj;rm(obj)
@@ -446,8 +462,8 @@ rmse.p <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFa
 colnames(rmse) <- names(test.average)
 
 # R2 and Actual RMSE
-layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
-par(mar=c(3.5,4,1.5, 0.1), family="serif")
+par(mfrow=c(1,2))
+par(mar=c(3.5,4,2, 0.1), family="serif")
 data <- do.call("rbind", lapply(1:ncol(r2), function(i) {
   data <- r2[,i]
   data <- data.frame(rep(colnames(r2)[i], nrow(r2)), data)
@@ -456,7 +472,7 @@ colnames(data)[1] <- "epoch"
 boxplot(data~epoch, data=data, ylab="", xlab="")
 points(data)
 mtext("Model R-squared", side=2, line=2.25)
-par(mar=c(3.5,4,1.5, 0.1), family="serif")
+par(mar=c(3.5,4,2, 0.1), family="serif")
 data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
   data <- rmse[,i]
   data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
@@ -472,7 +488,7 @@ mtext("South predisinfection E. coli: averaged, log-transformed, lagged", side=3
 ## Narrow boxplot ranges by increasing number of model iterations from 10->100
 ```
 
-```{r North Predisinfection E.coli model fit, eval=FALSE, include=FALSE}
+```{r North Predisinfection E.coli model fit, echo=FALSE}
 # ADD WHEN innov-R server is complete with north analysis
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag-north.RData"))
 test.average <- obj;rm(obj)
@@ -509,8 +525,8 @@ colnames(rmse) <- names(test.average)
 
 
 # R2 and Actual RMSE
-layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
-par(mar=c(3.5,4,1.5, 0.1), family="serif")
+par(mfrow=c(1,2))
+par(mar=c(3.5,4,2, 0.1), family="serif")
 data <- do.call("rbind", lapply(1:ncol(r2), function(i) {
   data <- r2[,i]
   data <- data.frame(rep(colnames(r2)[i], nrow(r2)), data)
@@ -519,22 +535,7 @@ colnames(data)[1] <- "epoch"
 boxplot(data~epoch, data=data, ylab="", xlab="")
 points(data)
 mtext("Model R-squared", side=2, line=2.25)
-par(mar=c(3.5,4,1.5, 0.1), family="serif")
-data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
-  data <- rmse[,i]
-  data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
-}))
-colnames(data)[1] <- "epoch"
-boxplot(data~epoch, data=data, ylab="", xlab="")
-points(data)
-mtext("Test RMSE", side=2, line=2.25)
-mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
-mtext("North predisinfection E. coli: averaged, log-transformed, lagged", side=3, font=2, line=-1,  outer=TRUE)
-
-
-# Actual RMSE and Persistence RMSE
-# layout(mat=matrix(c(1,2), ncol=2, byrow = TRUE), widths=c(0.5,0.5), heights=c(1), TRUE)
-par(mar=c(3.5,4,1.5, 0.1), family="serif")
+par(mar=c(3.5,4,2, 0.1), family="serif")
 data <- do.call("rbind", lapply(1:ncol(rmse), function(i) {
   data <- rmse[,i]
   data <- data.frame(rep(colnames(rmse)[i], nrow(rmse)), data)
@@ -547,8 +548,11 @@ mtext("Test RMSE", side=2, line=2.25)
 mtext("Number of times model is re-trained", side=1, line=-1, outer=TRUE)
 mtext("North predisinfection E. coli: averaged, log-transformed, lagged", side=3, font=2, line=-1,  outer=TRUE)
 
+
 ## Narrow boxplot ranges by increasing number of model iterations from 10->100
 ```
+
+In Figure `r fig<-fig+1;fig.s.best<-fig;fig.s.best`, the best performing model predictions (lowest test RMSE) used are plotted alongside the actual *E. coli* for the entire testing period. For the majority of the testing period, the errors are relatively low, exept for an event on February 25, 2020. 
 
 ```{r South Predisinfection E.coli model performance, echo=FALSE}
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
@@ -577,6 +581,7 @@ actual <- data.frame(as.POSIXct(rownames(results)), 10^results$Actual)
 predicted <- data.frame(as.POSIXct(rownames(results)),10^results$Prediction)
 actual.predicted.plot(actual, predicted, label)
 mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
+mtext(side=2, line=2.25, "E. coli (CFU/mL)")
 # 
 # label <- "South Log Predisinfection E.coli"
 # actual <- data.frame(as.POSIXct(rownames(results)), results$Actual)
@@ -587,8 +592,7 @@ mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
 # plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="South Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
 ```
 
-```{r North Predisinfection E.coli model performance, eval=FALSE, include=FALSE}
-# Add when innov-R is complete
+```{r North Predisinfection E.coli model performance, echo=FALSE}
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag-north.RData"))
 test.average <- obj;rm(obj)
 l <- lapply(test.average, function(results.list) {
@@ -597,7 +601,7 @@ l <- lapply(test.average, function(results.list) {
   }))
 })
 rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
-colnames(rmse) <- c("250", "500", "750")
+colnames(rmse) <- names(test.average)
 results <- test.average[[(ceiling(which(rmse==min(rmse))/nrow(rmse)))]][[(which(rmse==min(rmse)) %% nrow(rmse))]]
 
 # plot(results$R2, main="R2", pch=20)
@@ -626,4 +630,43 @@ mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
 ```
 
 
-### Postdisinfection *E. coli*
+<!-- ### Postdisinfection *E. coli* -->
+
+```{r South Predisinfection Ecoli model performance, eval=FALSE, include=FALSE}
+load(file=file.path(wd.path,"results","Over-under fit","average-log-lag-south-postdis.RData"))
+test.average <- obj;rm(obj)
+l <- lapply(list(test.average), function(results.list) {
+  unlist(lapply(results.list, function(results) {
+    mean((10^results[,2]-10^results[,3])^2)^0.5
+  }))
+})
+rmse <- data.frame(matrix(unlist(l), nrow=length(l[[1]]), byrow=F),stringsAsFactors=FALSE)
+colnames(rmse) <- names(test.average)
+# results <- list(test.average)[[(ceiling(which(rmse==min(rmse))/nrow(rmse)))]][[(which(rmse==min(rmse)) %% nrow(rmse))]]
+results <- 
+
+# plot(results$R2, main="R2", pch=20)
+
+r2 <- mean(results$R2)
+rmse.log <- data.frame("Prediction"=mean((results$Prediction-results$Actual)^2)^0.5,
+                       "Persistance"=mean((results$Persistance-results$Actual)^2)^0.5)
+rmse <- data.frame("Prediction"=mean((10^results$Prediction-10^results$Actual)^2)^0.5,
+                   "Persistance"=mean((10^results$Persistance-10^results$Actual)^2)^0.5)
+
+source("src/actual-predicted-plot.R")
+
+label <- "South Predisinfection E.coli"
+actual <- data.frame(as.POSIXct(rownames(results)), 10^results$Actual)
+predicted <- data.frame(as.POSIXct(rownames(results)),10^results$Prediction)
+actual.predicted.plot(actual, predicted, label)
+mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
+mtext(side=2, line=2.25, "E. coli (CFU/mL)")
+# 
+# label <- "South Log Predisinfection E.coli"
+# actual <- data.frame(as.POSIXct(rownames(results)), results$Actual)
+# predicted <- data.frame(as.POSIXct(rownames(results)),results$Prediction)
+# actual.predicted.plot(actual, predicted, label)
+# mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+#   
+# plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="South Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+```
