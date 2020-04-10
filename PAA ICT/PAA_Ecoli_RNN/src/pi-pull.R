@@ -1,7 +1,13 @@
 # Function to import pi data
 pi.pull <- function(tag, label=NULL, save=TRUE, obj.return = FALSE, start='*-365d', end='*') {
   # Initialize R-PI connection
-  library(piwebapi)
+  if(!("piwebapi" %in% installed.packages()[,1])) {
+    install.packages("devtools")
+    library(devtools)
+    install_github("rbechalany/PI-Web-API-Client-R")
+  }
+  require(piwebapi)
+
   
   # Login information
   useKerberos <- TRUE
