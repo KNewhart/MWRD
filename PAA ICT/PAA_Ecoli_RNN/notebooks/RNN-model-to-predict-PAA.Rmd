@@ -1,5 +1,5 @@
 ---
-title: "RNN model to predict predisinfection E.coli"
+title: "RNN model to predict PAA kinetics"
 output:
   pdf_document: default
 ---
@@ -16,6 +16,8 @@ if(tail(unlist(strsplit(wd.path,"/")),n=1)=="notebooks") wd.path <- dirname(wd.p
 knitr::opts_knit$set(root.dir = wd.path)
 ```
 
+# 2018
+## Import data
 ```{r Import data and functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 library(xts)
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
@@ -160,9 +162,7 @@ all.data <- all.data[,-remove.cols]
 paa.data <- all.data
 ```
 
-
-
-## Plot all data
+## Plot data
 ```{r eval=FALSE, include=FALSE}
 for(i in 1:ncol(paa.data)) {
   png(filename=paste0("figures/paa/",gsub("[.]","-",colnames(paa.data)[i]),".png"))
@@ -172,50 +172,53 @@ for(i in 1:ncol(paa.data)) {
 }
 ```
 
-# Train and test data
-
+## Train and test data
+### 1-minute
 ```{r PAA 1-min}
-source("src/rolling-rnn.R")
-data <- paa.data[,-which(colnames(paa.data)=="PAA...1.2.Basin.Sampling")]
-
-# Identify best n_epoch: 
-# Are we overfitting? Underfitting?
-test.average <- list()
-for(i in 1:10) {
-  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
-                                                        predict.col=which(colnames(data)=="PAA...1.min..Sample"),
-                                                        train.obs=ceiling(nrow(data)*.9),
-                                                        n_epoch=250)
+if("paa-1.RData" %in% list.files(file.path(wd.path,"results","Over-under fit"))) {
+  load(file=file.path(wd.path,"results","Over-under fit","paa-1.RData"))
+} else {
+  source("src/rolling-rnn.R")
+  data <- paa.data[,-which(colnames(paa.data)=="PAA...1.2.Basin.Sampling")]
+  
+  # Identify best n_epoch: 
+  # Are we overfitting? Underfitting?
+  test.average <- list()
+  for(i in 1:10) {
+    test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                          predict.col=which(colnames(data)=="PAA...1.min..Sample"),
+                                                          train.obs=ceiling(nrow(data)*.9),
+                                                          n_epoch=250)
+  }
+  test.average.1 <- test.average
+  test.average <- list()
+  for(i in 1:10) {
+    test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                          predict.col=which(colnames(data)=="PAA...1.min..Sample"),
+                                                          train.obs=ceiling(nrow(data)*.9),
+                                                          n_epoch=175)
+  }
+  test.average.2 <- test.average
+  test.average <- list()
+  for(i in 1:10) {
+    test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                          predict.col=which(colnames(data)=="PAA...1.min..Sample"),
+                                                          train.obs=ceiling(nrow(data)*.9),
+                                                          n_epoch=100)
+  }
+  test.average.3 <- test.average
+  # unlist(lapply(test.average.1, function(result) {
+  #   paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
+  # }))
+  # 
+  source("src/save-results.R")
+  test.average <- list(test.average.3, test.average.2, test.average.1)
+  names(test.average) <- c("100", "175", "250")
+  save.results(test.average, obj.folder="Over-under fit",obj.name="paa-1")
 }
-test.average.1 <- test.average
-test.average <- list()
-for(i in 1:10) {
-  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
-                                                        predict.col=which(colnames(data)=="PAA...1.min..Sample"),
-                                                        train.obs=ceiling(nrow(data)*.9),
-                                                        n_epoch=175)
-}
-test.average.2 <- test.average
-test.average <- list()
-for(i in 1:10) {
-  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
-                                                        predict.col=which(colnames(data)=="PAA...1.min..Sample"),
-                                                        train.obs=ceiling(nrow(data)*.9),
-                                                        n_epoch=100)
-}
-test.average.3 <- test.average
-# unlist(lapply(test.average.1, function(result) {
-#   paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
-# }))
-# 
-source("src/save-results.R")
-test.average <- list(test.average.3, test.average.2, test.average.1)
-names(test.average) <- c("100", "175", "250")
-save.results(test.average, obj.folder="Over-under fit",obj.name="paa-1")
 ```
 
 ```{r results 1-min, echo=FALSE}
-load(file=file.path(wd.path,"results","Over-under fit","paa-1.RData"))
 test.average <- obj;rm(obj)
 # Compare results:
 # lapply(test.average, function(results.list) {
@@ -274,58 +277,52 @@ mtext("PAA at 1-min", side=3, font=2, line=-1,  outer=TRUE)
 
 ```
 
-
-
-
+## Half-basin
 ```{r PAA half}
-source("src/rolling-rnn.R")
-data <- paa.data[,-which(colnames(paa.data)=="PAA...1.min..Sample")]
-
-# Identify best n_epoch: 
-# Are we overfitting? Underfitting?
-test.average <- list()
-for(i in 1:10) {
-  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
-                                                        predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
-                                                        train.obs=ceiling(nrow(data)*.9),
-                                                        n_epoch=250)
+if("paa-half.RData" %in% list.files(file.path(wd.path,"results","Over-under fit"))) {
+  load(file=file.path(wd.path,"results","Over-under fit","paa-half.RData"))
+} else {
+  source("src/rolling-rnn.R")
+  data <- paa.data[,-which(colnames(paa.data)=="PAA...1.min..Sample")]
+  
+  # Identify best n_epoch: 
+  # Are we overfitting? Underfitting?
+  test.average <- list()
+  for(i in 1:10) {
+    test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                          predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
+                                                          train.obs=ceiling(nrow(data)*.9),
+                                                          n_epoch=250)
+  }
+  test.average.1 <- test.average
+  test.average <- list()
+  for(i in 1:10) {
+    test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                          predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
+                                                          train.obs=ceiling(nrow(data)*.9),
+                                                          n_epoch=175)
+  }
+  test.average.2 <- test.average
+  test.average <- list()
+  for(i in 1:10) {
+    test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
+                                                          predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
+                                                          train.obs=ceiling(nrow(data)*.9),
+                                                          n_epoch=100)
+  }
+  test.average.3 <- test.average
+  unlist(lapply(test.average.1, function(result) {
+    paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
+  }))
+  
+  source("src/save-results.R")
+  test.average <- list(test.average.3, test.average.2, test.average.1)
+  names(test.average) <- c("100", "175", "250")
+  save.results(test.average, obj.folder="Over-under fit",obj.name="paa-half")
 }
-test.average.1 <- test.average
-test.average <- list()
-for(i in 1:10) {
-  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
-                                                        predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
-                                                        train.obs=ceiling(nrow(data)*.9),
-                                                        n_epoch=175)
-}
-test.average.2 <- test.average
-test.average <- list()
-for(i in 1:10) {
-  test.average[[length(test.average)+1]] <- rolling.rnn(all.data=data,
-                                                        predict.col=which(colnames(data)=="PAA...1.2.Basin.Sampling"),
-                                                        train.obs=ceiling(nrow(data)*.9),
-                                                        n_epoch=100)
-}
-test.average.3 <- test.average
-unlist(lapply(test.average.1, function(result) {
-  paste("R2 =",mean(result[,1]),", RMSE =",mean((result[,2]-result[,3])^2)^0.5)
-}))
-
-source("src/save-results.R")
-test.average <- list(test.average.3, test.average.2, test.average.1)
-names(test.average) <- c("100", "175", "250")
-save.results(test.average, obj.folder="Over-under fit",obj.name="paa-half")
 ```
 
-
-
-
-
-
-
-
 ```{r results half, echo=FALSE}
-load(file=file.path(wd.path,"results","Over-under fit","paa-half.RData"))
 test.average <- obj;rm(obj)
 # Compare results:
 # lapply(test.average, function(results.list) {
@@ -775,96 +772,421 @@ source("src/rolling-rnn.R")
 feature.rnn <- function(all.data, predict.col, train.obs=ceiling(nrow(all.data)*.9),
                         act.function="softsign", n_epoch=500) {
 
-  perturbation <- rnorm(n=nrow(all.data), mean=0, sd=0.2)
+# 2019
+
+## Step 1: Calculate CT
+For each sampling event and location, HRT was calculated to fit to a first-order decay model to generate PAA concentration as a function of time ($C(t)$). The integral of $C(t)$ and the total disinfection potential ($CT$) is $\frac{1}{k}(C_0-C_0*e^{-kt_{30 min}})$ where $C_0$ is the PAA cocentration at time 0 and $k$ is the model parameter for first-order decay. $C_0$ is not equal to the initial dose of PAA ($C_{dose}$) but the residual after some initial PAA demand ($D$) has been consumed ($C_0=C_{dose}-D$). Model parameters $k$ and $D$ are fit for each sampling event and CT calculated (highlighted in orange below). Of the 66 sampleing events, only event #24 is excluded from further analysis due to poor data (PAA measured at the 1-minute sample location is less than all downstream locations).
+
+```{r Load data, include=FALSE}
+# Load required packages
+library(xts)
+library(xlsx)
+
+##### PAA ##### 
+if("paa.RData" %in% list.files(path="data/paa/compiled")) {
+  load("data/paa/compiled/paa.RData")
+} else {
+  # Load raw data from sampling campaign
+  PAA.PROFILE.DATA <- read.xlsx("data/paa/PAA PROFILE DATA_08-08-19.xlsx", sheetIndex = 1)
   
-  perturbed.results <- list()
-  for(n in seq(1,ncol(all.data))[-predict.col]) {
-    test.data <- all.data
-    test.data[,n] <- test.data[,n]+perturbation
-    test.results <- rolling.rnn(all.data=test.data,
-                                predict.col=predict.col,
-                                train.obs=train.obs, 
-                                n_epoch=n_epoch)
-    perturbed.results[[length(perturbed.results)+1]] <- test.results
+  # Subset just PAA data
+  paa <- PAA.PROFILE.DATA[which(PAA.PROFILE.DATA$ANALYSIS_CODE == "PAAR"),]
+  
+  # Remove erroneous/bad data
+  paa <- paa[which(paa$COMBINATION_RESULT != "Scratched"),]
+  paa <- paa[which(!is.na(paa$NUMERIC_RESULT)),]
+  
+  # Create timestamps
+  date.time <- strptime(paste(as.character(paa$COLLECTION_DATE), as.character(paa$COLLECTION_TIME)), format="%Y-%m-%d %H:%M")
+  
+  # Create clean data object
+  data <- data.frame(date.time, stringsAsFactors = FALSE)
+  data <- cbind(data, as.data.frame(paa$COMMON_NAME, stringsAsFactors = FALSE))
+  data <- cbind(data, as.data.frame(as.numeric(as.character(paa$NUMERIC_RESULT)),
+                                    stringsAsFactors = FALSE))
+  colnames(data) <- c("date.time", "COMMON_NAME", "NUMERIC_RESULT")
+  data <- data[order(data[,1]),]
+  
+  # Label sampling campaigns & hour of the day
+  sample.count <- vector()
+  min <- vector()
+  hour <- vector()
+  for(i in 2:nrow(data)){
+    if(i == 2) {
+      last.row <- 1
+      sampling.campaign <- 1
+    }
+    
+    if(difftime(data[,"date.time"][i],data[,"date.time"][i-1], units = "mins") > 60) {
+      if(i == nrow(data)) {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
+        min <- c(min, rep(as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(data$date.time[i],'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min')), length(c(last.row:(i)))))
+        hour <- c(hour, rep(format(round(data$date.time[i], units="hours"), "%H"), length(c(last.row:(i)))))
+      } else {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:(i-1)))))
+        min <- c(min, rep(as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(data$date.time[i-1],'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min')), length(c(last.row:(i-1)))))
+        hour <- c(hour, rep(format(round(data$date.time[i-1], units="hours"), "%H"), length(c(last.row:(i-1)))))
+        last.row <- i
+        sampling.campaign <- sampling.campaign + 1
+      }
+    } else {
+      if(i == nrow(data)) {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
+        hour <- c(hour, rep(format(round(data$date.time[i], units="hours"), "%H"), length(c(last.row:(i)))))
+        min <- c(min, rep(as.numeric(difftime(as.POSIXct(paste(Sys.Date(), format(data$date.time[i],'%H:%M'))), as.POSIXct(paste(Sys.Date(), "00:00")), units = 'min')), length(c(last.row:(i)))))
+      }
+    }
   }
-  
-  org.results <- rolling.rnn(all.data=all.data,
-                                predict.col=predict.col,
-                                train.obs=train.obs, 
-                                n_epoch=n_epoch)
-  
-  perturbed.r2 <- do.call("rbind", lapply(perturbed.results, function(x) mean(x[,1])))
-  perturbed.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,2]-x[,3])^2)^0.5))
-  persistance.rmse <- do.call("rbind", lapply(perturbed.results, function(x) mean((x[,4]-x[,3])^2)^0.5))
-  
-  org.r2 <- mean(org.results[,1])
-  org.rmse <- mean((org.results[,2]-org.results[,3])^2)^0.5
-  org.persistance.rmse <- mean((org.results[,4]-org.results[,3])^2)^0.5
-  
-  all <- list(org.r2, org.rmse, org.persistance.rmse, 
-              perturbed.r2, perturbed.rmse, persistance.rmse)
-  return(all)
+  # data2 <- cbind(data, as.data.frame(sample.count, stringsAsFactors=FALSE), as.data.frame(as.numeric(hour)))
+  # colnames(data2)[ncol(data2)] <- "hour.of.day"
+  data2 <- cbind(data, as.data.frame(sample.count, stringsAsFactors=FALSE), as.data.frame(min))
+  colnames(data2)[ncol(data2)] <- "min.of.day"
+  paa <- data2
+  save(paa, file="./data/compiled/paa.RData")
 }
 
-train.average <- feature.rnn(all.data=average.data.log.lag, 
-                             predict.col=which(colnames(average.data.log.lag)=="ECIDX_G"),
-                             n_epoch=2000)
-```
-
-
-# Results
-```{r Average results}
-results <- test.average
-
-# plot(results$R2, main="R2", pch=20)
-
-r2 <- mean(results$R2)
-rmse.log <- data.frame("Prediction"=mean((results$Prediction-results$Actual)^2)^0.5,
-                       "Persistance"=mean((results$Persistance-results$Actual)^2)^0.5)
-rmse <- data.frame("Prediction"=mean((10^results$Prediction-10^results$Actual)^2)^0.5,
-                   "Persistance"=mean((10^results$Persistance-10^results$Actual)^2)^0.5)
-
-source("src/actual-predicted-plot.R")
-
-label <- "Predisinfection E.coli"
-actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], 10^results$Actual)
-predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],10^results$Prediction)
-actual.predicted.plot(actual, predicted, label)
-mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
-
-label <- "Log Predisinfection E.coli"
-actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], results$Actual)
-predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],results$Prediction)
-actual.predicted.plot(actual, predicted, label)
-mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+##### ECOLI #####
+if("ecoli.RData" %in% list.files(path="data/paa/compiled")) {
+  load("data/paa/compiled/ecoli.RData")
+} else {
+  # Load raw data from sampling campaign
+  PAA.PROFILE.DATA <- read.xlsx("data/paa/PAA PROFILE DATA_08-08-19.xlsx", sheetIndex = 1)
   
-plot(x=results$Actual, y=results$Prediction, pch=20, main="Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
-
-```
-
-```{r Instant results}
-results <- test.instant
-
-r2 <- mean(results$R2)
-rmse.log <- data.frame("Prediction"=mean((results$Prediction-results$Actual)^2)^0.5,
-                       "Persistance"=mean((results$Persistance-results$Actual)^2)^0.5)
-rmse <- data.frame("Prediction"=mean((10^results$Prediction-10^results$Actual)^2)^0.5,
-                   "Persistance"=mean((10^results$Persistance-10^results$Actual)^2)^0.5)
-
-source("src/actual-predicted-plot.R")
-
-label <- "Predisinfection E.coli"
-actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], 10^results$Actual)
-predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],10^results$Prediction)
-actual.predicted.plot(actual, predicted, label)
-mtext(side=3, line=-1, paste("RMSE =",round(rmse$Prediction,0)), adj=1)
-
-label <- "Log Predisinfection E.coli"
-actual <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)], results$Actual)
-predicted <- data.frame(index(average.data.log.lag)[(nrow(average.data.log.lag)*.9+1):nrow(average.data.log.lag)],results$Prediction)
-actual.predicted.plot(actual, predicted, label)
-mtext(side=3, line=-1, paste("RMSE =",round(rmse.log$Prediction,2)), adj=1)
+  # Subset just Ecoli data
+  ecoli <- PAA.PROFILE.DATA[which(PAA.PROFILE.DATA$ANALYSIS_CODE == "ECIDX"),]
   
-plot(x=results$Actual, y=results$Prediction, pch=20, main="Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
+  # Remove irrelevant data
+  ecoli <- ecoli[-which(ecoli$COMMON_NAME == "S_PREPAA"),] # Not considering data from the South
+  ecoli <- ecoli[-which(ecoli$COMMON_NAME == "N_PREPAA"),] # Not considering data not included in a sampling campaign (i.e., no number precluding label)
+  
+  # Create timestamps
+  date.time <- strptime(paste(as.character(ecoli$COLLECTION_DATE), as.character(ecoli$COLLECTION_TIME)), format="%Y-%m-%d %H:%M")
+  
+  # Create clean data object
+  data <- data.frame(date.time, stringsAsFactors = FALSE)
+  data <- cbind(data, as.data.frame(ecoli$COMMON_NAME, stringsAsFactors = FALSE))
+  data <- cbind(data, as.data.frame(as.numeric(as.character(ecoli$NUMERIC_RESULT)),
+                                    stringsAsFactors = FALSE))
+  colnames(data) <- c("date.time", "COMMON_NAME", "NUMERIC_RESULT")
+  data <- data[order(data[,1]),]
+  
+  # Label sampling campaigns
+  sample.count <- vector()
+  for(i in 2:nrow(data)){
+    if(i == 2) {
+      last.row <- 1
+      sampling.campaign <- 1
+    }
+    
+    if(difftime(data[,"date.time"][i],data[,"date.time"][i-1], units = "mins") > 60) {
+      if(i == nrow(data)) {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
+      } else {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:(i-1)))))
+        last.row <- i
+        sampling.campaign <- sampling.campaign + 1
+      }
+    } else {
+      if(i == nrow(data)) {
+        sample.count <- c(sample.count, rep(sampling.campaign, length(c(last.row:i))))
+        }
+    }
+  }
+  data2 <- cbind(data, as.data.frame(sample.count, stringsAsFactors=FALSE))
+  
+  # Calculate log removal
+  log.removal <- vector()
+  for(i in unique(data2$sample.count)) {
+    experiment <- data2[which(data2$sample.count == i),]
+    i.ecoli <- experiment[grepl("N_PREPAA", experiment$COMMON_NAME),"NUMERIC_RESULT"]
+    if(length(i.ecoli) == 0) {
+      log.removal <- c(log.removal, rep(NA, nrow(experiment)))
+    } else {
+      exp.removal <- log10(i.ecoli/experiment$NUMERIC_RESULT)
+      log.removal <- c(log.removal, exp.removal)
+    }
+  }
+  data3 <- cbind(data2, as.data.frame(log.removal))
+  ecoli <- data3
+  save(ecoli, file="data/paa/compiled/ecoli.RData")
+}
+
+##### Water quality #####
+if("wq.RData" %in% list.files(path="data/paa/compiled")) {
+  load("data/paa/compiled/wq.RData")
+} else {
+  # Install and load piwebapi package from Github
+  # install.packages("devtools")
+  # library(devtools)
+  # install_github("rbechalany/PI-Web-API-Client-R")
+  library(piwebapi)
+  
+  # Login information
+  useKerberos <- TRUE
+  username <- "knewhart"
+  password <- ""
+  validateSSL <- TRUE
+  debug <- TRUE
+  piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+  # Go from MT to UTC
+  pi.times <- matrix(NA,nrow=length(date.time),ncol=1)
+  date.time <- paa$date.time
+  for(i in 1:length(date.time)) {
+    time.obj <- date.time[i]
+    time.obj <- lubridate::with_tz(time.obj, tzone="UTC")
+    pi.times[i,1] <- paste0(as.character(format(time.obj,"%Y-%m-%d")),"T",
+                            as.character(format(time.obj,"%H:%M:%S")),"Z")
+  }
+  # Declare with variables/pi tags to pull
+  pi.tags <- matrix(c("PAA Flow", "\\\\applepi\\FY_K810",
+    "DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
+                      "PAA Setpoint", "\\\\applepi\\PAA_N_Target_Dose",
+                      
+                      "DIS PAA N Upstream Residual", "\\\\applepi\\AI_K826",
+                      "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
+                      "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
+                      "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
+                      "NSEC Effluent NO2", "\\\\applepi\\AI_N501G",
+                      "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
+                      "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
+                      # "NSEC Effluent NO5", "\\\\applepi\\AI-K570N", # All zeros
+                      "NSEC Effluent Flow", "\\\\applepi\\FY-F225"), ncol=2, byrow=TRUE)
+  # Pull data
+  for(tag in 1:nrow(pi.tags)) {
+    pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
+    data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
+                                                                      time = c(pi.times[,1]))[[2]]
+    data.holder <- do.call("rbind", lapply(data.holder, function(x) c(x$Timestamp, x$Value)))
+    colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
+    if(tag==1) all.data <- data.holder
+    if(tag>1) {
+      all.data <- cbind(all.data, data.holder[,2])
+      colnames(all.data)[ncol(all.data)] <- make.names(pi.tags[tag,1])
+    }
+  }
+  # Fix tags from UTC to MT
+  date.time <- all.data[,1]
+  new.date.time <- .POSIXct(rep(NA, length(date.time)))
+  for(i in 1:length(date.time)) {
+    time.obj <- paste(strsplit(date.time[i], "T")[[1]][1], 
+                      strsplit(strsplit(date.time[i], "T")[[1]][2], "Z")[[1]][1])
+    time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+    new.date.time[i] <- time.obj
+  }
+  all.data <- data.frame(all.data)
+  all.data[,1] <- new.date.time
+  colnames(all.data)[1] <- "date.time"
+  wq.data <- all.data
+  save(wq.data, file="data/paa/compiled/wq.RData")
+}
+
+##### Merge & Calculate HRT #####
+if("paa-wq-ecoli.RData" %in% list.files(path="data/paa/compiled")) {
+  load("data/paa/compiled/paa-wq-ecoli.RData")
+} else {
+  paa.wq <- cbind(paa[which(paa$date.time %in% wq.data$date.time),], 
+                  wq.data[which(wq.data$date.time %in% paa$date.time),-1])
+  # Calculate HRT
+  hrt <- matrix(data=NA, nrow=nrow(paa.wq), ncol = 1)
+  hrt[grep("NPAA1M", paa.wq$COMMON_NAME)] <- 57.866*as.numeric(as.vector(paa.wq[c(grep("NPAA1M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+  hrt[grep("NPAA10M", paa.wq$COMMON_NAME)] <- 970.18*as.numeric(as.vector(paa.wq[c(grep("NPAA10M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+  hrt[grep("NPAA20M", paa.wq$COMMON_NAME)] <- 1825.3*as.numeric(as.vector(paa.wq[c(grep("NPAA20M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+  hrt[grep("NPAA30M", paa.wq$COMMON_NAME)] <- 2690.3*as.numeric(as.vector(paa.wq[c(grep("NPAA30M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+  paa.wq <- cbind(paa.wq, as.data.frame(hrt, stringsAsFactors = FALSE))
+  colnames(paa.wq)[ncol(paa.wq)] <- "HRT (min)"
+  
+  ##### PAA & WQ & Ecoli #####
+  paa.wq.ecoli <- cbind(paa.wq, rep(NA, nrow(paa.wq)))
+  paa.wq.ecoli[which(paa.wq.ecoli$date.time %in% ecoli$date.time), ncol(paa.wq.ecoli)] <- 
+    ecoli[which(ecoli$date.time %in% paa.wq.ecoli$date.time), "log.removal"]
+  colnames(paa.wq.ecoli)[ncol(paa.wq.ecoli)] <- "Log Removal"
+  save(paa.wq.ecoli, file="data/paa/compiled/paa-wq-ecoli.RData")
+}
+
+# Import CarboVis data
+carbovis_ls <- list()
+carbovis <- data.frame(readr::read_csv("data/paa/NNE Carbovis Data 2019.csv"), stringsAsFactors = FALSE)
+cols <- as.numeric(which(sapply(carbovis[1,], is.numeric)))
+cols <- cols[seq(1,length(cols),by=2)]
+for(i in cols) {
+  new.data <- cbind(as.character(carbovis[,(i-2)]), #date
+                    carbovis[,i])
+  colnames(new.data) <- c("Datetime", carbovis[1,(i+2)])
+  carbovis_ls[[length(carbovis_ls)+1]] <- new.data
+}
+carbovis <- do.call("cbind", carbovis_ls)
+carbovis <- carbovis[-which(duplicated(carbovis[,1])),]
+library(data.table)
+matching.dates <- which(as.POSIXct(carbovis[,1], format="%m/%d/%Y %H:%M") %between% range(paa.wq.ecoli[,1]))
+matching.dates <- c(matching.dates[1]-1, matching.dates, last(matching.dates)+1)
+carbovis <- carbovis[matching.dates,]
+carbovis <- xts(carbovis[,seq(2,ncol(carbovis), by=2)], order.by=as.POSIXct(carbovis[,1], format="%m/%d/%Y %H:%M"))
+paa.wq.ecoli <- na.locf(merge(xts(paa.wq.ecoli[,2:ncol(paa.wq.ecoli)], order.by=paa.wq.ecoli[,1]), carbovis))[paa.wq.ecoli[,1]]
+```
+
+
+
+## Kinetics
+```{r Function to plot PAA and C(t) curve, echo=FALSE}
+plotCt <- function(experiment) {
+  experiment <- experiment[,as.numeric(sapply(c("NUMERIC_RESULT", "HRT..min.", "PAA.Setpoint"), function(x) which(x==colnames(experiment))))]
+  experiment <- apply(experiment,2,as.numeric)
+# Read in a single sampling event with PAA, HRT, and initial dose
+  if(experiment[3,"NUMERIC_RESULT"] == 0) {
+    C1=experiment[1,"NUMERIC_RESULT"]
+    t1=experiment[1,"HRT..min."]
+    C2=experiment[2,"NUMERIC_RESULT"]
+    t2=experiment[2,"HRT..min."]
+    C <- c(C1, C2)
+    t <- c(t1, t2)
+            
+  } else if (experiment[4,"NUMERIC_RESULT"] == 0) {
+    C1=experiment[1,"NUMERIC_RESULT"]
+    t1=experiment[1,"HRT..min."]
+    C2=experiment[2,"NUMERIC_RESULT"]
+    t2=experiment[2,"HRT..min."]
+    C3=experiment[3,"NUMERIC_RESULT"]
+    t3=experiment[3,"HRT..min."]
+    C <- c(C1, C2, C3)
+    t <- c(t1, t2, t3)
+            
+  } else if(experiment[4,"NUMERIC_RESULT"] > 0) {
+    C1=experiment[1,"NUMERIC_RESULT"]
+    t1=experiment[1,"HRT..min."]
+    C2=experiment[2,"NUMERIC_RESULT"]
+    t2=experiment[2,"HRT..min."]
+    C3=experiment[3,"NUMERIC_RESULT"]
+    t3=experiment[3,"HRT..min."]
+    C4=experiment[4,"NUMERIC_RESULT"]
+    t4=experiment[4,"HRT..min."]
+    C <- c(C1,C2,C3,C4)
+    t <- c(t1,t2,t3,t4)
+  }
+  
+  exponential.model <- lm(log(C) ~ t)
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(as.numeric(exponential.model$coefficients[1]))
+  D <- as.numeric(as.vector(experiment[,"PAA.Setpoint"]))[1] - C0
+  Ct <- (C0-C0*exp(-k*max(experiment[,"HRT..min."])))/k # Ct under single exponential curve
+  
+  plot(y=C,
+       x=t,
+       ylim=c(0,1.44),
+       xlim=c(0,101),
+       pch=20,
+       xlab="",
+       ylab="")
+  new.data <- data.frame(x=seq(min(t), max(experiment[,"HRT..min."]), length.out=100))
+  new.data <- cbind(new.data, exp(-k*new.data+log(C0)))
+  points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
+  polygon(x=c(0,new.data[,1],max(new.data[,1]),0), y=c(C0,new.data[,2],0,0), col="orange", border=NA)
+  points(y=C,x=t,pch=20)
+  mtext(paste("D =", round(D,2)), side=3,line=-1.1,adj = 0.99)
+  mtext(paste("k=", round(k,2)), side=3,line=-2.1,adj = 0.99)
+  mtext(paste("CT=", round(Ct,1)), side=3,line=-3.1,adj = 0.99)
+  mtext(paste("Trial",i), side=3, line=.25, font=2)
+  mtext("PAA (mg/L)", side=2,line=2.5)
+  mtext("HRT (min)",side=1,line=2.25)
+  
+  return(list(as.numeric(Ct),
+              as.numeric(D),
+              as.numeric(k)))
+}
+```
+
+
+```{r Plot PAA and C(t) curve, echo=FALSE, fig.height=2, fig.width=7}
+mat <- matrix(seq(1,3,by=1), nrow=1, ncol=3, byrow=TRUE)
+layout(mat=mat, widths=rep(1/ncol(mat),ncol(mat)), heights=rep(1/nrow(mat),nrow(mat)))
+par(family="serif", cex=0.9, mar=c(4.25,4.25,1.25,.5))
+data <- paa.wq.ecoli
+Ct.all <- list()
+for(i in unique(data$sample.count)) {
+  experiment <- data[which(data$sample.count == i),]
+  Ct.all[[length(Ct.all)+1]] <- plotCt(experiment)
+  names(Ct.all[[length(Ct.all)]]) <- c("CT", "D", "k")
+}
+```
+
+```{r Boxplot of D}
+boxplot(unlist(lapply(Ct.all, function(x) x$D)))
+points(matrix(c(rep(1,length(Ct.all)),unlist(lapply(Ct.all, function(x) x$D))), ncol=2), pch=20)
+```
+
+```{r Boxplot of k}
+boxplot(unlist(lapply(Ct.all, function(x) x$k)))
+points(matrix(c(rep(1,length(Ct.all)),unlist(lapply(Ct.all, function(x) x$k))), ncol=2), pch=20)
+```
+```{r Boxplot of CT}
+boxplot(unlist(lapply(Ct.all, function(x) x$CT)))
+points(matrix(c(rep(1,length(Ct.all)),unlist(lapply(Ct.all, function(x) x$CT))), ncol=2), pch=20)
+```
+
+
+```{r Setup CT NN data, include=FALSE}
+# Use paa.wq.ecoli to predict CT
+training.vars <- c("min.of.day", "DIS.North.Flow", "PAA.Flow", "DIS.PAA.N.Upstream.Residual", "NSEC.Aerobic.SRT", "NSEC.Effluent.NH3", "NSEC.Effluent.NO3","NSEC.Effluent.NO2", "NSEC.Effluent.OP", "NSEC.Effluent.TSS", "NSEC.Effluent.Flow", "CODto", "TSS", "UVT", "CODds", "SACto")
+training.data <- paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),] # first observation of each sampling event
+training.data <- training.data[,sapply(training.vars, function(x) which(colnames(training.data)==x))] # Exclude lab samples, only online data
+training.data <- cbind(unlist(lapply(Ct.all, function(x) x[[1]])), 
+                       unlist(lapply(Ct.all, function(x) x[[2]])),
+                       unlist(lapply(Ct.all, function(x) x[[3]])),
+                       training.data)
+colnames(training.data)[1:3] <- c("CT", "D", "k")
+training.data <- apply(training.data, 2, as.numeric)
+# rownames(training.data) <- as.character(paa.wq.ecoli[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1]),1])
+rownames(training.data) <- index(paa.wq.ecoli)[sapply(unique(paa.wq.ecoli$sample.count), function(x) which(paa.wq.ecoli$sample.count==x)[1])]
+
+# REMOVE TRIAL 24: BAD DATA, 1-MIN SAMPLE LESS THAN REST#
+training.data <- training.data[-24,]
+save(training.data, file="results/paa/ct-training-data.RData")
+```
+
+```{r Plot training data, echo=FALSE}
+# pairs(training.data)
+boxplot(scale(training.data), las=2)
+```
+
+
+## Step 2: Predict CT
+Using artifical neural networks (ANN), CT can be predicted from minute of the day, disinfection basin influent flow, PAA flow, PAA residual from a Chemscan instrument downstream of the 1-minute sample location, aerobic SRT of the secondary process, and a variety of nutrient and water quality measurements taken at the effluent of the secondary process (ammonia, nitrate, nitrite, phosphorus, TSS, COD, UVT, SAC). A rolling window approach is used for testing in which a training dataset of *n* observations is used to fit a 1-layer ANN with 5 nodes. Observation $n+1$ is compared to the ANN prediction at time *n*+1 using root mean squared error (RMSE). The window then moves forward to include observations 2--(*n*+1) and test observation *n*+2. The window moves forward, is re-trained, and tested on a new obseration for the entire dataset (unitl all 65 sampling events have been used for training or testing).
+
+```{r CT NN, echo=FALSE}
+load("results/paa/ct-training-data.RData")
+training.data <- training.data[-13,-c(2,3)]
+predict.column <- which(colnames(training.data)=="CT")
+fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
+                     paste(colnames(training.data)[-c(predict.column)], collapse= "+")))
+
+# Loop shows 5 hidden layers acheive smallest RMSE
+# rmse.results <- foreach(nodes=seq(1,100,by=1), .combine=c) %do% {
+nodes <- c(17,10)
+# par(mfrow=c(1,2), family="serif", mar=c(4,4,2,.5)+.1)
+# for(n in c(50,90)) {
+# Let's try using n% to train the model, and (100-n)% to test
+n <- 90 # percent
+
+# Scale variables first
+# Z-score standardization
+library(doParallel)
+results <- foreach(i=1:ceiling(nrow(training.data)*((100-n)/100)), .combine=rbind) %do% {
+  training.mean <- apply(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], 2, mean)
+  training.sd <- apply(scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),], scale=FALSE), 2, sd)
+  training.NN <- scale(training.data[i:(floor(nrow(training.data)*n/100)+i-1),])
+  testing.NN <- sapply(1:ncol(training.data), function(x)
+    (training.data[(floor(nrow(training.data)*n/100)+i),x]-training.mean[x])/training.sd[x]
+  )
+  NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = TRUE)
+  predict.NN <-  neuralnet::compute(NN, t(data.frame(testing.NN[-predict.column])))
+  predict.NN <- predict.NN$net.result*training.sd[predict.column]+training.mean[predict.column]
+  return(matrix(data=c(training.data[(floor(nrow(training.data)*n/100)+i),predict.column], predict.NN), nrow=1))
+}
+
+plot(results, ylim=c(min(results), max(results)), xlim=c(min(results), max(results)), pch=20, xlab="Actual", ylab="Predicted", main=paste("Trained on:", floor(nrow(training.data)*n/100), "/",nrow(training.data)))
+abline(a=0, b=1)
+# text(x=max(results),y=1+min(results), labels=paste("RMSE =",round(rmse.calculator(results[,2], results[,1]),3)), pos=2)
+# }
+
 
 ```
+

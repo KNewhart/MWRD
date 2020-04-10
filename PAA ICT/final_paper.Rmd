@@ -177,7 +177,7 @@ if("wq.RData" %in% list.files(path="./data/compiled")) {
   # Login information
   useKerberos <- TRUE
   username <- "knewhart"
-  password <- "Lunabear2@"
+  password <- ""
   validateSSL <- TRUE
   debug <- TRUE
   piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
@@ -424,7 +424,7 @@ text(x=max(results),y=1+min(results), labels=paste("RMSE =",round(rmse.calculato
 library(piwebapi)
 useKerberos <- TRUE
 username <- "knewhart"
-password <- "Lunabear2@"
+password <- ""
 validateSSL <- TRUE
 debug <- TRUE
 piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)

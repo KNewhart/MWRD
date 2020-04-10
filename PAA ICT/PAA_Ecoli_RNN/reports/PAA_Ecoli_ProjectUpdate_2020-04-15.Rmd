@@ -1,13 +1,11 @@
 ---
 title: "Predisinfection E. coli Modeling"
 subtitle: "Analysis and Prediction"
-date: "2020-03-18"
+date: "2020-04-15"
 output:
   word_document:
      reference_docx: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/Ecoli_RNN/src/word_template.docx
-#bibliography: src/bibliography.bib
-#link-citations: yes
-#csl: src/science-of-the-total-environment.csl
+bibliography: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/Ecoli_RNN/src/bibliography.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -90,7 +88,18 @@ tab <-0;fig<-0
   * Online analyzers are costly to purchase and maintain, reactive
 
 ## Machine learning approaches to disinfection modeling
-* Some literature exists, but with 5-10 years of data and never implemented in real-time
+* Literature review of PAA
+  * ANN modeling of chlorine dosing and residuals has been widely explored for drinking water (@serodes2001) and wastewater treatment (@gibbs2006). 
+* Literature review of *E. coli*
+  * E.coli disinfection by chlorine and PAA follow an *n*th order kinetic reaction... 
+  * Most results are for total coliforms, not *E. coli*:
+  * @lin2012 used an ANN to predict effluent total coliforms in a bench-scale UV disinfection system (combined with a linear model of UV dose and log inactivation) to control disinfection. However, the authors defend the strength of their model by the correlation coeffient (R^2^) between measured and predicted values rather than the magnitude of the error (e.g., root-mean-squared-error or RMSE). In practice, the error surrounding two of the three goal effluent total coliform counts was large (208-278 and 583-778 measured effluent total coliform counts, for the 200 and 1000 CFU/100 mL goals respectively). The third goal to achieve nondetect concentrations achieved a range of 0-25 CFU/100 mL).
+  * @yu2008 used ANN to control a bench-scale chlorination-dechlorination system. 5 ANN models were built from pH and ORP in the influent, chlorination reactor and dechlorination reactor.  The first model predicted the chlorine dose based on the influent quality and target effluent total coliform for feedforward control. The second model predicted effluent total coliform from the actual chlorine dose (5 minute delay from dose change predicted by first model) and influent quality to provide feedback control. A similar combination of dose-response models were built for dechlorination. Total coliform goals were acheived for a variety of reuse scenerios, but residual chlorine was much more difficult to achieve precise control. 
+  * @carvajal2017 investigated the realtionship between dose, time, pH, turbidity, and viral log inactivation on a bench-scale batch chlorination system for secondary treated wastewater using a Bayesian belief network (BBN). @carvagal2017 seeded water with viruses and measured log inactivation to train Bayesian multilayer perceptron (BMLP) models to predict the required CT, one for each type of virus. 
+
+
+<!-- @Lin2012: Also used high number of epochs for a very low number of samples, two layers: 8-6/5-1 -->
+  
 * Artificial neural networks (ANN) are a nonlinear modeling method that identifies patterns between input and output data by (1) using a large number of obervations, (2) mulitple nonlinear functions that combine different process variables, (3) trial-and-error to adjust the parameters of the nonlinear functions to accurately map input to output. 
 * ANN are not constructed for time-series data, i.e., correlation to previous timesteps. Recurrent neural networks (RNN) have internal memory nodes that can train based on a *sequence* of observations rather than a series of individual observations. Long short-term memory (LSTM) nodes are one example of a RNN that have been used in process data. 
 
@@ -423,7 +432,7 @@ A few data transformations were used to improve model fit:
 * lag *E. coli* by 2-days
 While *E. coli* is more highly correlated to the previous *E. coli* observation (1-day), the average time from when a sample is taken to a result is 2-days. Thus, to simulate the use of this model in "real-time" a lag of 2 observations was used. 
 
-A common problem in machine learning is *overfitting*. Overfitting occurs when the model-building method continues to adjust model parameters beyond the general trends and instead fits to error within the training dataset. This causes a deceptively high training R^2^, as the testing root-mean-squared-error (RMSE) is also very high. RMSE can be interpreted as the standard deviation of the unexplained variance and is used to measure testing error here. A good model for real-time prediction minimizes RMSE. Thus, here we examined different number of training periods, from 100-2000. Figure `r fig<-fig+1;fig.s.retrain<-fig;fig.s.retrain` illustrates how R^2^ is not a good predictor of test RMSE. Currently, *E. coli* is 'predicted' by assuming the last known value approximates current conditions. In modeling, this is refered to as *persistence* and is represented as the red, dashed line in Figure `r fig.s.retrain`. Because the model error is less than persistence for 100-750 epochs, and minimized for 100-500 epochs, the ideal number of training epochs being between 100-500.
+A common problem in machine learning is *overfitting*. Overfitting occurs when the model-building method continues to adjust model parameters beyond the general trends and instead fits to error within the training dataset. This causes a deceptively high training R^2^, as the testing RMSE is also very high. RMSE can be interpreted as the standard deviation of the unexplained variance and is used to measure testing error here. A good model for real-time prediction minimizes RMSE. Thus, here we examined different number of training periods, from 100-2000. Figure `r fig<-fig+1;fig.s.retrain<-fig;fig.s.retrain` illustrates how R^2^ is not a good predictor of test RMSE. Currently, *E. coli* is 'predicted' by assuming the last known value approximates current conditions. In modeling, this is refered to as *persistence* and is represented as the red, dashed line in Figure `r fig.s.retrain`. Because the model error is less than persistence for 100-750 epochs, and minimized for 100-500 epochs, the ideal number of training epochs being between 100-500.
 
 **Figure `r fig.s.retrain`.** South predisinfection *E. coli* is predicted using a simple RNN, using a various number of epoch (e.g., "re-train" parameter estimations). The red line is the *persistence* RMSE, which is the RMSE calculated from the previously known *E. coli* value. Compared to the model predicted RMSE (black circles), 100-500 training epochs improve upon the current method of estimating *E. coli* (being less than the persistance prediction). 
 
@@ -670,3 +679,15 @@ mtext(side=2, line=2.25, "E. coli (CFU/mL)")
 #   
 # plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="South Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
 ```
+
+
+### Log removal
+```{r}
+# Plot -log(Nt/N0), predicted (persistence using excel for constant parameters and neural network using r for real time parameters) and actual
+```
+
+### Sensitivity analysis
+```{r}
+# Plot input variable vs output variable for variety of conditions
+```
+
