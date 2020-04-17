@@ -105,7 +105,7 @@ rolling.rnn <- function(all.data, predict.col, train.obs,
         
         # Setup testing data
         test.x <- scale(all.data, center=train.mean, scale=train.sd)[test.obs,-predict.col]
-        test.x <- test.x[,which(colnames(test.x) %in% colnames(train.x[,,1]))]
+        # test.x <- test.x[,which(colnames(test.x) %in% colnames(train.x[,,1]))]
         # test.y <- scale(all.data, center=train.mean, scale=train.sd)[test.obs,predict.col]
         
         # Predict E coli
