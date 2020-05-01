@@ -1,0 +1,137 @@
+---
+title: "Untitled"
+author: "KN"
+date: "4/30/2020"
+output: html_document
+---
+
+```{r PAA data, include=FALSE}
+# setwd("../Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
+all.data.ls <- list()
+source("src/import2018.R")
+all.data.ls[[1]] <- import2018()
+source("src/import2019.R")
+all.data.ls[[2]] <- import2019()
+
+# 1. Import PAA sampling data
+# 2. Import Carbovis data (average 5 min)
+# 3. Import process data
+# 4. Calculate HRT
+```
+
+```{r}
+lapply(all.data.ls, colnames)
+```
+```{r Carbovis data}
+###### North Carbovis Data #####
+vis.data <- read.csv("data/paa/NNE Carbovis Data 2018-2019.csv", stringsAsFactors = FALSE)
+vis.data.ls <- list()
+for(i in seq(1,ncol(vis.data),by=8)) {
+  valid <- vis.data[,i+1]
+  valid <- which(valid=="Valid")
+  data <- vis.data[valid,c(i,i+6,i+4)] # Using voltage, not calibrated data
+  
+  dates <- as.POSIXct(data[,1], format = "%m/%d/%Y %H:%M")
+  keep <- intersect(which(!is.na(dates)), which(!duplicated(dates)))
+  result <- xts(data[keep,2], order.by = dates[keep])
+  # result <- result[paste0(range(paa[,1]),collapse="/")]
+  colnames(result) <- data[1,3]
+  
+  vis.data.ls[[length(vis.data.ls)+1]] <- result
+}
+vis.data <- do.call("cbind",vis.data.ls)
+```
+
+
+
+
+```{r Process data}
+# Install and load piwebapi package from Github
+    # install.packages("devtools")
+    # library(devtools)
+    # install_github("rbechalany/PI-Web-API-Client-R")
+    library(piwebapi)
+    
+    # Login information
+    useKerberos <- TRUE
+    username <- "knewhart"
+    password <- ""
+    validateSSL <- TRUE
+    debug <- TRUE
+    piWebApiService <- piwebapi$new("https://pivision/piwebapi", useKerberos, username, password, validateSSL, debug)
+    
+    # Go from MT to UTC
+    date.time <- as.POSIXct(unlist(lapply(all.data.ls, index)), origin="1970-01-01")
+    pi.times <- matrix(NA,nrow=length(date.time),ncol=1)
+    for(i in 1:length(date.time)) {
+      time.obj <- date.time[i]
+      time.obj <- lubridate::with_tz(time.obj, tzone="UTC")
+      pi.times[i,1] <- paste0(as.character(format(time.obj,"%Y-%m-%d")),"T",
+                              as.character(format(time.obj,"%H:%M:%S")),"Z")
+    }
+    
+    # Declare with variables/pi tags to pull
+    pi.tags <- matrix(c("DIS North Flow", "\\\\applepi\\PAA_North_Plant_Flow",
+                        "PAA Setpoint", "\\\\applepi\\PAA_N_Target_Dose",
+                        "DIS PAA N Upstream Residual", "\\\\applepi\\AI_K826",
+                        "NSEC Aerobic SRT", "\\\\applepi\\ASRT_ASRT_N",
+                        "NSEC Effluent NH3", "\\\\applepi\\AI_N501A",
+                        "NSEC Effluent NO3", "\\\\applepi\\AI_N501D",
+                        "NSEC Effluent OP", "\\\\applepi\\AI_N501F",
+                        "NSEC Effluent TSS", "\\\\applepi\\AI-K530N",
+                        "NSEC Effluent NO5", "\\\\applepi\\AI-K570N", # All zeros
+                        "NSEC Effluent Flow", "\\\\applepi\\FY-F225"), ncol=2, byrow=TRUE)
+    # Pull data
+    for(tag in 1:nrow(pi.tags)) {
+      pi.points <- piWebApiService$point$getByPath(path=as.character(pi.tags[tag,2]))
+      data.holder <- piWebApiService$data$stream$getInterpolatedAtTimes(webId = pi.points$WebId, 
+                                                                        time = c(pi.times[,1]))[[2]]
+      data.holder <- do.call("rbind", lapply(data.holder, function(x) c(x$Timestamp, x$Value)))
+      colnames(data.holder) <- c("Datetime", make.names(pi.tags[tag,1]))
+      if(tag==1) all.data <- data.holder
+      if(tag>1) {
+        all.data <- cbind(all.data, data.holder[,2])
+        colnames(all.data)[ncol(all.data)] <- make.names(pi.tags[tag,1])
+      }
+    }
+    # Fix tags from UTC to MT
+    date.time <- all.data[,1]
+    new.date.time <- .POSIXct(rep(NA, length(date.time)))
+    for(i in 1:length(date.time)) {
+      time.obj <- paste(strsplit(date.time[i], "T")[[1]][1], 
+                        strsplit(strsplit(date.time[i], "T")[[1]][2], "Z")[[1]][1])
+      time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+      new.date.time[i] <- time.obj
+    }
+    all.data <- data.frame(all.data)
+    all.data[,1] <- new.date.time
+    colnames(all.data)[1] <- "date.time"
+    wq.data <- all.data
+```
+
+
+```{r HRT}
+##### Merge & Calculate HRT #####
+  if("paa-wq-ecoli.RData" %in% list.files(path="./data/paa/compiled")) {
+    load("./data/paa/compiled/paa-wq-ecoli.RData")
+  } else {
+    paa.wq <- cbind(paa[which(paa$date.time %in% wq.data$date.time),], 
+                    wq.data[which(wq.data$date.time %in% paa$date.time),-1])
+    # Calculate HRT
+    hrt <- matrix(data=NA, nrow=nrow(paa.wq), ncol = 1)
+    hrt[grep("NPAA1M", paa.wq$COMMON_NAME)] <- 57.866*as.numeric(as.vector(paa.wq[c(grep("NPAA1M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+    hrt[grep("NPAA10M", paa.wq$COMMON_NAME)] <- 970.18*as.numeric(as.vector(paa.wq[c(grep("NPAA10M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+    hrt[grep("NPAA20M", paa.wq$COMMON_NAME)] <- 1825.3*as.numeric(as.vector(paa.wq[c(grep("NPAA20M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+    hrt[grep("NPAA30M", paa.wq$COMMON_NAME)] <- 2690.3*as.numeric(as.vector(paa.wq[c(grep("NPAA30M", paa.wq$COMMON_NAME)),"DIS.North.Flow"]))^(-0.959)
+    paa.wq <- cbind(paa.wq, as.data.frame(hrt, stringsAsFactors = FALSE))
+    colnames(paa.wq)[ncol(paa.wq)] <- "HRT (min)"
+    
+    ##### PAA & WQ & Ecoli #####
+    paa.wq.ecoli <- cbind(paa.wq, rep(NA, nrow(paa.wq)))
+    paa.wq.ecoli[which(paa.wq.ecoli$date.time %in% ecoli$date.time), ncol(paa.wq.ecoli)] <- 
+      ecoli[which(ecoli$date.time %in% paa.wq.ecoli$date.time), "log.removal"]
+    colnames(paa.wq.ecoli)[ncol(paa.wq.ecoli)] <- "Log Removal"
+    save(paa.wq.ecoli, file="./data/paa/compiled/paa-wq-ecoli.RData")
+  }
+```
+

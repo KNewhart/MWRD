@@ -9,7 +9,6 @@ bibliography: C:/Users/kbnewhart/Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/src/bib
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(fig.path="figures/", fig.align="center", fig.fullwidth=TRUE, dev = 'png', dpi=600, fig.width = 6.5, family="serif")
 
 # Change working directory to be "Ecoli_RNN", rather than location of notebook
@@ -120,7 +119,7 @@ tab <-0;fig<-0
     * Online instrumentation of upstream treatment processes
     * Daily-weekly samples of upstream treatment processes, both instantaneous grab and 24-hour flow-weighted composites
 
-```{r Import data and functions, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+```{r Import data and functions, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 library(xts)
 mergeData <- function(list.x, sort.by = 1, average = FALSE) {
   all.data <- do.call(merge, list.x)
@@ -265,7 +264,7 @@ paa.data <- all.data
 ```
 
 <!-- **Table `r tab<-tab+1;tab`.** Monitored process variables included in building nerual network model to predict PAA. -->
-```{r Table of variables, eval=FALSE, include=FALSE}
+```{r Table of variables, echo=FALSE}
 library(dplyr)
 all.data.names <- colnames(all.data) %>% gsub("[.]"," ", .) %>% gsub("  "," ", .) %>% gsub("  "," ", .)
 data <- data.frame("North Variable"=all.data.names,
@@ -274,16 +273,439 @@ data <- data.frame("North Variable"=all.data.names,
                     stringsAsFactors = FALSE)
 
 colnames(data) <- c("North Variable", "Collection Method", "Number of Observations")
+data <- data[,1:2]
 ft <- flextable(data)
 ft <- theme_kate(ft)
 ft <- align(ft, align="left", part="all")
 ft
 ```
+# Neuralnet package
+## With visual data
 
+```{r include=FALSE}
+
+if("response-results-ls-001.RData" %in% list.files("results")) {
+  load("results/response-results-ls-001.RData")
+} else {
+  
+library(doSNOW)
+library(parallel)
+library(neuralnet)
+library(foreach)
+
+all.data <- na.omit(data.frame(all.data))
+predict.col.name <- c("PAA...1.min..Sample",
+                      "PAA...1.2.Basin.Sampling")
+
+response.results.ls <- list()
+for(iteration in 1:100) {
+  
+response.results <- list()
+for(response in predict.col.name) {
+  
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  # register the cluster
+  registerDoSNOW(cluster)
+  
+  ## Prep data
+  remove.column <- which(colnames(all.data) == predict.col.name[which(!(predict.col.name %in% response))])
+  
+  results <- foreach(i = 1:nrow(all.data), .combine = rbind) %dopar% {
     
+    training.data <- all.data[-i,-remove.column]
+    testing.data <- all.data[i,-remove.column]
+    
+    predict.column <- which(colnames(training.data) == response)
+    
+    ## Scale data using min-max method
+    max <- apply(training.data, 2, max)
+    min <- apply(training.data, 2, min)
+
+    training.NN <- as.data.frame(scale(training.data, center = min, scale = max - min))
+    testing.NN <- as.data.frame(scale(testing.data, center = min, scale = max - min))
+    
+    fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
+                       paste(colnames(training.data)[-predict.column], collapse= "+")))
+    
+    nodes <- 3
+    NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+    predict.NN <-  neuralnet::compute(NN, testing.NN)
+    predict.NN <- (predict.NN$net.result * (max[predict.column] - min[predict.column])) + min[predict.column]
+  
+    return(data.frame(testing.data[,predict.column], # Actual
+                        predict.NN)) # Prediction
+  }
+  # stop cluster and remove clients
+  stopCluster(cluster)
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  # clean up a bit.
+  invisible(gc); remove(nThreads); remove(cluster); 
+  
+  response.results[[length(response.results)+1]] <- xts(results, order.by=as.POSIXct(rownames(results)))
+}
+response.results.ls[[length(response.results.ls)+1]] <- response.results
+}
+save(response.results.ls, file="./results/response-results-ls-001.RData")
+}
+```
+
+```{r}
+t <- cbind(130.5293*all.data$N..Basin.Outfall^-0.9495,
+           1477.2*all.data$N..Basin.Outfall^-.958,
+           2775*all.data$N..Basin.Outfall^-.959)
+prediction.results.ls <- list()
+for(iteration in 1:100) {
+response.results <- response.results.ls[[iteration]]  
+C1.prediction.e <- rep(NA, nrow(response.results[[1]]))
+C2.prediction.e <- rep(NA, nrow(response.results[[1]]))
+Ct.prediction.e <- rep(NA, nrow(response.results[[1]]))
+for(i in 1:nrow(response.results[[1]])) {
+  C_a <- c(as.numeric(response.results[[1]][i,1]), 
+           as.numeric(response.results[[2]][i,1]))
+  C_p <- c(as.numeric(response.results[[1]][i,2]), 
+           as.numeric(response.results[[2]][i,2]))
+  t_i <- as.numeric(t[i,])
+  
+  
+  exponential.model <- lm(log(C_a) ~ t_i[1:2])
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  Ct_a <- as.numeric(C0)/as.numeric(k)-as.numeric(C0)/as.numeric(k)*exp(-as.numeric(k)*t_i[3]) # Ct under single exponential curve
+  
+  exponential.model <- lm(log(C_p) ~ t_i[1:2])
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  Ct_p <- as.numeric(C0)/as.numeric(k)-as.numeric(C0)/as.numeric(k)*exp(-as.numeric(k)*t_i[3]) # Ct under single exponential curve
+
+  C1.prediction.e[i] <- (C_a-C_p)[1]
+  C2.prediction.e[i] <- (C_a-C_p)[2]
+  Ct.prediction.e[i] <- Ct_a-Ct_p
+  
+}
+
+prediction.results.ls[[length(prediction.results.ls)+1]] <- list(C1.prediction.e, C2.prediction.e, Ct.prediction.e)
+
+}
+
+
+```
+
+```{r Plot 2018 errors 1, echo=FALSE}
+layout(mat=matrix(data=c(1,2,3), nrow=1))
+C1.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[1]]))
+hist(C1.prediction.e, main="1-minute error", xlab="PAA (mg/L)")
+mtext(paste("RMSE =",round(mean(C1.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+C2.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[2]]))
+hist(C2.prediction.e, main="1/2 basin error", xlab="PAA (mg/L)")
+mtext(paste("RMSE =",round(mean(C2.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+Ct.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[3]]))
+hist(Ct.prediction.e, main="Ct error", xlab="PAA*t (mg/L min)")
+mtext(paste("RMSE =",round(mean(Ct.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+```
+
+
+
+
+
+
+## Without visual data
+
+```{r include=FALSE}
+
+if("response-results-ls-002.RData" %in% list.files("results")) {
+  load("results/response-results-ls-002.RData")
+} else {
+  
+library(doSNOW)
+library(parallel)
+library(neuralnet)
+library(foreach)
+
+all.data <- na.omit(data.frame(all.data))
+predict.col.name <- c("PAA...1.min..Sample",
+                      "PAA...1.2.Basin.Sampling")
+
+response.results.ls <- list()
+for(iteration in 1:100) {
+  
+response.results <- list()
+for(response in predict.col.name) {
+  
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  # register the cluster
+  registerDoSNOW(cluster)
+  
+  ## Prep data
+  remove.column <- which(colnames(all.data) == predict.col.name[which(!(predict.col.name %in% response))])
+  
+  results <- foreach(i = 1:nrow(all.data), .combine = rbind) %dopar% {
+    
+    training.data <- all.data[-i,-remove.column]
+    testing.data <- all.data[i,-remove.column]
+    
+    predict.column <- which(colnames(training.data) == response)
+    
+    ## Scale data using min-max method
+    max <- apply(training.data, 2, max)
+    min <- apply(training.data, 2, min)
+
+    training.NN <- as.data.frame(scale(training.data, center = min, scale = max - min))
+    testing.NN <- as.data.frame(scale(testing.data, center = min, scale = max - min))
+    
+    # fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
+    #                    paste(colnames(training.data)[-predict.column], collapse= "+")))
+    fmla <- as.formula(paste0(colnames(training.data)[predict.column],"~",
+                   paste(colnames(training.data)[-c(predict.column, 8:12)], collapse= "+")))
+    
+    nodes <- 3
+    NN <- neuralnet::neuralnet(fmla, training.NN, hidden = nodes, linear.output = FALSE)
+    predict.NN <-  neuralnet::compute(NN, testing.NN)
+    predict.NN <- (predict.NN$net.result * (max[predict.column] - min[predict.column])) + min[predict.column]
+  
+    return(data.frame(testing.data[,predict.column], # Actual
+                        predict.NN)) # Prediction
+  }
+  # stop cluster and remove clients
+  stopCluster(cluster)
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  # clean up a bit.
+  invisible(gc); remove(nThreads); remove(cluster); 
+  
+  response.results[[length(response.results)+1]] <- xts(results, order.by=as.POSIXct(rownames(results)))
+}
+response.results.ls[[length(response.results.ls)+1]] <- response.results
+}
+save(response.results.ls, file="./results/response-results-ls-002.RData")
+}
+```
+
+```{r}
+t <- cbind(130.5293*all.data$N..Basin.Outfall^-0.9495,
+           1477.2*all.data$N..Basin.Outfall^-.958,
+           2775*all.data$N..Basin.Outfall^-.959)
+prediction.results.ls <- list()
+for(iteration in 1:100) {
+response.results <- response.results.ls[[iteration]]  
+C1.prediction.e <- rep(NA, nrow(response.results[[1]]))
+C2.prediction.e <- rep(NA, nrow(response.results[[1]]))
+Ct.prediction.e <- rep(NA, nrow(response.results[[1]]))
+for(i in 1:nrow(response.results[[1]])) {
+  C_a <- c(as.numeric(response.results[[1]][i,1]), 
+           as.numeric(response.results[[2]][i,1]))
+  C_p <- c(as.numeric(response.results[[1]][i,2]), 
+           as.numeric(response.results[[2]][i,2]))
+  t_i <- as.numeric(t[i,])
+  
+  exponential.model <- lm(log(C_a) ~ t_i[1:2])
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  Ct_a <- as.numeric(C0)/as.numeric(k)-as.numeric(C0)/as.numeric(k)*exp(-as.numeric(k)*t_i[3]) # Ct under single exponential curve
+  
+  exponential.model <- lm(log(C_p) ~ t_i[1:2])
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  Ct_p <- as.numeric(C0)/as.numeric(k)-as.numeric(C0)/as.numeric(k)*exp(-as.numeric(k)*t_i[3]) # Ct under single exponential curve
+
+  C1.prediction.e[i] <- (C_a-C_p)[1]
+  C2.prediction.e[i] <- (C_a-C_p)[2]
+  Ct.prediction.e[i] <- Ct_a-Ct_p
+  
+}
+
+prediction.results.ls[[length(prediction.results.ls)+1]] <- list(C1.prediction.e, C2.prediction.e, Ct.prediction.e)
+
+}
+
+
+```
+
+```{r Plot 2018 errors, echo=FALSE}
+layout(mat=matrix(data=c(1,2,3), nrow=1))
+C1.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[1]]))
+hist(C1.prediction.e, main="1-minute error", xlab="PAA (mg/L)")
+mtext(paste("RMSE =",round(mean(C1.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+C2.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[2]]))
+hist(C2.prediction.e, main="1/2 basin error", xlab="PAA (mg/L)")
+mtext(paste("RMSE =",round(mean(C2.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+Ct.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[3]]))
+hist(Ct.prediction.e, main="Ct error", xlab="PAA*t (mg/L min)")
+mtext(paste("RMSE =",round(mean(Ct.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+```
+
+
+
+
+# Keras 
+```{r include=FALSE}
+
+if("response-results-ls-003.RData" %in% list.files("results")) {
+  load("results/response-results-ls-003.RData")
+} else {
+  
+library(doSNOW)
+library(parallel)
+library(neuralnet)
+library(foreach)
+library(keras)
+library(dplyr)
+  
+all.data <- na.omit(data.frame(all.data))
+predict.col.name <- c("PAA...1.min..Sample",
+                      "PAA...1.2.Basin.Sampling")
+
+response.results.ls <- list()
+iteration <- 1
+response <- predict.col.name[1]
+i <- 1
+
+for(iteration in 1:100) {
+  
+response.results <- list()
+for(response in predict.col.name) {
+  
+  # detect threads with parallel()
+  nThreads<- detectCores(logical = TRUE)
+  # Create doSNOW compute cluster
+  cluster = makeCluster(nThreads, type = "SOCK")
+  # register the cluster
+  registerDoSNOW(cluster)
+  
+  ## Prep data
+  remove.column <- which(colnames(all.data) == predict.col.name[which(!(predict.col.name %in% response))])
+  
+  results <- foreach(i = 1:nrow(all.data), .combine = rbind, .packages = c("dplyr", "keras")) %dopar% {
+
+    training.data <- all.data[-i,-remove.column]
+    testing.data <- all.data[i,-remove.column]
+    
+    predict.column <- which(colnames(training.data) == response)
+    
+    ## Scale data using min-max method
+    max <- apply(training.data, 2, max)
+    min <- apply(training.data, 2, min)
+
+    training.NN <- as.data.frame(scale(training.data, center = min, scale = max - min))
+    testing.NN <- as.data.frame(scale(testing.data, center = min, scale = max - min))
+    
+    nodes <- 3
+    model <- keras_model_sequential() %>%
+          layer_dense(units=nodes, 
+                     input_shape=ncol(training.data)-1, 
+                     activation = "softsign")
+    layer_dense(object=model, units = 1)
+    model %>% compile(
+          optimizer = optimizer_rmsprop(),
+          loss = "mean_squared_error"
+        )
+    history <- model %>% fit(
+            x=data.matrix(training.NN[,-predict.column]),
+            y=data.matrix(training.NN[,predict.column]),
+            shuffle=TRUE,
+            epochs = 100,
+            verbose = 0
+          )
+    predict.NN <- model %>% predict(
+          x=data.matrix(testing.NN[,-predict.column])
+        )
+    predict.NN <- (predict.NN * (max[predict.column] - min[predict.column])) + min[predict.column]
+  
+    return(data.frame(testing.data[,predict.column], # Actual
+                        predict.NN)) # Prediction
+  }
+  # stop cluster and remove clients
+  stopCluster(cluster)
+  # insert serial backend, otherwise error in repetetive tasks
+  registerDoSEQ()
+  # clean up a bit.
+  invisible(gc); remove(nThreads); remove(cluster); 
+  
+  response.results[[length(response.results)+1]] <- results
+}
+response.results.ls[[length(response.results.ls)+1]] <- response.results
+}
+save(response.results.ls, file="./results/response-results-ls-003.RData")
+}
+```
+
+
+```{r}
+t <- cbind(130.5293*all.data$N..Basin.Outfall^-0.9495,
+           1477.2*all.data$N..Basin.Outfall^-.958,
+           2775*all.data$N..Basin.Outfall^-.959)
+# Convert to xts?
+# xts(results, order.by=as.POSIXct(rownames(results)))
+prediction.results.ls <- list()
+for(iteration in 1:length(response.results.ls)) {
+response.results <- response.results.ls[[iteration]]  
+C1.prediction.e <- rep(NA, nrow(response.results[[1]]))
+C2.prediction.e <- rep(NA, nrow(response.results[[1]]))
+Ct.prediction.e <- rep(NA, nrow(response.results[[1]]))
+for(i in 1:nrow(response.results[[1]])) {
+  C_a <- c(as.numeric(response.results[[1]][i,1]), 
+           as.numeric(response.results[[2]][i,1]))
+  C_p <- c(as.numeric(response.results[[1]][i,2]), 
+           as.numeric(response.results[[2]][i,2]))
+  t_i <- as.numeric(t[i,])
+  
+  exponential.model <- lm(log(C_a) ~ t_i[1:2])
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  Ct_a <- as.numeric(C0)/as.numeric(k)-as.numeric(C0)/as.numeric(k)*exp(-as.numeric(k)*t_i[3]) # Ct under single exponential curve
+  
+  exponential.model <- lm(log(C_p) ~ t_i[1:2])
+  k <- -1*exponential.model$coefficients[2]
+  C0 <- exp(exponential.model$coefficients[1])
+  Ct_p <- as.numeric(C0)/as.numeric(k)-as.numeric(C0)/as.numeric(k)*exp(-as.numeric(k)*t_i[3]) # Ct under single exponential curve
+
+  C1.prediction.e[i] <- (C_a-C_p)[1]
+  C2.prediction.e[i] <- (C_a-C_p)[2]
+  Ct.prediction.e[i] <- Ct_a-Ct_p
+  
+}
+
+prediction.results.ls[[length(prediction.results.ls)+1]] <- list(C1.prediction.e, C2.prediction.e, Ct.prediction.e)
+
+}
+
+
+```
+
+```{r, echo=FALSE}
+layout(mat=matrix(data=c(1,2,3), nrow=1))
+C1.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[1]]))
+hist(C1.prediction.e, main="1-minute error", xlab="PAA (mg/L)")
+mtext(paste("RMSE =",round(mean(C1.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+C2.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[2]]))
+hist(C2.prediction.e, main="1/2 basin error", xlab="PAA (mg/L)")
+mtext(paste("RMSE =",round(mean(C2.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+Ct.prediction.e <- do.call("c", lapply(prediction.results.ls, function(x) x[[3]]))
+hist(Ct.prediction.e, main="Ct error", xlab="PAA*t (mg/L min)")
+mtext(paste("RMSE =",round(mean(Ct.prediction.e^2)^0.5,2)), side=3,cex = 0.7, line=-0.5)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### *E. coli* model input data
 
-```{r Import data, include=FALSE}
+```{r Import data, eval=FALSE, include=FALSE}
 source("src/compile-data.R")
 north.data <- compile.data("data/north/average")
 south.data <- compile.data("data/south/average")
@@ -292,7 +714,7 @@ Data from the North and South that are used to predict *E. coli* are summaried b
 
 **Table `r tab.n.var`.** Variables monitored in the North to predict E. coli performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the E.coli sample
 
-```{r Table north variables, warning=FALSE}
+```{r Table north variables, eval=FALSE, include=FALSE}
 north.variables <- sapply(strsplit(unlist(strsplit(colnames(north.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
 north.variables <- sapply(north.variables, function(x) {
   i <- 1
@@ -329,7 +751,7 @@ ft
 
 **Figure `r fig.n.ecoli`.** North predisinfection *E. coli* for training (before purple line) and testing (after purple line) period. A log~10~-transform approximates normally distributed training and testing data. 
 
-```{r}
+```{r, eval=FALSE, include=FALSE}
 # layout.matrix <- matrix(c(1,2,3,3,4,4), nrow=3, byrow=TRUE)
 # layout(mat=layout.matrix)
 layout.matrix <- matrix(c(1,2,3,4), ncol=2, byrow=TRUE)
@@ -357,7 +779,7 @@ mtext("LOG10 Predis E.coli", side=3, line=0.5, font=2)
 
 **Table `r tab.s.var`.** Variables monitored in the South to predict predisinfection *E. coli* performance. Number of observations is calculated by the number of variables that have a value collected within 24-hours prior to the *E. coli* sample
 
-```{r Table sorth variables, warning=FALSE}
+```{r Table sorth variables, eval=FALSE, include=FALSE}
 south.variables <- sapply(strsplit(unlist(strsplit(colnames(south.data), "_FC24")), "_G"), function(x) gsub("_"," ",gsub("[.]"," ", x)))
 south.variables <- sapply(south.variables, function(x) {
   i <- 1
@@ -392,7 +814,7 @@ ft
 
 **Figure `r fig.s.ecoli`.** South predisinfection *E. coli* for training (before purple line) and testing (after purple line) period. A log~10~-transform approximates normally distributed training and testing data. 
 
-```{r}
+```{r, eval=FALSE, include=FALSE}
 # layout.matrix <- matrix(c(1,2,3,3,4,4), nrow=3, byrow=TRUE)
 # layout(mat=layout.matrix)
 layout.matrix <- matrix(c(1,2,3,4), ncol=2, byrow=TRUE)
@@ -438,7 +860,7 @@ A common problem in machine learning is *overfitting*. Overfitting occurs when t
 
 **Figure `r fig.s.retrain`.** South predisinfection *E. coli* is predicted using a simple RNN, using a various number of epoch (e.g., "re-train" parameter estimations). The red line is the *persistence* RMSE, which is the RMSE calculated from the previously known *E. coli* value. Compared to the model predicted RMSE (black circles), 100-500 training epochs improve upon the current method of estimating *E. coli* (being less than the persistance prediction). 
 
-```{r South Predisinfection E.coli model fit, echo=FALSE}
+```{r South Predisinfection E.coli model fit, eval=FALSE, include=FALSE}
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
 test.average <- obj;rm(obj)
 # Compare results:
@@ -499,7 +921,7 @@ mtext("South predisinfection E. coli: averaged, log-transformed, lagged", side=3
 ## Narrow boxplot ranges by increasing number of model iterations from 10->100
 ```
 
-```{r North Predisinfection E.coli model fit, echo=FALSE}
+```{r North Predisinfection E.coli model fit, eval=FALSE, include=FALSE}
 # ADD WHEN innov-R server is complete with north analysis
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag-north.RData"))
 test.average <- obj;rm(obj)
@@ -565,7 +987,7 @@ mtext("North predisinfection E. coli: averaged, log-transformed, lagged", side=3
 
 In Figure `r fig<-fig+1;fig.s.best<-fig;fig.s.best`, the best performing model predictions (lowest test RMSE) used are plotted alongside the actual *E. coli* for the entire testing period. For the majority of the testing period, the errors are relatively low, exept for an event on February 25, 2020. 
 
-```{r South Predisinfection E.coli model performance, echo=FALSE}
+```{r South Predisinfection E.coli model performance, eval=FALSE, include=FALSE}
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag.RData"))
 test.average <- obj;rm(obj)
 l <- lapply(test.average, function(results.list) {
@@ -603,7 +1025,7 @@ mtext(side=2, line=2.25, "E. coli (CFU/mL)")
 # plot(x=10^results$Actual, y=10^results$Prediction, pch=20, main="South Predisinfection E.coli", xlab="Actual", ylab="Predicted");abline(a=0,b=1)
 ```
 
-```{r North Predisinfection E.coli model performance, echo=FALSE}
+```{r North Predisinfection E.coli model performance, eval=FALSE, include=FALSE}
 load(file=file.path(wd.path,"results","Over-under fit","average-log-lag-north.RData"))
 test.average <- obj;rm(obj)
 l <- lapply(test.average, function(results.list) {
