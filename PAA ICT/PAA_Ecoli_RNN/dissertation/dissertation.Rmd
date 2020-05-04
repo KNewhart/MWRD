@@ -21,6 +21,7 @@ vis.data <- importCarbovis() #? Unknown timezone
 
 # 3. Import process data (online, instantaneous interpolated values)
 process.data.ls <- importProcess(times=do.call("c", lapply(paa.data.ls, index)))
+process.data.ls <- lapply(process.data.ls, function(x) na.locf(x, na.rm=FALSE))
 
 # 4. Merge data
 

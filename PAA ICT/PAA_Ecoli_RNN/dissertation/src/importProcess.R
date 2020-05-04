@@ -31,8 +31,8 @@ importProcess <- function(times) {
   }
   
   library(foreach)
-  # process.data.ls <- foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi")) %dopar% {
-  process.data.ls <- foreach(p=1:2,.packages = c("xts", "lubridate", "piwebapi")) %dopar% {
+  process.data.ls <- foreach(p=1:length(tag.names),.packages = c("xts", "lubridate", "piwebapi"), .export=c("piPull")) %dopar% {
+  # process.data.ls <- foreach(p=1:2,.packages = c("xts", "lubridate", "piwebapi"), .export=c("piPull")) %dopar% {
     file <- rep(NA, length(times))
     file.avg <- rep(NA, length(times))
     file.avg.24 <- rep(NA, length(times))
@@ -45,8 +45,8 @@ importProcess <- function(times) {
     # Testing: 24h avg for all parameters
     d.24 <- lubridate::dhours(24)
     
-    # for(t in 1:length(times)) {
-    for(t in 1:3) {
+    for(t in 1:length(times)) {
+    # for(t in 1:3) {
       print(paste("Starting timestamp", t))
       start <- as.POSIXct(times[t]) - as.numeric(d)
       start.24 <- as.POSIXct(times[t]) - as.numeric(d.24)
@@ -101,13 +101,20 @@ importProcess <- function(times) {
   }
   
   for(i in 1:length(process.data.ls)) {
-    # lapply(process.data.ls, function(x) x[i]) # returns ith object in each list
     for(j in 1:length(process.data.ls[[i]])) {
       colnames(process.data.ls[[i]][[j]])[2] <- tag.names[i]
     }
   }
   
-  return(process.data.ls)
+  process.data.ls.1 <- do.call("cbind", lapply(process.data.ls, function(x) x[[1]]))
+  process.data.ls.1 <- process.data.ls.1[,which(! duplicated(colnames(process.data.ls.1)))]
+  process.data.ls.2 <- do.call("cbind", lapply(process.data.ls, function(x) x[[2]]))
+  process.data.ls.2 <- process.data.ls.2[,which(! duplicated(colnames(process.data.ls.2)))]
+  process.data.ls.3 <- do.call("cbind", lapply(process.data.ls, function(x) x[[3]]))
+  process.data.ls.3 <- process.data.ls.3[,which(! duplicated(colnames(process.data.ls.3)))]
+
+  
+  return(list(process.data.ls.1, process.data.ls.2, process.data.ls.3))
   # 
   # 
   # # Install and load piwebapi package from Github
