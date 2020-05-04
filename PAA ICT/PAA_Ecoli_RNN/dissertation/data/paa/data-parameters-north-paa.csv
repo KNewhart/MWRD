@@ -1,7 +1,7 @@
 Path,Average
 \\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\07-Disinfection\Dis_PAA\North_PAA\North_PAA_Analyzers\N PAA Analyzers_Upstream\K826_PAA_Analyzyer|DIS PAA N Upstream Residual - (AI_K826),15m
 \\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\07-Disinfection\Dis_PAA\North_PAA\North_PAA_Dose_Cntrl\CT_Demonstration|PAA_N_FlowRate,15m
-\\applepi\PAA_N_iCT_Dose_Actual,15m
+\\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\20-Optimization_Tools\Chemical Use\Disinfection|North Flow to Dis,15m
 \\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\02-Flows\INF-Flows|NSEC INF (FY-F25),15m
 \\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\08-Gravity_Thickeners\GVT_Effluent\GTE_to_SAR-2 Flow|FI_T631 - GTE to SAR-2 Flow,15m
 \\APPLEPI_AF\MWRD_Production\Hite Treatment Plant\08-Gravity_Thickeners\GVT_Effluent\GTE_to_SAR-4 Flow|FI_T632 - GTE to SAR-4 Flow,15m
