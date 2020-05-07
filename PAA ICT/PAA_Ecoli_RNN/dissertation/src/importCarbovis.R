@@ -6,7 +6,12 @@ importCarbovis <- function() {
     valid <- which(valid=="Valid")
     data <- vis.data[valid,c(i,i+6,i+4)] # Using voltage, not calibrated data
     
-    dates <- as.POSIXct(data[,1], format = "%m/%d/%Y %H:%M")
+
+    dates <- as.POSIXct(data[,1], format = "%m/%d/%Y %H:%M", tz="Etc/GMT+6")
+
+    dates <- lubridate::with_tz(dates, tzone="UTC")
+
+    
     keep <- intersect(which(!is.na(dates)), which(!duplicated(dates)))
     result <- xts(data[keep,2], order.by = dates[keep])
     # result <- result[paste0(range(paa[,1]),collapse="/")]

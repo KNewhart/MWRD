@@ -81,6 +81,7 @@ importProcess <- function(times) {
     # write.csv(cbind(times, file), file=paste0("data/paa/north/instant/",tag.names[p],".csv"))
     # write.csv(cbind(times, file.avg), file=paste0("data/paa/north/average/",tag.names[p],".csv"))
     # write.csv(cbind(times, file.avg.24), file=paste0("data/paa/north/average-24/",tag.names[p],".csv"))
+    
     return(list(data.frame(times, 
                            file),
                 data.frame(times, 
@@ -113,8 +114,10 @@ importProcess <- function(times) {
   process.data.ls.3 <- do.call("cbind", lapply(process.data.ls, function(x) x[[3]]))
   process.data.ls.3 <- process.data.ls.3[,which(! duplicated(colnames(process.data.ls.3)))]
 
+  process.data.ls <- list(process.data.ls.1, process.data.ls.2, process.data.ls.3)
+  process.data.ls <- lapply(process.data.ls, function(x) na.locf(x, na.rm=FALSE))
   
-  return(list(process.data.ls.1, process.data.ls.2, process.data.ls.3))
+  return(process.data.ls)
   # 
   # 
   # # Install and load piwebapi package from Github

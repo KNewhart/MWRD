@@ -28,18 +28,30 @@ piPull <- function(tag, label=NULL, save=TRUE, obj.return = FALSE, start='*-365d
   
   # Pull PI tag/WebID from "start"
   pi.data <- piWebApiService$stream$getRecorded(webId = pi.points$WebId, startTime=start, endTime=end)[[2]]
-  
-  # Transform list of observations into dataframe with time and value
-  pi.data <- do.call("rbind", lapply(pi.data, function(x) {
+  if(length(pi.data)==0) {
+    x <- piWebApiService$stream$getRecordedAtTime(webId = pi.points$WebId, time=end) # If no value exists, use last recorded value.
     time.obj <- paste(strsplit(as.character(x[1]), "T")[[1]][1], 
                       strsplit(strsplit(as.character(x[1]), "T")[[1]][2], "Z")[[1]][1])
-    time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+    time.obj <- as.POSIXct(time.obj, tz="UTC")
     value.obj <- x[[2]]
     if(length(value.obj) > 1) value.obj <- NA
-    return(data.frame("Timestamp"=time.obj, 
-                      "Value" = value.obj))
-  })
-  )
+    pi.data <- data.frame("Timestamp"=time.obj, 
+                          "Value" = value.obj)
+  } else {
+    # Transform list of observations into dataframe with time and value
+    pi.data <- do.call("rbind", lapply(pi.data, function(x) {
+      time.obj <- paste(strsplit(as.character(x[1]), "T")[[1]][1], 
+                        strsplit(strsplit(as.character(x[1]), "T")[[1]][2], "Z")[[1]][1])
+      time.obj <- as.POSIXct(time.obj, tz="UTC")
+      value.obj <- x[[2]]
+      if(length(value.obj) > 1) value.obj <- NA
+      return(data.frame("Timestamp"=time.obj, 
+                        "Value" = value.obj))
+    })
+    )
+  }
+  
+
   
   # Remove NAs
   all.pi.data <- na.omit(pi.data)
@@ -57,7 +69,7 @@ piPull <- function(tag, label=NULL, save=TRUE, obj.return = FALSE, start='*-365d
     while(needsUpdating) {
       
       # What time was the last observation pulled?
-      time.obj <- as.POSIXct(all.pi.data[nrow(all.pi.data), 1], tz=Sys.timezone())
+      time.obj <- as.POSIXct(all.pi.data[nrow(all.pi.data), 1])
       
       # Make the last time the new start time
       begin <- paste0(as.character(format(lubridate::with_tz(time.obj, tzone="UTC"),"%Y-%m-%d")),"T",
@@ -70,7 +82,7 @@ piPull <- function(tag, label=NULL, save=TRUE, obj.return = FALSE, start='*-365d
       pi.data <- do.call("rbind", lapply(pi.data, function(x) {
         time.obj <- paste(strsplit(as.character(x[1]), "T")[[1]][1], 
                           strsplit(strsplit(as.character(x[1]), "T")[[1]][2], "Z")[[1]][1])
-        time.obj <- lubridate::with_tz(as.POSIXct(time.obj, tz="UTC"), tzone = Sys.timezone())
+        time.obj <- as.POSIXct(time.obj, tz="UTC")
         value.obj <- x[[2]]
         if(length(value.obj) > 1) value.obj <- NA
         return(data.frame("Timestamp"=time.obj, 

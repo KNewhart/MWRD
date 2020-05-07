@@ -9,24 +9,126 @@ output: html_document
 # 0. Set working directory and import functions
 # setwd("../Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
 # setwd("GitHub/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
+
 sapply(list.files("src", full.names = TRUE), source)
 
 # 1. Import PAA sampling data (offline)
 paa.data.ls <- list()
-paa.data.ls[[1]] <- import2018() #UTC
-paa.data.ls[[2]] <- import2019() #UTC
+paa.data.ls[[1]] <- import2018() # UTC
+paa.data.ls[[2]] <- import2019() # UTC
 
 # 2. Import Carbovis data (offline)
-vis.data <- importCarbovis() #? Unknown timezone
+vis.data <- importCarbovis() # Unknown timezone, assumed GMT+6 and converted to UTC
 
 # 3. Import process data (online, instantaneous interpolated values)
-process.data.ls <- importProcess(times=do.call("c", lapply(paa.data.ls, index)))
-process.data.ls <- lapply(process.data.ls, function(x) na.locf(x, na.rm=FALSE))
+if(!("process-data-ls.RData" %in% list.files("data/paa/"))) {
+  process.data.ls <- importProcess(times=do.call("c", lapply(paa.data.ls, index)))
+  save(process.data.ls, file="data/paa/process-data-ls.RData")
+} else {
+  load("data/paa/process-data-ls.RData")
+}
 
-# 4. Merge data
+# 4. Calculate HRT
+hrt.ls <- lapply(paa.data.ls, function(paa) {
+  lapply(process.data.ls, function(data) {
+      q <- data[which(data$times %in% index(paa)),which(colnames(data)=="North Flow to Dis")]
+      hrt <- sapply(1:ncol(paa), function(i) calculateHRT(flow=q,c=paa[,i]))
+      colnames(hrt) <- gsub("PAA","HRT",colnames(paa))
+      hrt
+  })
+})
+
+```
+
+```{r Build NN}
+start <- Sys.time()
+all.results.ls <- list()
+# 5. Merge data for testing
+for(i in 1:length(paa.data.ls)) {
+  paa <- paa.data.ls[[i]] # 2018 or 2019
+  annual.results.ls <- list()
+  for(j in 1:length(process.data.ls)) {
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+    
+    # 1. Combine paa and process data
+    merged.data <- cbind(paa,
+                         xts(process[which(process[,1] %in% index(paa)),-1], order.by=process[which(process[,1] %in% index(paa)),1]))
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add HRT
+    merged.data <- cbind(merged.data, hrt)
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+    merged.data <- cbind(merged.data, vis)
+    
+    resultsANN.k <- list()
+    for(k in 1:ncol(paa)) {
+      predict.var <- colnames(paa)[k]
+      remove.var <- colnames(paa)[-k]
+      all.data <- merged.data[,-which(colnames(merged.data) %in% remove.var)]
+      predict.col <- which(colnames(all.data)==predict.var)
+      resultsANN.n <- list()
+      for(n in 1:10) {
+        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                          predict.col=predict.col, 
+                                          act.function="softsign", 
+                                          n_epoch=3000,
+                                          # n_nodes=NULL, 
+                                          scale=TRUE)
+      }
+      resultsANN.k[[length(resultsANN.k)+1]] <- resultsANN.n
+    }
+    annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.k
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- annual.results.ls
+}
+end <- Sys.time()
+end-start
+save(all.results.ls, file="results/paa-all-results-ls.RData")
+```
 
 
-# 5. Calculate HRT
+```{r}
+# 1: 2018 or 2019
+# 2: Instantaneous process data, Avg, or 24h avg
+# 3: PAA sampling location
+# 4: Model results x10
+# Summarize average r2 and rmse of 4 by 3 and 2
+load("results/paa-all-results-ls.RData")
+results <- array(data=NA, 
+                 dim=c(6, # 6 rows (sampling location)
+                       2, # 2 columns (r2 and rmse)
+                       3)) # matrices (averageing)
+r <- 1
+for(avg in 1:3) {
+  for(year in 1:length(all.results.ls)) {
+    for(loc in 1:length(all.results.ls[[year]][[avg]])) {
+      data <- all.results.ls[[year]][[avg]][[loc]]
+      results[r,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)))^0.5 # rmse
+      r <- r+1
+      if(r>6) r <- 1
+    }
+  }
+}
 
+# Barplot of prediction error (RMSE)
+plot.data <- cbind(results[1,2,],results[2,2,])
+colnames(plot.data) <- c("1-min", "Half-basin")
+rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
+barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018")
+
+plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,])
+colnames(plot.data) <- c("1-min", "10-min", "20-min", "30-min")
+rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
+barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2019")
+```
+
+```{r}
+# Pull E.coli data and repeat
 ```
 
