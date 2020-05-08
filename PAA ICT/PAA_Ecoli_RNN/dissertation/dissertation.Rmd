@@ -9,7 +9,7 @@ output: html_document
 # 0. Set working directory and import functions
 # setwd("../Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
 # setwd("GitHub/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
-
+pkgs <- c("xts", "readl", "lubridate", "stringr", "xlsx", "doSNOW", "foreach", "devtools")
 sapply(list.files("src", full.names = TRUE), source)
 
 # 1. Import PAA sampling data (offline)
