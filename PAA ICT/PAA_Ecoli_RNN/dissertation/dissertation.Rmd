@@ -38,6 +38,21 @@ hrt.ls <- lapply(paa.data.ls, function(paa) {
   })
 })
 
+# 5. Ecoli data
+ecoli.data.ls <- list()
+ecoli.data.ls[[1]] <- piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
+                             save=FALSE, obj.return=TRUE, 
+                             start= range(index(vis.data))[1], end= range(index(vis.data))[2])
+ecoli.data.ls[[2]] <- piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                             save=FALSE, obj.return=TRUE, 
+                             start= range(index(vis.data))[1], end= range(index(vis.data))[2])
+# 6. Import process data (online, instantaneous interpolated values)
+if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
+  process.data.ls <- importProcess(times=do.call("c", lapply(ecoli.data.ls, function(x) x[,1])))
+  save(process.data.ls, file="data/ecoli/process-data-ls.RData")
+} else {
+  load("data/ecoli/process-data-ls.RData")
+}
 ```
 
 ```{r Build NN}
@@ -101,7 +116,7 @@ save(all.results.ls, file="results/paa-all-results-ls.RData")
 load("results/paa-all-results-ls.RData")
 results <- array(data=NA, 
                  dim=c(6, # 6 rows (sampling location)
-                       2, # 2 columns (r2 and rmse)
+                       5, # 4 columns (r2 and rmse, RMSE IQR)
                        3)) # matrices (averageing)
 r <- 1
 for(avg in 1:3) {
@@ -109,12 +124,16 @@ for(avg in 1:3) {
     for(loc in 1:length(all.results.ls[[year]][[avg]])) {
       data <- all.results.ls[[year]][[avg]][[loc]]
       results[r,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
-      results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)))^0.5 # rmse
+      results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results[r,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results[r,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results[r,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
       r <- r+1
       if(r>6) r <- 1
     }
   }
 }
+
 
 # Barplot of prediction error (RMSE)
 plot.data <- cbind(results[1,2,],results[2,2,])
@@ -122,13 +141,105 @@ colnames(plot.data) <- c("1-min", "Half-basin")
 rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
 barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018")
 
-plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,])
-colnames(plot.data) <- c("1-min", "10-min", "20-min", "30-min")
+plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,]) # mean
+plot.data <- cbind(results[1,3,],results[2,3,],results[3,3,],results[4,3,],results[5,3,],results[6,3,])
+colnames(plot.data) <- c("1-min", "Half-basin", "1-min", "10-min", "20-min", "30-min")
 rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2019")
+foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019")
+
+lows <- t(results[,4,])
+highs <- t(results[,5,])
+foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019", border=NA, ylim=c(0,max(highs)), col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Squared error")
+
+for(i in 1:ncol(plot.data)) {
+  arrows(x0=foo[,i],y0=lows[,i],y1=highs[,i],angle=90,code=3,length=0.1)
+}
+
 ```
 
 ```{r}
 # Pull E.coli data and repeat
+```
+
+```{r Calculate CT}
+load("results/paa-all-results-ls.RData")
+i <- 1;j <- 1
+all.results.ls <- list()
+# 5. Merge data for testing
+year <- c("2018", "2019")
+for(i in 1:length(paa.data.ls)) {
+  paa <- paa.data.ls[[i]] # 2018 or 2019
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  dose <- process.data.ls[[i]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  flow <- process.data.ls[[i]]$`North Flow to Dis`
+  t_f <- 2690.3*flow^-0.959
+  data <- array(data=NA, 
+                 dim=c(ncol(paa), # 2 or 4 rows (sampling location)
+                       2, # 2 columns (C and t)
+                       nrow(paa))) # matrices (each sampling event)
+  results <- matrix(data=NA,
+                    nrow=nrow(paa),ncol=4)
+  for(j in 1:dim(data)[3]) {
+    data[,,j] <- cbind(as.numeric(paa[j,]),as.numeric(hrt[j,]))
+    if(any(data[,,j]==0)) {
+     data[which(data[,,j]==0),,j] <- NA 
+    }
+  }
+  for(j in 1:dim(results)[1]) {
+    C <- data[,1,j]
+    t <- data[,2,j]
+    exponential.mod <- lm(log(C)~ t)
+    
+    C0 <- dose[j]
+    D <- C0-exp(as.numeric(exponential.mod$coefficients)[1])
+    k <- -as.numeric(exponential.mod$coefficients)[2]
+    CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f[j])
+    results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT)
+    
+
+    plot(y=C,
+         x=t,
+         ylim=c(0,2),
+         xlim=c(0,80),
+         pch=20,
+         xlab="",
+         ylab="")
+    new.data <- data.frame(x=seq(0, t_f[j], length.out=100))
+    new.data <- cbind(new.data, exp(results[j,2]*new.data+results[j,1]))
+    polygon(x=c(0,new.data[,1],max(new.data[,1]),0), y=c(exp(results[j,1]), new.data[,2],0,0), col="#0000007F", border=NA)
+    points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
+    mtext(paste("Demand =", round(C0-exp(results[j,1]),2)), side=3,line=-1.1,adj = 0.99)
+    mtext(paste("k=", round(-results[j,2],2)), side=3,line=-2.1,adj = 0.99)
+    mtext(paste(year[i],"Trial",j), side=3, line=.25, font=2)
+    mtext("PAA (mg/L)", side=2,line=2.5)
+    mtext("HRT (min)",side=1,line=2.25)
+  
+    
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- results
+}
+
+
+
+layout(mat=matrix(c(1,2,3,4,5,6), ncol=2, byrow = TRUE))
+par(oma=c(0,2.5,2,0))
+par(mar=c(1,2,1,1))
+for(i in 1:length(all.results.ls)) {
+  # apply(abs(all.results.ls[[i]]),2,boxplot)
+  boxplot(all.results.ls[[i]][,3]-exp(all.results.ls[[i]][,1]), ylim=c(0,2.5))
+  if(i==1) mtext("2018", side=3, line=1)
+  if(i==1) mtext("Demand (D)", side=2, line=3)
+  if(i==2) mtext("2019", side=3, line=1)
+}
+for(i in 1:length(all.results.ls)) {
+  # apply(abs(all.results.ls[[i]]),2,boxplot)
+  boxplot(-all.results.ls[[i]][,2], ylim=c(0,0.08))
+  if(i==1) mtext("Decay (k)", side=2, line=3)
+}
+for(i in 1:length(all.results.ls)) {
+  # apply(abs(all.results.ls[[i]]),2,boxplot)
+  boxplot(all.results.ls[[i]][,4])
+  if(i==1) mtext("CT (mg/L*min)", side=2, line=3)
+}
 ```
 
