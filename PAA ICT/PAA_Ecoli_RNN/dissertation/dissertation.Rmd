@@ -38,6 +38,21 @@ hrt.ls <- lapply(paa.data.ls, function(paa) {
   })
 })
 
+# 5. Ecoli data
+ecoli.data.ls <- list()
+ecoli.data.ls[[1]] <- piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
+                             save=FALSE, obj.return=TRUE, 
+                             start= range(index(vis.data))[1], end= range(index(vis.data))[2])
+ecoli.data.ls[[2]] <- piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                             save=FALSE, obj.return=TRUE, 
+                             start= range(index(vis.data))[1], end= range(index(vis.data))[2])
+# 6. Import process data (online, instantaneous interpolated values)
+if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
+  process.data.ls <- importProcess(times=do.call("c", lapply(ecoli.data.ls, function(x) x[,1])))
+  save(process.data.ls, file="data/ecoli/process-data-ls.RData")
+} else {
+  load("data/ecoli/process-data-ls.RData")
+}
 ```
 
 ```{r Build NN}
@@ -101,7 +116,7 @@ save(all.results.ls, file="results/paa-all-results-ls.RData")
 load("results/paa-all-results-ls.RData")
 results <- array(data=NA, 
                  dim=c(6, # 6 rows (sampling location)
-                       2, # 2 columns (r2 and rmse)
+                       5, # 4 columns (r2 and rmse, RMSE IQR)
                        3)) # matrices (averageing)
 r <- 1
 for(avg in 1:3) {
@@ -109,12 +124,16 @@ for(avg in 1:3) {
     for(loc in 1:length(all.results.ls[[year]][[avg]])) {
       data <- all.results.ls[[year]][[avg]][[loc]]
       results[r,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
-      results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)))^0.5 # rmse
+      results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results[r,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results[r,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results[r,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
       r <- r+1
       if(r>6) r <- 1
     }
   }
 }
+
 
 # Barplot of prediction error (RMSE)
 plot.data <- cbind(results[1,2,],results[2,2,])
@@ -122,10 +141,20 @@ colnames(plot.data) <- c("1-min", "Half-basin")
 rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
 barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018")
 
-plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,])
-colnames(plot.data) <- c("1-min", "10-min", "20-min", "30-min")
+plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,]) # mean
+plot.data <- cbind(results[1,3,],results[2,3,],results[3,3,],results[4,3,],results[5,3,],results[6,3,])
+colnames(plot.data) <- c("1-min", "Half-basin", "1-min", "10-min", "20-min", "30-min")
 rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2019")
+foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019")
+
+lows <- t(results[,4,])
+highs <- t(results[,5,])
+foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019", border=NA, ylim=c(0,max(highs)), col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Squared error")
+
+for(i in 1:ncol(plot.data)) {
+  arrows(x0=foo[,i],y0=lows[,i],y1=highs[,i],angle=90,code=3,length=0.1)
+}
+
 ```
 
 ```{r}
