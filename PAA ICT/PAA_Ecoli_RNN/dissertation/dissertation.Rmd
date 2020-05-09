@@ -40,15 +40,22 @@ hrt.ls <- lapply(paa.data.ls, function(paa) {
 
 # 5. Ecoli data
 ecoli.data.ls <- list()
-ecoli.data.ls[[1]] <- piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
+ecoli.data.ls[[1]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
                              save=FALSE, obj.return=TRUE, 
-                             start= range(index(vis.data))[1], end= range(index(vis.data))[2])
-ecoli.data.ls[[2]] <- piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                             start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
+                            piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
                              save=FALSE, obj.return=TRUE, 
-                             start= range(index(vis.data))[1], end= range(index(vis.data))[2])
+                             start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
+ecoli.data.ls[[2]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                             save=FALSE, obj.return=TRUE, 
+                             start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
+                            piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                             save=FALSE, obj.return=TRUE, 
+                             start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
+                            
 # 6. Import process data (online, instantaneous interpolated values)
 if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
-  process.data.ls <- importProcess(times=do.call("c", lapply(ecoli.data.ls, function(x) x[,1])))
+  process.data.ls <- importProcess(times=ecoli.data.ls[[1]][,1])
   save(process.data.ls, file="data/ecoli/process-data-ls.RData")
 } else {
   load("data/ecoli/process-data-ls.RData")
