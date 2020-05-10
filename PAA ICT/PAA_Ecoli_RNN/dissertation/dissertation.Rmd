@@ -1,9 +1,17 @@
 ---
-title: "Untitled"
+title: "Chapter 4 Disertation plots"
 author: "KN"
 date: "4/30/2020"
 output: html_document
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	fig.path = "figures/",
+	dev = "pdf",
+)
+```
+
 
 ```{r PAA data, include=FALSE}
 # 0. Set working directory and import functions
@@ -62,8 +70,9 @@ if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
 }
 ```
 
-```{r Build NN}
-start <- Sys.time()
+```{r Build ANN PAA, include=FALSE}
+if(!("results/paa-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+  start <- Sys.time()
 all.results.ls <- list()
 # 5. Merge data for testing
 for(i in 1:length(paa.data.ls)) {
@@ -111,10 +120,13 @@ for(i in 1:length(paa.data.ls)) {
 end <- Sys.time()
 end-start
 save(all.results.ls, file="results/paa-all-results-ls.RData")
+} else {
+  load("results/paa-all-results-ls.RData")
+}
 ```
 
 
-```{r}
+```{r plot PAA squared error, echo=FALSE}
 # 1: 2018 or 2019
 # 2: Instantaneous process data, Avg, or 24h avg
 # 3: PAA sampling location
@@ -146,30 +158,31 @@ for(avg in 1:3) {
 plot.data <- cbind(results[1,2,],results[2,2,])
 colnames(plot.data) <- c("1-min", "Half-basin")
 rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018")
+# barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018")
 
 plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,]) # mean
 plot.data <- cbind(results[1,3,],results[2,3,],results[3,3,],results[4,3,],results[5,3,],results[6,3,])
 colnames(plot.data) <- c("1-min", "Half-basin", "1-min", "10-min", "20-min", "30-min")
 rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019")
+# foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019")
 
 lows <- t(results[,4,])
 highs <- t(results[,5,])
-foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019", border=NA, ylim=c(0,max(highs)), col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Squared error")
+foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019", 
+               # border=NA, 
+               # ylim=c(0,max(highs)), 
+               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
 
-for(i in 1:ncol(plot.data)) {
-  arrows(x0=foo[,i],y0=lows[,i],y1=highs[,i],angle=90,code=3,length=0.1)
-}
+# for(i in 1:ncol(plot.data)) {
+#   arrows(x0=foo[,i],y0=lows[,i],y1=highs[,i],angle=90,code=3,length=0.1)
+# }
 
 ```
 
-```{r}
-# Pull E.coli data and repeat
-```
 
-```{r Calculate CT}
+```{r Calculate CT, echo=FALSE}
 load("results/paa-all-results-ls.RData")
+load("data/paa/process-data-ls.RData")
 i <- 1;j <- 1
 all.results.ls <- list()
 # 5. Merge data for testing
@@ -177,31 +190,34 @@ year <- c("2018", "2019")
 for(i in 1:length(paa.data.ls)) {
   paa <- paa.data.ls[[i]] # 2018 or 2019
   hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
-  dose <- process.data.ls[[i]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
-  flow <- process.data.ls[[i]]$`North Flow to Dis`
+  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  flow <- process.data.ls[[1]]$`North Flow to Dis`
   t_f <- 2690.3*flow^-0.959
   data <- array(data=NA, 
                  dim=c(ncol(paa), # 2 or 4 rows (sampling location)
                        2, # 2 columns (C and t)
                        nrow(paa))) # matrices (each sampling event)
   results <- matrix(data=NA,
-                    nrow=nrow(paa),ncol=4)
+                    nrow=nrow(paa),ncol=5)
   for(j in 1:dim(data)[3]) {
     data[,,j] <- cbind(as.numeric(paa[j,]),as.numeric(hrt[j,]))
     if(any(data[,,j]==0)) {
      data[which(data[,,j]==0),,j] <- NA 
     }
   }
+  # layout(mat=matrix(1:dim(results)[1]/4, ncol=4, byrow = TRUE))
+  par(mfrow=c(2,2))
   for(j in 1:dim(results)[1]) {
     C <- data[,1,j]
     t <- data[,2,j]
     exponential.mod <- lm(log(C)~ t)
-    
+    r2 <- cor(x=na.omit(C),y=na.omit(exp(t*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])))
     C0 <- dose[j]
     D <- C0-exp(as.numeric(exponential.mod$coefficients)[1])
     k <- -as.numeric(exponential.mod$coefficients)[2]
-    CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f[j])
-    results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT)
+    n <- tail(which(process.data.ls[[1]][,1] <= index(paa)[j]),n=1)
+    CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f[n])
+    results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT, r2)
     
 
     plot(y=C,
@@ -211,42 +227,291 @@ for(i in 1:length(paa.data.ls)) {
          pch=20,
          xlab="",
          ylab="")
-    new.data <- data.frame(x=seq(0, t_f[j], length.out=100))
+    new.data <- data.frame(x=seq(0, t_f[n], length.out=100))
     new.data <- cbind(new.data, exp(results[j,2]*new.data+results[j,1]))
     polygon(x=c(0,new.data[,1],max(new.data[,1]),0), y=c(exp(results[j,1]), new.data[,2],0,0), col="#0000007F", border=NA)
     points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
     mtext(paste("Demand =", round(C0-exp(results[j,1]),2)), side=3,line=-1.1,adj = 0.99)
-    mtext(paste("k=", round(-results[j,2],2)), side=3,line=-2.1,adj = 0.99)
+    mtext(paste("k =", round(-results[j,2],2)), side=3,line=-2.1,adj = 0.99)
+    mtext(paste("R-sq =", round(results[j,5],2)), side=3,line=-3.2,adj = 0.99)
     mtext(paste(year[i],"Trial",j), side=3, line=.25, font=2)
     mtext("PAA (mg/L)", side=2,line=2.5)
     mtext("HRT (min)",side=1,line=2.25)
   
     
   }
+  results <- xts(results, order.by=index(paa))
   all.results.ls[[length(all.results.ls)+1]] <- results
 }
+save(all.results.ls,file="results/ct-all-results-ls.RData")
+```
 
 
-
+```{r Boxplots of CT D k, echo=FALSE}
 layout(mat=matrix(c(1,2,3,4,5,6), ncol=2, byrow = TRUE))
 par(oma=c(0,2.5,2,0))
 par(mar=c(1,2,1,1))
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
-  boxplot(all.results.ls[[i]][,3]-exp(all.results.ls[[i]][,1]), ylim=c(0,2.5))
+  boxplot(as.numeric(all.results.ls[[i]][,3])-exp(as.numeric(all.results.ls[[i]][,1])), ylim=c(0,2.5))
   if(i==1) mtext("2018", side=3, line=1)
   if(i==1) mtext("Demand (D)", side=2, line=3)
   if(i==2) mtext("2019", side=3, line=1)
 }
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
-  boxplot(-all.results.ls[[i]][,2], ylim=c(0,0.08))
+  boxplot(-as.numeric(all.results.ls[[i]][,2]), ylim=c(0,0.08))
   if(i==1) mtext("Decay (k)", side=2, line=3)
 }
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
-  boxplot(all.results.ls[[i]][,4])
+  boxplot(as.numeric(all.results.ls[[i]][,4]))
   if(i==1) mtext("CT (mg/L*min)", side=2, line=3)
 }
 ```
 
+
+```{r Ecoli log removal calcs}
+load("results/ct-all-results-ls.RData")
+ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- xts(log.removal, order.by=ecoli.data.ls[[2]][,1])
+removal <- 10^log.removal
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+CT.index <- sapply(1:nrow(log.removal), function(n) {
+  m <- which(min(abs(difftime(index(log.removal)[n],index(CT))))==abs(difftime(index(log.removal)[n],index(CT))))
+  return(m)
+})
+all.data <- cbind(log.removal, as.numeric(CT[CT.index]))
+plot(x=as.numeric(all.data[,2]), y=as.numeric(all.data[,1]), pch=20, ylab="Log removal (Log(N/N0))", xlab="CT (mg/L*min)")
+x=as.numeric(all.data[,2]);y=as.numeric(all.data[,1])
+
+# Linear model
+exponential.mod <- lm(y~x)
+cor(y,x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])
+# lines(x,x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])
+
+# Exponential model
+exponential.mod <- lm(exp(-y)~x)
+cor(y,-log(x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1]))
+lines(x,-log(x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1]))
+
+# 3D plot
+z <- ecoli.data.ls[[1]][ecoli.index,2]
+scatter3D(x, y, z, theta = 30, phi = 40, pch=20, xlab="CT", ylab="Log removal", zlab="Predisinfection E.coli", ticktype = "detailed")
+
+fit <- lm(z ~ x + y)
+# predict values on regular xy grid
+grid.lines = 26
+x.pred <- seq(min(x), max(x), length.out = grid.lines)
+y.pred <- seq(min(y), max(y), length.out = grid.lines)
+xy <- expand.grid( x = x.pred, y = y.pred)
+z.pred <- matrix(predict(fit, newdata = xy), 
+                 nrow = grid.lines, ncol = grid.lines)
+# fitted points for droplines to surface
+fitpoints <- predict(fit)
+# scatter plot with regression plane
+scatter3D(x, y, z, pch = 18, cex = 2, 
+    theta = 30, phi = 40, ticktype = "detailed",
+    xlab="CT", ylab="Log removal", zlab="Predisinfection E.coli",  
+    surf = list(x = x.pred, y = y.pred, z = z.pred,  
+    facets = NA, fit = fitpoints))
+```
+
+```{r Build Ecoli ANN, include=FALSE}
+if(!("results/ecoli-ann-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+
+
+  # Load process data
+  load("data/ecoli/process-data-ls.RData")
+  
+  # Calculate log removal
+  ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
+
+  load("results/ct-all-results-ls.RData")
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+for(i in 1:3) {
+  ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  test.results.ls <- list()
+  for(j in 1:length(process.data.ls)) {
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    
+    # 1. Combine paa and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(ecoli),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, CT[CT.index])
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, vis)
+    
+
+      predict.var <- "ecoli"
+      predict.col <- which(colnames(merged.data)==predict.var)
+      resultsANN.n <- list()
+      for(n in 1:10) {
+        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=merged.data,
+                                          predict.col=predict.col, 
+                                          act.function="softsign", 
+                                          n_epoch=3000,
+                                          # n_nodes=NULL, 
+                                          scale=TRUE)
+      }
+
+   test.results.ls[[length(test.results.ls)+1]] <- resultsANN.n
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- test.results.ls
+}
+end <- Sys.time()
+end-start
+save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
+} else {
+  load("results/ecoli-ann-all-results-ls.RData")
+}
+```
+
+```{r plot PAA squared error, echo=FALSE}
+# 1: 2018 or 2019
+# 2: Instantaneous process data, Avg, or 24h avg
+# 3: PAA sampling location
+# 4: Model results x10
+# Summarize average r2 and rmse of 4 by 3 and 2
+load("results/ecoli-ann-all-results-ls.RData")
+results <- array(data=NA, 
+                 dim=c(3, # 3 rows pre, post, log removal
+                       5, # 5 columns (r2 and rmse, RMSE IQR)
+                       3)) # matrices (averageing)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+  }
+}
+
+
+# Barplot of prediction error (RMSE)
+# plot.data <- cbind(results[1,2,],results[2,2,])
+# colnames(plot.data) <- c("Pre-disinfection", "Post-disinfection")
+# rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data))
+par(mfrow=c(1,3))
+plot.data <- results[,3,]
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+for(i in 1:nrow(plot.data)) {
+  barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+               # border=NA, 
+               # ylim=c(0,max(highs)), 
+               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+}
+
+
+```
+```{r Build Ecoli RNN, include=FALSE}
+if(!("results/ecoli-rnn-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+
+
+  # Load process data
+  load("data/ecoli/process-data-ls.RData")
+  
+  # Calculate log removal
+  ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
+
+  load("results/ct-all-results-ls.RData")
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+for(i in 1:3) {
+  ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  test.results.ls <- list()
+  for(j in 1:length(process.data.ls)) {
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    
+    # 1. Combine paa and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(ecoli),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, CT[CT.index])
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, vis)
+    
+
+      predict.var <- "ecoli"
+      predict.col <- which(colnames(merged.data)==predict.var)
+      resultsRNN.n <- list()
+      for(n in 1:10) {
+        resultsRNN.n[[length(resultsRNN.n)+1]] <- rollingRNN(all.data=merged.data, predict.col, train.obs=ceiling(nrow(merged.data)*0.9),
+                act.function="softsign", n_epoch=3000)
+      }
+
+   test.results.ls[[length(test.results.ls)+1]] <- resultsRNN.n
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- test.results.ls
+}
+end <- Sys.time()
+end-start
+save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
+} else {
+  load("results/ecoli-rnn-all-results-ls.RData")
+}
+```
