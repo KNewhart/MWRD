@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
 	fig.path = "figures/",
-	dev = "pdf",
+	dev = "pdf"
 )
 ```
 
@@ -47,20 +47,24 @@ hrt.ls <- lapply(paa.data.ls, function(paa) {
 })
 
 # 5. Ecoli data
-ecoli.data.ls <- list()
-ecoli.data.ls[[1]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
-                             save=FALSE, obj.return=TRUE, 
-                             start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
-                            piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
-                             save=FALSE, obj.return=TRUE, 
-                             start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
-ecoli.data.ls[[2]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
-                             save=FALSE, obj.return=TRUE, 
-                             start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
-                            piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
-                             save=FALSE, obj.return=TRUE, 
-                             start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
-                            
+if(!("ecoli-data-ls.RData" %in% list.files("data/ecoli/"))) {
+  ecoli.data.ls <- list()
+  ecoli.data.ls[[1]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
+                              piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
+  ecoli.data.ls[[2]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
+                              piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
+  save(ecoli.data.ls, file="data/ecoli/ecoli-data-ls.RData")
+} else {
+  load("data/ecoli/ecoli-data-ls.RData")
+}
 # 6. Import process data (online, instantaneous interpolated values)
 if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
   process.data.ls <- importProcess(times=ecoli.data.ls[[1]][,1])
@@ -272,6 +276,7 @@ for(i in 1:length(all.results.ls)) {
 
 
 ```{r Ecoli log removal calcs}
+library(plot3D)
 load("results/ct-all-results-ls.RData")
 ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
   m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
@@ -400,7 +405,7 @@ save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
 }
 ```
 
-```{r plot PAA squared error, echo=FALSE}
+```{r plot Ecoli squared error, echo=FALSE}
 # 1: 2018 or 2019
 # 2: Instantaneous process data, Avg, or 24h avg
 # 3: PAA sampling location
@@ -442,7 +447,7 @@ for(i in 1:nrow(plot.data)) {
 
 
 ```
-```{r Build Ecoli RNN, include=FALSE}
+```{r Build Ecoli RNN, eval=FALSE, include=FALSE}
 if(!("results/ecoli-rnn-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
 
 
@@ -470,16 +475,18 @@ for(i in 1:3) {
     process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
     vis <- vis.data
     
-    # 1. Combine paa and process data
+    
+    # 1. Combine ecoli and process data
       process.index <- sapply(1:nrow(ecoli), function (n) {
         e <- index(ecoli)[n]
         d <- difftime(process$times,e)
         p <- which(abs(d)==min(abs(d)))
         return(p)
   })
-    merged.data <- cbind(data.frame(ecoli),
+    merged.data <- cbind(data.frame(log10(ecoli)),
                          process[process.index,-1])
     merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
     
     # 2. Add CT
     CT.index <- sapply(1:nrow(ecoli), function (n) {
@@ -495,13 +502,16 @@ for(i in 1:3) {
     vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
     merged.data <- cbind(merged.data, vis)
     
+    # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
 
-      predict.var <- "ecoli"
+      predict.var <- "log10.ecoli."
       predict.col <- which(colnames(merged.data)==predict.var)
       resultsRNN.n <- list()
       for(n in 1:10) {
         resultsRNN.n[[length(resultsRNN.n)+1]] <- rollingRNN(all.data=merged.data, predict.col, train.obs=ceiling(nrow(merged.data)*0.9),
-                act.function="softsign", n_epoch=3000)
+                act.function="softsign", n_epoch=1000)
       }
 
    test.results.ls[[length(test.results.ls)+1]] <- resultsRNN.n
@@ -515,3 +525,45 @@ save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
   load("results/ecoli-rnn-all-results-ls.RData")
 }
 ```
+```{r}
+
+```
+
+```{r eval=FALSE, include=FALSE}
+load("results/ecoli-rnn-all-results-ls.RData")
+results <- array(data=NA, 
+                 dim=c(3, # 3 rows pre, post, log removal
+                       6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
+                       3)) # matrices (averageing)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+      results[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
+  }
+}
+
+
+# Barplot of prediction error (RMSE)
+# plot.data <- cbind(results[1,2,],results[2,2,])
+# colnames(plot.data) <- c("Pre-disinfection", "Post-disinfection")
+# rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data))
+par(mfrow=c(1,3))
+plot.data <- results[,3,]
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+for(i in 1:nrow(plot.data)) {
+  barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+               # border=NA, 
+               # ylim=c(0,max(highs)), 
+               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+}
+
+```
+
