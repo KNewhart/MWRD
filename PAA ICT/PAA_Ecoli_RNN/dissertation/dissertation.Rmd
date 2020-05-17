@@ -75,7 +75,8 @@ if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
 ```
 
 ```{r Build ANN PAA, include=FALSE}
-if(!("results/paa-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+if(!("results/paa-all-results-ls.RData" %in% list.files(recursive=TRUE))) {
+  load("data/paa/process-data-ls.RData")
   start <- Sys.time()
 all.results.ls <- list()
 # 5. Merge data for testing
@@ -126,6 +127,71 @@ end-start
 save(all.results.ls, file="results/paa-all-results-ls.RData")
 } else {
   load("results/paa-all-results-ls.RData")
+}
+```
+
+
+```{r Variable selection ANN PAA, include=FALSE}
+if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
+  load("data/paa/process-data-ls.RData")
+  start <- Sys.time()
+all.results.ls <- list()
+
+# 5. Merge data for testing
+for(i in 1:length(paa.data.ls)) {
+  paa <- paa.data.ls[[i]] # 2018 or 2019
+  process <- process.data.ls[[1]] # Instantaneous process data
+  vis <- vis.data
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  
+  # 1. Combine paa and process data
+  merged.data <- cbind(paa,
+                       xts(process[which(process[,1] %in% index(paa)),-1], order.by=process[which(process[,1] %in% index(paa)),1]))
+  merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+  
+  # 2. Add HRT
+  merged.data <- cbind(merged.data, hrt)
+  
+  # 3. Add vis
+  vis <- na.locf(vis)
+  vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+  merged.data <- cbind(merged.data, vis)
+  
+  # 4. Set variable combinations
+  vars <- which(!(colnames(merged.data) %in% colnames(paa)))
+  combos <- combn(vars,(length(vars)-1))
+  combo.results.ls <- list()
+  for(j in 1:length(combos)) {
+    
+    resultsANN.k <- list()
+    for(k in 1:ncol(paa)) {
+      predict.var <- colnames(paa)[k]
+      # remove.var <- colnames(paa)[-k]
+      all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
+      predict.col <- which(colnames(all.data)==predict.var)
+      resultsANN.n <- list()
+      for(n in 1:10) {
+        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                          predict.col=predict.col, 
+                                          act.function="softsign", 
+                                          n_epoch=3000,
+                                          # n_nodes=NULL, 
+                                          scale=TRUE)
+      }
+      resultsANN.k[[length(resultsANN.k)+1]] <- resultsANN.n # 10 iterations of a combo for a sampling location
+      
+    }
+    combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.k # Results of a combo for all sampling locations
+  } 
+  ###### CHECK RMSE AND WRITE CONDITIONAL STATEMENT TO REMOVE WORSE COMBO ######
+  # save(combo.results.ls,file="testing.RData")
+  all.results.ls[[length(all.results.ls)+1]] <- combo.results.ls # Results of all combos for 2018/2019
+}
+end <- Sys.time()
+end-start
+save(all.results.ls, file="results/paa-var-results-ls.RData")
+} else {
+  load("results/paa-var-results-ls.RData")
 }
 ```
 
@@ -222,27 +288,7 @@ for(i in 1:length(paa.data.ls)) {
     n <- tail(which(process.data.ls[[1]][,1] <= index(paa)[j]),n=1)
     CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f[n])
     results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT, r2)
-    
 
-    plot(y=C,
-         x=t,
-         ylim=c(0,2),
-         xlim=c(0,80),
-         pch=20,
-         xlab="",
-         ylab="")
-    new.data <- data.frame(x=seq(0, t_f[n], length.out=100))
-    new.data <- cbind(new.data, exp(results[j,2]*new.data+results[j,1]))
-    polygon(x=c(0,new.data[,1],max(new.data[,1]),0), y=c(exp(results[j,1]), new.data[,2],0,0), col="#0000007F", border=NA)
-    points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
-    mtext(paste("Demand =", round(C0-exp(results[j,1]),2)), side=3,line=-1.1,adj = 0.99)
-    mtext(paste("k =", round(-results[j,2],2)), side=3,line=-2.1,adj = 0.99)
-    mtext(paste("R-sq =", round(results[j,5],2)), side=3,line=-3.2,adj = 0.99)
-    mtext(paste(year[i],"Trial",j), side=3, line=.25, font=2)
-    mtext("PAA (mg/L)", side=2,line=2.5)
-    mtext("HRT (min)",side=1,line=2.25)
-  
-    
   }
   results <- xts(results, order.by=index(paa))
   all.results.ls[[length(all.results.ls)+1]] <- results
@@ -269,9 +315,92 @@ for(i in 1:length(all.results.ls)) {
 }
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
-  boxplot(as.numeric(all.results.ls[[i]][,4]))
+  boxplot(as.numeric(all.results.ls[[i]][,4]), ylim=c(0,max(unlist(lapply(all.results.ls,function(x) x[,4])))))
   if(i==1) mtext("CT (mg/L*min)", side=2, line=3)
 }
+```
+
+```{r Plot prediction on CT, fig.height=11,fig.width=8.5}
+load("results/paa-all-results-ls.RData")
+load("data/paa/process-data-ls.RData")
+i <- 1;j <- 1
+plot.these <- list(c(4,11,14,15,28,32),
+                   c(20,27,42,52,61,63))
+# 5. Merge data for testing
+year <- c("2018", "2019")
+for(i in 1:length(paa.data.ls)) {
+  paa <- paa.data.ls[[i]] # 2018 or 2019
+  pred <- all.results.ls[[i]][[1]] # Real time was found to be the best
+  pred <- lapply(pred, function(x) apply(do.call("cbind",lapply(x, function(y) y[,2])),1,mean)) # For each sampling location, mean predicted values
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  flow <- process.data.ls[[1]]$`North Flow to Dis`
+  t_f <- 2690.3*flow^-0.959
+  data <- array(data=NA, 
+                 dim=c(ncol(paa), # 2 or 4 rows (sampling location)
+                       3, # 3 columns (C and t) and Cpredicted
+                       nrow(paa))) # matrices (each sampling event)
+  results <- matrix(data=NA,
+                    nrow=nrow(paa),ncol=6)
+  for(j in 1:dim(data)[3]) {
+    data[,,j] <- cbind(as.numeric(paa[j,]),as.numeric(hrt[j,]), as.numeric(unlist(lapply(pred,function(x) x[j]))))
+    if(any(data[,,j]==0)) {
+     data[which(data[,,j]==0),,j] <- NA 
+    }
+  }
+  # layout(mat=matrix(1:dim(results)[1]/4, ncol=4, byrow = TRUE))
+  par(mfrow=c(4,3), mar=c(c(4, 4, 4, 1) + 0.1))
+  for(j in 1:dim(results)[1]) {
+    # for(j in plot.these[[i]]) {
+    C <- data[,1,j]
+    t <- data[,2,j]
+    Cp <- data[,3,j]
+    exponential.mod <- lm(log(C)~ t)
+    r2 <- cor(x=na.omit(C),y=na.omit(exp(t*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])))
+    C0 <- dose[j]
+    D <- C0-exp(as.numeric(exponential.mod$coefficients)[1])
+    k <- -as.numeric(exponential.mod$coefficients)[2]
+    n <- tail(which(process.data.ls[[1]][,1] <= index(paa)[j]),n=1)
+    CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f[n])
+    
+    
+    exponential.mod.p <- lm(log(Cp)~ t)
+    Dp <- C0-exp(as.numeric(exponential.mod.p$coefficients)[1])
+    kp <- -as.numeric(exponential.mod.p$coefficients)[2]
+    CTp <- (C0-Dp)/kp-(C0-Dp)/kp*exp(-kp*t_f[n])
+    
+    results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT, r2, CTp)
+
+    plot(y=C,
+         x=t,
+         ylim=c(0,2),
+         xlim=c(0,80),
+         pch=20,
+         xlab="",
+         ylab="",
+         cex.axis=1.5)
+    new.data <- data.frame(x=seq(0, t_f[n], length.out=100))
+    new.data <- cbind(new.data, 
+                      exp(results[j,2]*new.data+results[j,1]),
+                      exp(as.numeric(exponential.mod.p$coefficients)[2]*new.data+as.numeric(exponential.mod.p$coefficients)[1]))
+    polygon(x=c(0,new.data[,1],max(new.data[,1]),0), y=c(exp(results[j,1]), new.data[,2],0,0), col="#0000007F", border=NA)
+    points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
+    points(x=new.data[,1],y=new.data[,3], type="l", lty=2, col="red")
+    points(x=t,y=data[,3,j], col="red", pch=20)
+    # mtext(paste("Demand =", round(C0-exp(results[j,1]),2)), side=3,line=-1.1,adj = 0.99)
+    # mtext(paste("k =", round(-results[j,2],2)), side=3,line=-2.1,adj = 0.99)
+    # mtext(paste("R-sq =", round(results[j,5],2)), side=3,line=-3.2,adj = 0.99)
+    mtext(paste("Actual CT =", round(results[j,4],1)), side=3,line=-1.2, adj = 0.99)
+    mtext(paste("Predicted CT =", round(results[j,6],1)), side=3,line=-2.3, adj=0.99)
+    mtext(paste(year[i],"Trial",j), side=3, line=.25, font=2)
+    mtext("PAA (mg/L)", side=2,line=2.5)
+    mtext("HRT (min)",side=1,line=2.25)
+  
+    
+  }
+}
+
+rmse <- mean((results[,4]-results[,6])^2)^0.5
 ```
 
 
@@ -294,6 +423,15 @@ CT.index <- sapply(1:nrow(log.removal), function(n) {
 all.data <- cbind(log.removal, as.numeric(CT[CT.index]))
 plot(x=as.numeric(all.data[,2]), y=as.numeric(all.data[,1]), pch=20, ylab="Log removal (Log(N/N0))", xlab="CT (mg/L*min)")
 x=as.numeric(all.data[,2]);y=as.numeric(all.data[,1])
+
+# Double exponential
+x <- as.numeric(all.data[,2])
+y <- as.numeric(all.data[,1])
+mod <- nls(formula=10^y~((1-b)*exp(-d*x^m)), start = list(d=0.01163, b=0.99101, m=1.2))
+# mod <- nls(formula=y~(1-b)*exp(-d*x^m)+b*exp(-p*x), start = list(b=0.99,
+#                                                                  d=0.01,
+#                                                                  m=1,
+#                                                                  p=0.01))
 
 # Linear model
 exponential.mod <- lm(y~x)
@@ -325,6 +463,8 @@ scatter3D(x, y, z, pch = 18, cex = 2,
     xlab="CT", ylab="Log removal", zlab="Predisinfection E.coli",  
     surf = list(x = x.pred, y = y.pred, z = z.pred,  
     facets = NA, fit = fitpoints))
+
+
 ```
 
 ```{r Build Ecoli ANN, include=FALSE}
