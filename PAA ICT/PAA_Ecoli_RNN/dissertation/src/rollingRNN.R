@@ -156,7 +156,7 @@ rollingRNN <- function(all.data, predict.col, train.obs,
           data.frame("R2"=r2,
                    "Prediction"=pred,
                    "Actual"=all.data[test.obs,predict.col],
-                   "Persistance"=all.data[(test.obs-1),predict.col])
+                   "Persistance"=all.data[(test.obs-2),predict.col])
       } else {
           data.frame("R2"=NA, 
                    "Prediction"=NA,

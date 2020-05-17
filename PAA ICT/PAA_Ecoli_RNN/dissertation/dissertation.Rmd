@@ -467,7 +467,7 @@ log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
-for(i in 1:3) {
+for(i in 1:2) {
   ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
   ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
   test.results.ls <- list()
@@ -511,7 +511,7 @@ for(i in 1:3) {
       resultsRNN.n <- list()
       for(n in 1:10) {
         resultsRNN.n[[length(resultsRNN.n)+1]] <- rollingRNN(all.data=merged.data, predict.col, train.obs=ceiling(nrow(merged.data)*0.9),
-                act.function="softsign", n_epoch=1000)
+                act.function="softsign", n_epoch=3000)
       }
 
    test.results.ls[[length(test.results.ls)+1]] <- resultsRNN.n
@@ -550,13 +550,9 @@ for(loc in 1:length(all.results.ls)) {
 
 
 # Barplot of prediction error (RMSE)
-# plot.data <- cbind(results[1,2,],results[2,2,])
-# colnames(plot.data) <- c("Pre-disinfection", "Post-disinfection")
-# rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-# barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data))
-par(mfrow=c(1,3))
-plot.data <- results[,3,]
-rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+par(mfrow=c(1,2))
+plot.data <- results[1:2,3,]
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
 colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
 for(i in 1:nrow(plot.data)) {
   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
@@ -564,6 +560,17 @@ for(i in 1:nrow(plot.data)) {
                # ylim=c(0,max(highs)), 
                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
 }
+
+# par(mfrow=c(1,3))
+# plot.data <- results[,3,]
+# rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+# colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# for(i in 1:nrow(plot.data)) {
+#   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+#                # border=NA, 
+#                # ylim=c(0,max(highs)), 
+#                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+# }
 
 ```
 
