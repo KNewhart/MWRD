@@ -524,9 +524,10 @@ for(i in 1:3) {
     merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
     colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
     
-
-      predict.var <- "ecoli"
+    predict.var <- "log10.ecoli."
       predict.col <- which(colnames(merged.data)==predict.var)
+    
+
       resultsANN.n <- list()
       for(n in 1:10) {
         resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=merged.data,
@@ -541,8 +542,6 @@ for(i in 1:3) {
   }
   all.results.ls[[length(all.results.ls)+1]] <- test.results.ls
 }
-end <- Sys.time()
-end-start
 save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
 } else {
   load("results/ecoli-ann-all-results-ls.RData")
