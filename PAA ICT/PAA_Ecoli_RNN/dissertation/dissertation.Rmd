@@ -131,7 +131,7 @@ save(all.results.ls, file="results/paa-all-results-ls.RData")
 ```
 
 
-```{r Variable selection ANN PAA, include=FALSE}
+```{r Variable selection ANN PAA, eval=FALSE, include=FALSE}
 if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
   load("data/paa/process-data-ls.RData")
   start <- Sys.time()
@@ -404,7 +404,7 @@ rmse <- mean((results[,4]-results[,6])^2)^0.5
 ```
 
 
-```{r Ecoli log removal calcs}
+```{r Ecoli log removal calcs, eval=FALSE, include=FALSE}
 library(plot3D)
 load("results/ct-all-results-ls.RData")
 ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
@@ -665,11 +665,9 @@ save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
   load("results/ecoli-rnn-all-results-ls.RData")
 }
 ```
-```{r}
 
-```
 
-```{r eval=FALSE, include=FALSE}
+```{r Plot Ecoli Double RNN Error, echo=FALSE}
 load("results/ecoli-rnn-all-results-ls.RData")
 results <- array(data=NA, 
                  dim=c(3, # 3 rows pre, post, log removal
@@ -714,3 +712,81 @@ for(i in 1:nrow(plot.data)) {
 
 ```
 
+```{r Build Ecoli RNN, eval=FALSE, include=FALSE}
+if(!("results/ecoli-rnn-ann-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+
+
+  # Load process data
+  load("data/ecoli/process-data-ls.RData")
+  
+  # Calculate log removal
+  ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
+
+  load("results/ct-all-results-ls.RData")
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+for(i in 1:2) {
+  ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  test.results.ls <- list()
+  for(j in 1:length(process.data.ls)) {
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    
+    
+    # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, CT[CT.index])
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, vis)
+    
+    # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+
+      predict.var <- "log10.ecoli."
+      predict.col <- which(colnames(merged.data)==predict.var)
+      resultsRNN.n <- list()
+      for(n in 1:10) {
+        resultsRNN.n[[length(resultsRNN.n)+1]] <- rollingRNN(all.data=merged.data, predict.col, train.obs=ceiling(nrow(merged.data)*0.9),
+                act.function="softsign", n_epoch=3000)
+      }
+
+   test.results.ls[[length(test.results.ls)+1]] <- resultsRNN.n
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- test.results.ls
+}
+end <- Sys.time()
+end-start
+save(all.results.ls, file="results/ecoli-rnn-ann-all-results-ls.RData")
+} else {
+  load("results/ecoli-rnn-ann-all-results-ls.RData")
+}
+```
