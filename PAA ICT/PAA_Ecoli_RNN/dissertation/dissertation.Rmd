@@ -449,6 +449,7 @@ for(i in 1:length(all.results.ls)) {
 }
 ```
 
+
 ```{r Plot prediction on CT, fig.height=11,fig.width=8.5}
 load("results/paa-all-results-ls.RData")
 load("data/paa/process-data-ls.RData")
@@ -538,7 +539,62 @@ for(i in 1:length(paa.data.ls)) {
 }
 ```
 
-```{r}
+
+```{r Build CT ANN}
+
+if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
+  load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
+  load("data/paa/process-data-ls.RData")
+  ct.results.ls <- list()
+  # 5. Merge data for testing
+  for(i in 1:length(all.results.ls)) {
+    ct <- all.results.ls[[i]][,4]
+    annual.results.ls <- list()
+    for(j in 1:length(process.data.ls)) {
+      process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+      vis <- vis.data
+      hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+      
+      # 1. Combine ct and process data
+      merged.data <- cbind(ct,
+                           xts(process[which(process[,1] %in% index(ct)),-1], order.by=process[which(process[,1] %in% index(ct)),1]))
+      merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+      
+      # 2. Add HRT
+      merged.data <- cbind(merged.data, hrt)
+      
+      # 3. Add vis
+      vis <- na.locf(vis)
+      vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+      merged.data <- cbind(merged.data, vis)
+      
+
+        predict.var <- "ct"
+        predict.col <- which(colnames(merged.data)==predict.var)
+        resultsANN.n <- list()
+        for(n in 1:10) {
+          resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=merged.data,
+                                            predict.col=predict.col, 
+                                            act.function="softsign", 
+                                            n_epoch=3000,
+                                            n_nodes=NULL, 
+                                            scale=TRUE)
+        }
+        annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.n
+
+    }
+    ct.results.ls[[length(ct.results.ls)+1]] <- annual.results.ls
+  }
+
+  save(ct.results.ls, file="results/ct-ann-results-ls.RData")
+} else {
+  load("results/ct-ann-results-ls.RData")
+}
+```
+
+
+
+```{r Actual predicted CT Plots}
 actual <- unlist(lapply(results.ls, function(x) x[,4]))
 predicted <- unlist(lapply(results.ls, function(x) x[,6]))
 plot(x=actual,
