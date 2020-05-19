@@ -132,12 +132,13 @@ save(all.results.ls, file="results/paa-all-results-ls.RData")
 ```
 
 
-```{r Variable selection ANN PAA, eval=FALSE, include=FALSE}
+```{r Variable selection ANN PAA, include=FALSE}
 if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
 load("data/paa/process-data-ls.RData")
 
 all.results.ls <- list()
 var.results.ls <- list()
+i <- 1
 # 5. Merge data for testing
 for(i in 1:length(paa.data.ls)) {
   paa <- paa.data.ls[[i]] # 2018 or 2019
@@ -159,17 +160,16 @@ for(i in 1:length(paa.data.ls)) {
   merged.data <- cbind(merged.data, vis)
   
   resultsANN.k <- list()
+  k<-1
   for(k in 1:ncol(paa)) {
   predict.var <- colnames(paa)[k]
   
   # 4. Set variable combinations
   vars <- which(!(colnames(merged.data) %in% colnames(paa)))
-  combos <- combn(vars,length(vars)-1)
+  combos <- combn(vars,1)
   
   combo.results.ls <- list()
   for(j in 1:ncol(combos)) {
-    
-      
 
       all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
       predict.col <- which(colnames(all.data)==predict.var)
@@ -193,18 +193,14 @@ for(i in 1:length(paa.data.ls)) {
   current.mse <- min(mse.results)
   while(current.mse <= previous.mse) {
     previous.mse <- min(mse.results) 
-    previous.vars <- vars
+    previous.vars <- combos[,which(mse.results==min(mse.results))]
     previous.results <- combo.results.ls
     
-    keep <- which(mse.results==min(mse.results))
-    vars <- combos[,keep]
-    combos <- combn(vars,length(vars)-1)
+    combos <- matrix(data=rep(previous.vars, length(vars[!vars %in% previous.vars])), byrow=TRUE, nrow=length(previous.vars))
+    combos <- rbind(combos, vars[!vars %in% previous.vars])
     
     combo.results.ls <- list()
     for(j in 1:ncol(combos)) {
-      
-        
-  
         all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
         predict.col <- which(colnames(all.data)==predict.var)
         resultsANN.n <- list()
