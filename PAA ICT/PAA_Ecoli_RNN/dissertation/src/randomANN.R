@@ -1,15 +1,3 @@
-min.max.norm <- function(train, test=NULL) {
-  if(is.null(test)) test <- train
-  ma <- apply(train,2,max)
-  mi <- apply(train,2,min)
-  results <- do.call("cbind", lapply(names(ma), function(var) {
-    (test[,var]-mi[var])/(ma[var]-mi[var])
-  }))
-  return(results)
-}
-
-
-
 # Function to create a rnn, train and test in parallel/rolling window
 randomANN <- function(all.data,
                        predict.col,

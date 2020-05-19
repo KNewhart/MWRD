@@ -132,7 +132,7 @@ save(all.results.ls, file="results/paa-all-results-ls.RData")
 ```
 
 
-```{r Variable selection ANN PAA, include=FALSE}
+```{r Variable selection ANN PAA, eval=FALSE, include=FALSE}
 if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
 load("data/paa/process-data-ls.RData")
 
@@ -256,6 +256,7 @@ results <- array(data=NA,
                  dim=c(6, # 6 rows (sampling location)
                        5, # 4 columns (r2 and rmse, RMSE IQR)
                        3)) # matrices (averageing)
+rmse.results.ls <- list()
 r <- 1
 for(avg in 1:3) {
   for(year in 1:length(all.results.ls)) {
@@ -263,6 +264,7 @@ for(avg in 1:3) {
       data <- all.results.ls[[year]][[avg]][[loc]]
       results[r,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
       results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      rmse.results.ls[[length(rmse.results.ls)+1]] <- unlist(lapply(data, function(x) mean((x[,2]-x[,3])^2)^0.5))
       results[r,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
       results[r,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
       results[r,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
@@ -273,30 +275,108 @@ for(avg in 1:3) {
 }
 
 
-# Barplot of prediction error (RMSE)
-plot.data <- cbind(results[1,2,],results[2,2,])
-colnames(plot.data) <- c("1-min", "Half-basin")
-rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-# barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018")
 
-plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,]) # mean
-plot.data <- cbind(results[1,3,],results[2,3,],results[3,3,],results[4,3,],results[5,3,],results[6,3,])
-colnames(plot.data) <- c("1-min", "Half-basin", "1-min", "10-min", "20-min", "30-min")
-rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-# foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019")
-
-lows <- t(results[,4,])
-highs <- t(results[,5,])
-foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019", 
-               # border=NA, 
-               # ylim=c(0,max(highs)), 
-               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+# # Barplot of prediction error (RMSE)
+# plot.data <- cbind(results[1,2,],results[2,2,])
+# colnames(plot.data) <- c("1-min", "Half-basin")
+# rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# # barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018")
+# 
+# plot.data <- cbind(results[3,2,],results[4,2,],results[5,2,],results[6,2,]) # mean
+# plot.data <- cbind(results[1,3,],results[2,3,],results[3,3,],results[4,3,],results[5,3,],results[6,3,])
+# colnames(plot.data) <- c("1-min", "Half-basin", "1-min", "10-min", "20-min", "30-min")
+# rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# # foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019")
+# 
+# lows <- t(results[,4,])
+# highs <- t(results[,5,])
+# foo <- barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data), main="2018 & 2019", 
+#                # border=NA, 
+#                # ylim=c(0,max(highs)), 
+#                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
 
 # for(i in 1:ncol(plot.data)) {
 #   arrows(x0=foo[,i],y0=lows[,i],y1=highs[,i],angle=90,code=3,length=0.1)
 # }
 
+# 
+rmse.results <- do.call("cbind", rmse.results.ls)
+colnames(rmse.results) <- c("Instant 2018 1-min",
+                            "Instant 2018 Half",
+                            "Instant 2019 1-min",
+                            "Instant 2019 10-min",
+                            "Instant 2019 20-min",
+                            "Instant 2019 30-min",
+                            "Avg 2018 1-min",
+                            "Avg 2018 Half",
+                            "Avg 2019 1-min",
+                            "Avg 2019 10-min",
+                            "Avg 2019 20-min",
+                            "Avg 2019 30-min",
+                            "24-h avg 2018 1-min",
+                            "24-h avg 2018 Half",
+                            "24-h avg 2019 1-min",
+                            "24-h avg 2019 10-min",
+                            "24-h avg 2019 20-min",
+                            "24-h avg 2019 30-min")
+plot.results <- data.frame(
+  data=do.call("c", rmse.results.ls),
+  loc=rep(c(rep("2018 1-min",10), rep("2018 Half",10),rep("2019 1-min",10), rep("2019 10-min",10),rep("2019 20-min",10), rep("2019 30-min", 10)),3), 
+  avg=c(rep("Instant", 10*6), rep("Avg", 10*6), rep("24-hr avg", 10*6))
+)
+plot.results <- plot.results[order(plot.results$loc),]
+par(mar=c(4.5,3.5,0.1,0.1), family="serif", cex=1.2)
+cols <- RColorBrewer::brewer.pal(3,"Dark2")
+bar.pos <- seq(1,ncol(rmse.results)+ncol(rmse.results)/3-1)[-seq(4,ncol(rmse.results)+ncol(rmse.results)/3-1,by=4)]
+foo <- boxplot(data ~ avg +loc, data = plot.results,
+        at = bar.pos, col = cols, pch=20, xaxt="n", xlab="", ylab="")
+legend("bottomright", fill = cols, legend = c("24h avg","Avg","Instant"), horiz = F)
+mtext("RMSE", side=2, line=2.25, cex=1.2)
+axis(side=1, at=bar.pos[seq(2,length(bar.pos),3)], labels=FALSE)
+text(x=bar.pos[seq(2,length(bar.pos),3)], y=min(foo$stats)-.01, labels = unique(as.character(plot.results$loc)), xpd=TRUE, srt = 30, adj = 1)
 ```
+
+```{r Timeseries PAA prediction actual, fig.height=8.5, fig.width=6.5}
+load("results/paa-all-results-ls.RData")
+
+actual.predicted.plot <- function(actual, predicted, label) {
+  par(mar=c(2, 2, 2, 1) + 0.1, family="serif")
+  r <- c(min(c(actual[,2], predicted[,2])), max(c(actual[,2], predicted[,2])))
+  plot(x=actual[,1], y=actual[,2], main=label, pch=20,xlab="", ylab="", ylim=c(r[1], r[2]), xaxt="n", cex.axis=1.2, lwd=1.5)
+  times <- as.POSIXct(actual[,1], origin="1970-01-01")
+  r <- as.POSIXct(round(range(times), "days"))
+  axis.POSIXct(1, at = seq(r[1], r[2], by = "day"), format = "%b %d", cex.axis=1.2)
+  points(x=predicted[,1], y=predicted[,2], pch=20, col="purple", lwd=1.5)
+  line.matrix <- matrix(data=c(actual[,1], actual[,2], predicted[,1], predicted[,2]), ncol=4)
+  sapply(1:nrow(actual), function(i) lines(x=line.matrix[i,c(1,3)], y=line.matrix[i,c(2,4)]))
+  # legend("topleft", legend=c("Actual", "Predicted"), pch=20, col=c("black", "purple"))
+  mtext(text=paste0("RMSE=",sprintf("%.3f",round(mean((actual[,2]-predicted[,2])^2)^0.5,3))), side=3, adj=0.5, cex=0.8, line=0.1)
+}
+
+par(mfcol=c(6,3))
+for(avg in 1:3) {
+  avg.lab <- c("Instantaneous", "Average", "24-hr Avg")
+  for(year in 1:length(all.results.ls)) {
+    year.lab <- c("2018", "2019")
+    for(loc in 1:length(all.results.ls[[year]][[avg]])) {
+      data <- all.results.ls[[year]][[avg]][[loc]]
+      predicted <- apply(do.call("cbind",lapply(data, function(x) x[,2])),1,mean) # Predicted
+      actual <- data[[1]][,3]
+      times <- as.POSIXct(as.numeric(rownames(data[[1]])), origin="1970-01-01")
+      if(any(predicted<0)) {
+        remove <- which(predicted<0)
+        predicted <- predicted[-remove]
+        actual <- actual[-remove]
+        times <- times[-remove]
+      }
+      actual.predicted.plot(actual=cbind(times, actual),
+                            predicted=cbind(times, predicted),
+                            label=paste(year.lab[year],"Location",loc, "-",avg.lab[avg]))
+    }
+  }
+}
+```
+
 
 
 ```{r Calculate CT, echo=FALSE}
@@ -375,6 +455,8 @@ load("data/paa/process-data-ls.RData")
 i <- 1;j <- 1
 plot.these <- list(c(4,11,14,15,28,32),
                    c(20,27,42,52,61,63))
+results.ls <- list()
+r2.ls <- list()
 # 5. Merge data for testing
 year <- c("2018", "2019")
 for(i in 1:length(paa.data.ls)) {
@@ -391,6 +473,8 @@ for(i in 1:length(paa.data.ls)) {
                        nrow(paa))) # matrices (each sampling event)
   results <- matrix(data=NA,
                     nrow=nrow(paa),ncol=6)
+  r2.results <- matrix(data=NA,
+                    nrow=nrow(paa),ncol=2)
   for(j in 1:dim(data)[3]) {
     data[,,j] <- cbind(as.numeric(paa[j,]),as.numeric(hrt[j,]), as.numeric(unlist(lapply(pred,function(x) x[j]))))
     if(any(data[,,j]==0)) {
@@ -404,14 +488,16 @@ for(i in 1:length(paa.data.ls)) {
     C <- data[,1,j]
     t <- data[,2,j]
     Cp <- data[,3,j]
+    linear.mod <- lm(C~t)
     exponential.mod <- lm(log(C)~ t)
+    r2.linear <- cor(x=na.omit(C),y=na.omit(t*linear.mod$coefficients[2]+linear.mod$coefficients[1]))
     r2 <- cor(x=na.omit(C),y=na.omit(exp(t*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])))
+    r2.results[j,] <- c(r2.linear, r2)
     C0 <- dose[j]
     D <- C0-exp(as.numeric(exponential.mod$coefficients)[1])
     k <- -as.numeric(exponential.mod$coefficients)[2]
     n <- tail(which(process.data.ls[[1]][,1] <= index(paa)[j]),n=1)
     CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f[n])
-    
     
     exponential.mod.p <- lm(log(Cp)~ t)
     Dp <- C0-exp(as.numeric(exponential.mod.p$coefficients)[1])
@@ -445,15 +531,41 @@ for(i in 1:length(paa.data.ls)) {
     mtext("PAA (mg/L)", side=2,line=2.5)
     mtext("HRT (min)",side=1,line=2.25)
   
-    
   }
+  
+    r2.ls[[length(r2.ls)+1]] <- r2.results
+    results.ls[[length(results.ls)+1]] <- results
 }
+```
 
-rmse <- mean((results[,4]-results[,6])^2)^0.5
+```{r}
+actual <- unlist(lapply(results.ls, function(x) x[,4]))
+predicted <- unlist(lapply(results.ls, function(x) x[,6]))
+plot(x=actual,
+     y=predicted, 
+     xlim=c(min(c(actual, predicted)), max(c(actual, predicted))), 
+     ylim=c(min(c(actual, predicted)), max(c(actual, predicted))), 
+     pch=20, xlab="", ylab="")
+mtext(text="Actual Integrated CT", side=1, line=2.75)
+mtext(text="Predicted PAA, Integrated CT", side=2, line=2.75)
+abline(a=0, b=1)
 ```
 
 
-```{r Ecoli log removal calcs}
+
+```{r Plot PAA ANN linear exponential r2, fig.width=5, fig.height=3}
+par(family="serif",cex.main=1.25, mar=c(2.5,4,0.1,0.1))
+# boxplot(r2.ls[[2]][,1], ylim=c(min(r2.ls[[2]]),max(r2.ls[[2]])), main="Linear Model", pch=20, lwd=1, cex.axis=1.25)
+# mtext(expression(paste("R"^"2")), side=2, line=2.25, cex=1.25)
+# boxplot(r2.ls[[2]][,2], ylim=c(min(r2.ls[[2]]),max(r2.ls[[2]])), main="Exponential Model", pch=20, lwd=1, cex.axis=1.25)
+# mtext(expression(paste("R"^"2")), side=2, line=2.25, cex=1.25)
+
+boxplot(r2.ls[[2]], pch=20, lwd=1, cex.axis=1.25, names=c("Linear", "Exponential"), notch=TRUE)
+mtext(expression(paste("R"^"2")), side=2, line=2.25, cex=1.25)
+```
+
+
+```{r Ecoli log removal calcs, eval=FALSE, include=FALSE}
 library(plot3D)
 load("results/ct-all-results-ls.RData")
 ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
@@ -519,7 +631,6 @@ scatter3D(x, y, z, pch = 18, cex = 2,
 ```{r Build Ecoli ANN, include=FALSE}
 if(!("results/ecoli-ann-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
 
-
   # Load process data
   load("data/ecoli/process-data-ls.RData")
   
@@ -544,14 +655,15 @@ for(i in 1:3) {
     process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
     vis <- vis.data
     
-    # 1. Combine paa and process data
+    
+        # 1. Combine ecoli and process data
       process.index <- sapply(1:nrow(ecoli), function (n) {
         e <- index(ecoli)[n]
         d <- difftime(process$times,e)
         p <- which(abs(d)==min(abs(d)))
         return(p)
   })
-    merged.data <- cbind(data.frame(ecoli),
+    merged.data <- cbind(data.frame(log10(ecoli)),
                          process[process.index,-1])
     merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
     
@@ -569,9 +681,14 @@ for(i in 1:3) {
     vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
     merged.data <- cbind(merged.data, vis)
     
-
-      predict.var <- "ecoli"
+        # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+    
+    predict.var <- "log10.ecoli."
       predict.col <- which(colnames(merged.data)==predict.var)
+    
+
       resultsANN.n <- list()
       for(n in 1:10) {
         resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=merged.data,
@@ -586,15 +703,15 @@ for(i in 1:3) {
   }
   all.results.ls[[length(all.results.ls)+1]] <- test.results.ls
 }
-end <- Sys.time()
-end-start
 save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
 } else {
   load("results/ecoli-ann-all-results-ls.RData")
 }
 ```
 
-```{r plot Ecoli squared error, echo=FALSE}
+```{r plot Ecoli squared error, eval=FALSE, include=FALSE}
+## NOT WORKING
+
 # 1: 2018 or 2019
 # 2: Instantaneous process data, Avg, or 24h avg
 # 3: PAA sampling location
@@ -623,9 +740,9 @@ for(loc in 1:length(all.results.ls)) {
 # colnames(plot.data) <- c("Pre-disinfection", "Post-disinfection")
 # rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
 # barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data))
-par(mfrow=c(1,3))
+par(mfrow=c(1,2))
 plot.data <- results[,3,]
-rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
 colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
 for(i in 1:nrow(plot.data)) {
   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
@@ -656,7 +773,7 @@ log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
-for(i in 1:3) {
+for(i in 1:2) {
   ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
   ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
   test.results.ls <- list()
@@ -700,7 +817,7 @@ for(i in 1:3) {
       resultsRNN.n <- list()
       for(n in 1:10) {
         resultsRNN.n[[length(resultsRNN.n)+1]] <- rollingRNN(all.data=merged.data, predict.col, train.obs=ceiling(nrow(merged.data)*0.9),
-                act.function="softsign", n_epoch=1000)
+                act.function="softsign", n_epoch=3000)
       }
 
    test.results.ls[[length(test.results.ls)+1]] <- resultsRNN.n
@@ -714,11 +831,9 @@ save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
   load("results/ecoli-rnn-all-results-ls.RData")
 }
 ```
-```{r}
 
-```
 
-```{r eval=FALSE, include=FALSE}
+```{r Plot Ecoli Double RNN Error, echo=FALSE}
 load("results/ecoli-rnn-all-results-ls.RData")
 results <- array(data=NA, 
                  dim=c(3, # 3 rows pre, post, log removal
@@ -739,13 +854,9 @@ for(loc in 1:length(all.results.ls)) {
 
 
 # Barplot of prediction error (RMSE)
-# plot.data <- cbind(results[1,2,],results[2,2,])
-# colnames(plot.data) <- c("Pre-disinfection", "Post-disinfection")
-# rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
-# barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data))
-par(mfrow=c(1,3))
-plot.data <- results[,3,]
-rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+par(mfrow=c(1,2))
+plot.data <- results[1:2,3,]
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
 colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
 for(i in 1:nrow(plot.data)) {
   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
@@ -754,5 +865,139 @@ for(i in 1:nrow(plot.data)) {
                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
 }
 
+# par(mfrow=c(1,3))
+# plot.data <- results[,3,]
+# rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+# colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# for(i in 1:nrow(plot.data)) {
+#   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+#                # border=NA, 
+#                # ylim=c(0,max(highs)), 
+#                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+# }
+
 ```
 
+```{r Barplot of Ecoli prediction error, echo=FALSE}
+load("results/ecoli-ann-all-results-ls.RData")
+results.ann <- array(data=NA, 
+                 dim=c(3, # 3 rows pre, post, log removal
+                       5, # 5 columns (r2 and rmse, RMSE IQR)
+                       3)) # matrices (averageing)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results.ann[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results.ann[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results.ann[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results.ann[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results.ann[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+  }
+}
+
+
+
+
+load("results/ecoli-rnn-all-results-ls.RData")
+results.rnn <- array(data=NA, 
+                 dim=c(3, # 3 rows pre, post, log removal
+                       6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
+                       3)) # matrices (averageing)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results.rnn[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results.rnn[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results.rnn[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results.rnn[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results.rnn[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+      results.rnn[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
+  }
+}
+
+
+# Barplot of prediction error (RMSE)
+par(mfrow=c(2,1), family="serif", mar=c(2,3,3,1))
+plot.data <- array(data=NA,
+                   dim=c(2,
+                         3,
+                         3)
+                   )
+plot.data[,,1] <- results.ann[1:2,2,]^0.5
+plot.data[,,2] <- results.rnn[1:2,2,]^0.5
+plot.data[,,3] <- results.rnn[1:2,6,]^0.5
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
+colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+for(i in 1:dim(plot.data)[1]) {
+  # for(j in 1:nrow(plot.data))
+  # barplot(plot.data[i,,j], beside = TRUE, main=rownames(plot.data)[i],
+  barplot(t(plot.data[1,,]), beside = TRUE, main=rownames(plot.data)[i],
+               # border=NA, 
+               # ylim=c(0,max(highs)), 
+               # col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+          col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="RMSE")
+}
+
+
+```
+
+```{r Boxplot of Ecoli prediction error, fig.height=4.5, fig.width=6}
+load("results/ecoli-ann-all-results-ls.RData")
+results.ann <- array(data=NA, 
+                 dim=c(2, # 3 rows pre, post, log removal
+                       10, # 5 columns (r2 and rmse, RMSE IQR)
+                       3)) # matrices (averageing)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results.ann[loc,,avg] <- unlist(lapply(data, function(x) mean((x[,2]-x[,3])^2)^0.5)) # rmse
+  }
+}
+
+
+
+
+load("results/ecoli-rnn-all-results-ls.RData")
+results.rnn <- array(data=NA, 
+                 dim=c(2, # 3 rows pre, post, log removal
+                       10, # 5 columns (r2 and rmse, RMSE IQR)
+                       3)) # matrices (averageing)
+results.p <- matrix(data=NA, nrow=2, ncol=1)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results.rnn[loc,,avg] <- unlist(lapply(data, function(x) mean((x[,2]-x[,3])^2)^0.5)) # se
+      results.p[loc,] <- unlist(lapply(data, function(x) mean((x[,4]-x[,3])^2)^0.5))[1]
+  }
+}
+
+
+# Boxplot of prediction error (RMSE)
+par(mfrow=c(2,1), family="serif", mar=c(3.8,3.5,2,1), oma=c(0,0,0,0), xpd = TRUE)
+
+titles <- c("Predisinfection E.coli", "Postdisinfection E.coli")
+# colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+
+for(i in 1:dim(results.ann)[1]) {
+  plot.data <- cbind(results.ann[i,,1],results.rnn[i,,1],
+                results.ann[i,,2],results.rnn[i,,2],
+                results.ann[i,,3],results.rnn[i,,3])
+  colnames(plot.data) <- do.call("c", lapply(c("Instant", "Avg", "24h Avg"), function(t) paste(t,c("ANN", "RNN"))))
+  
+  # boxplot(plot.data, xaxt = "n")
+
+# Plot without x axis
+boundaries <- boxplot(plot.data, xaxt = "n", pch=20)
+mtext(titles[i], side=3, line=0.5, font=2)
+mtext("RMSE", side=2, line=2.25)
+axis(side=1,at=1:6,labels=FALSE)
+text(labels=colnames(plot.data), x=1:6, y=rep(min(boundaries$stats)-(range(boundaries$stats)[2]-range(boundaries$stats)[1])/4,6), xpd=TRUE, srt = 30, adj = 1,)
+abline(h=results.p[i,1], col="red", xpd=FALSE)
+}
+
+
+```
