@@ -540,7 +540,7 @@ for(i in 1:length(paa.data.ls)) {
 ```
 
 
-```{r Build CT ANN}
+```{r Build CT ANN, eval=FALSE, include=FALSE}
 
 if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
   load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
@@ -764,6 +764,22 @@ save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
   load("results/ecoli-ann-all-results-ls.RData")
 }
 ```
+
+
+```{r Ecoli autocorrelation, fig.width=6.5, fig.height=3}
+titles <- c(expression(paste(Log[10], " Predisinfection ", italic("E. coli"))), expression(paste(Log[10], " Postdisinfection ", italic("E. coli"))))
+par(mfrow=c(1,2), mar=c(3,3,2,1), family="serif", cex=1.2)
+load("results/ecoli-ann-all-results-ls.RData")
+for(i in 1:length(all.results.ls)) {
+  acf(all.results.ls[[i]][[1]][[1]][,3], main="")
+  mtext(text="Lag", side=1, line=2, cex=1.2)
+  mtext(text="ACF", side=2, line=2, cex=1.2)
+  mtext(text=titles[i], side=3, line=0.5, cex=1.2)
+}
+
+```
+
+
 
 ```{r plot Ecoli squared error, eval=FALSE, include=FALSE}
 ## NOT WORKING
