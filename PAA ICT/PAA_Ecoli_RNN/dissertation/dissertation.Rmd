@@ -159,6 +159,9 @@ for(i in 1:length(paa.data.ls)) {
   vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
   merged.data <- cbind(merged.data, vis)
   
+  # 4. Remove vars that are constant
+  merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
+  
   resultsANN.k <- list()
   k<-1
   for(k in 1:ncol(paa)) {
@@ -170,6 +173,7 @@ for(i in 1:length(paa.data.ls)) {
   
   combo.results.ls <- list()
   for(j in 1:ncol(combos)) {
+  # for(j in 16:ncol(combos)) { # interupted, bad col removed
 
       all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
       predict.col <- which(colnames(all.data)==predict.var)
@@ -188,12 +192,12 @@ for(i in 1:length(paa.data.ls)) {
       print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
   }
   #### WHICH COMBO HAS THE HIGHEST MSE? REMOVE AND RE-RUN ####
-  mse.results <- unlist(lapply(combo.results.ls, function(set) median(unlist(lapply(set, function(trial) (trial[,2]-trial[,3])^2)))))
-  previous.mse <- min(mse.results)
-  current.mse <- min(mse.results)
-  while(current.mse <= previous.mse) {
-    previous.mse <- min(mse.results) 
-    previous.vars <- combos[,which(mse.results==min(mse.results))]
+  rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
+  previous.rmse <- min(rmse.results)
+  current.rmse <- min(rmse.results)
+  while(current.rmse <= previous.rmse) {
+    previous.rmse <- min(rmse.results) 
+    previous.vars <- combos[,which(rmse.results==min(rmse.results))]
     previous.results <- combo.results.ls
     
     combos <- matrix(data=rep(previous.vars, length(vars[!vars %in% previous.vars])), byrow=TRUE, nrow=length(previous.vars))
@@ -218,8 +222,8 @@ for(i in 1:length(paa.data.ls)) {
         print(paste(Sys.time(),"Combo", j, "of", length(combos), "completed"))
     }
     
-    mse.results <- unlist(lapply(combo.results.ls, function(set) median(unlist(lapply(set, function(trial) (trial[,2]-trial[,3])^2)))))
-    current.mse <- min(mse.results)
+    rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
+    current.rmse <- min(rmse.results)
   }
   
   #### SAVE VARIABLE COMINATION AND RESULTS TO OBJECTS ####
