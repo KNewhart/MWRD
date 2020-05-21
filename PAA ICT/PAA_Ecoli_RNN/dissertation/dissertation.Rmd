@@ -895,7 +895,7 @@ for(i in 1:3) {
     colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
     
     predict.var <- "log10.ecoli."
-      predict.col <- which(colnames(merged.data)==predict.var)
+    predict.col <- which(colnames(merged.data)==predict.var)
     
 
       resultsANN.n <- list()
@@ -917,6 +917,139 @@ save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
   load("results/ecoli-ann-all-results-ls.RData")
 }
 ```
+
+
+```{r Variable selection ANN Ecoli, eval=FALSE, include=FALSE}
+if(!("results/ecoli-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
+  # Load process data anf CT
+  load("data/ecoli/process-data-ls.RData")
+  load("results/ct-all-results-ls.RData")
+  CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+var.results.ls <- list()
+i <- 1
+
+for(i in 1:length(ecoli.data.ls)) {
+  ecoli <- ecoli.data.ls[[i]] # Pre, post
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  process <- process.data.ls[[1]] # Instantaneous process data
+  vis <- vis.data
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  
+  # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
+    colnames(merged.data)[ncol(merged.data)] <- "CT"
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, as.matrix(vis))
+    
+     # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+   
+  
+  # 5. Remove vars that are constant
+  merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
+  
+    predict.var <- "log10.ecoli."
+    predict.col <- which(colnames(merged.data)==predict.var)
+ 
+  if(length(predict.col)==0) break
+    
+  # 4. Set variable combinations
+  vars <- which(!(colnames(merged.data) %in% predict.var))
+  combos <- combn(vars,1)
+  
+  combo.results.ls <- list()
+  for(j in 1:ncol(combos)) {
+
+      all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
+      predict.col <- which(colnames(all.data)==predict.var)
+      resultsANN.n <- list()
+      for(n in 1:3) {
+        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                          predict.col=predict.col, 
+                                          act.function="softsign", 
+                                          n_epoch=3000,
+                                          # n_nodes=NULL, 
+                                          scale=TRUE)
+      }
+      
+      
+      combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+      print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
+  }
+
+  rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
+  previous.rmse <- min(rmse.results)
+  current.rmse <- min(rmse.results)
+  while(current.rmse <= previous.rmse) {
+    previous.rmse <- min(rmse.results) 
+    previous.vars <- combos[,which(rmse.results==min(rmse.results))]
+    previous.results <- combo.results.ls
+    
+    combos <- matrix(data=rep(previous.vars, length(vars[!vars %in% previous.vars])), byrow=TRUE, nrow=length(previous.vars))
+    combos <- rbind(combos, vars[!vars %in% previous.vars])
+    
+    combo.results.ls <- list()
+    for(j in 1:ncol(combos)) {
+        all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
+        predict.col <- which(colnames(all.data)==predict.var)
+        resultsANN.n <- list()
+        for(n in 1:3) {
+          resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                            predict.col=predict.col, 
+                                            act.function="softsign", 
+                                            n_epoch=3000,
+                                            # n_nodes=NULL, 
+                                            scale=TRUE)
+        }
+        
+        
+        combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+        print(paste(Sys.time(),"Combo", j, "of", length(combos), "completed"))
+    }
+    
+    rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
+    current.rmse <- min(rmse.results)
+  }
+  
+    var.results.ls[[length(var.results.ls)+1]] <- colnames(all.data)[c(which(colnames(merged.data) %in% predict.var), previous.vars)]
+    print(paste("Finished",i,"year and",k,"sampling location"))
+  
+  # save(combo.results.ls,file="testing.RData")
+  all.results.ls[[length(all.results.ls)+1]] <- previous.results  # Results of all combos for 2018/2019
+  print(paste("Finished",i,"year"))
+}
+
+save(all.results.ls, file="results/ecoli-var-results-ls.RData")
+} else {
+  load("results/ecoli-var-results-ls.RData")
+}
+```
+
+
+
 
 
 ```{r Ecoli autocorrelation, fig.width=6.5, fig.height=3}

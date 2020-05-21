@@ -120,7 +120,7 @@ randomANN <- function(all.data,
                                #     stateful=TRUE
                                #   )
                                # plot(history$metric$loss,pch=20, ylim=c(0,1));points(validation$metrics$loss, col="red", pch=20)
-                               plot(history$metric$loss,pch=20, ylim=c(0,1))
+                               # plot(history$metric$loss,pch=20, ylim=c(0,1))
                                
                                # Calculate model fit to training data
                                validation <- model %>% predict(
