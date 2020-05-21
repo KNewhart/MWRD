@@ -132,7 +132,7 @@ save(all.results.ls, file="results/paa-all-results-ls.RData")
 ```
 
 
-```{r Variable selection ANN PAA, include=FALSE}
+```{r Variable selection ANN PAA, eval=FALSE, include=FALSE}
 if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
 load("data/paa/process-data-ls.RData")
 
@@ -379,7 +379,7 @@ for(avg in 1:3) {
 
 
 
-```{r Calculate CT, echo=FALSE}
+```{r Calculate CT, eval=FALSE, include=FALSE}
 load("results/paa-all-results-ls.RData")
 load("data/paa/process-data-ls.RData")
 i <- 1;j <- 1
@@ -427,6 +427,7 @@ save(all.results.ls,file="results/ct-all-results-ls.RData")
 
 
 ```{r Boxplots of CT D k, echo=FALSE}
+load("results/ct-all-results-ls.RData")
 layout(mat=matrix(c(1,2,3,4,5,6), ncol=2, byrow = TRUE))
 par(oma=c(0,2.5,2,0))
 par(mar=c(1,2,1,1))
@@ -458,6 +459,7 @@ plot.these <- list(c(4,11,14,15,28,32),
                    c(20,27,42,52,61,63))
 results.ls <- list()
 r2.ls <- list()
+anova.ls <- list()
 # 5. Merge data for testing
 year <- c("2018", "2019")
 for(i in 1:length(paa.data.ls)) {
@@ -473,7 +475,7 @@ for(i in 1:length(paa.data.ls)) {
                        3, # 3 columns (C and t) and Cpredicted
                        nrow(paa))) # matrices (each sampling event)
   results <- matrix(data=NA,
-                    nrow=nrow(paa),ncol=6)
+                    nrow=nrow(paa),ncol=7)
   r2.results <- matrix(data=NA,
                     nrow=nrow(paa),ncol=2)
   for(j in 1:dim(data)[3]) {
@@ -491,9 +493,14 @@ for(i in 1:length(paa.data.ls)) {
     Cp <- data[,3,j]
     linear.mod <- lm(C~t)
     exponential.mod <- lm(log(C)~ t)
+    # linear.mod <- nls(C~m*t+b, start=list(m=-.01723,b=1))
+    # exponential.mod <- nls(C ~ a*exp(r*t),
+    #                       start = list(a = 1, r = -0.03))
     r2.linear <- cor(x=na.omit(C),y=na.omit(t*linear.mod$coefficients[2]+linear.mod$coefficients[1]))
     r2 <- cor(x=na.omit(C),y=na.omit(exp(t*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])))
+    # r2 <- cor(x=na.omit(C),y=na.omit(coefficients(exponential.mod)[1]*exp(t*coefficients(exponential.mod)[2])))
     r2.results[j,] <- c(r2.linear, r2)
+    # anova.ls[[length(anova.ls)+1]] <- anova(linear.mod, exponential.mod, test="Chisq")
     C0 <- dose[j]
     D <- C0-exp(as.numeric(exponential.mod$coefficients)[1])
     k <- -as.numeric(exponential.mod$coefficients)[2]
@@ -505,7 +512,7 @@ for(i in 1:length(paa.data.ls)) {
     kp <- -as.numeric(exponential.mod.p$coefficients)[2]
     CTp <- (C0-Dp)/kp-(C0-Dp)/kp*exp(-kp*t_f[n])
     
-    results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT, r2, CTp)
+    results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT, r2, CTp, t_f[n])
 
     plot(y=C,
          x=t,
@@ -540,7 +547,7 @@ for(i in 1:length(paa.data.ls)) {
 ```
 
 
-```{r Build CT ANN}
+```{r Build CT ANN, eval=FALSE, include=FALSE}
 
 if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
   load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
@@ -594,17 +601,43 @@ if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
 
 
 
-```{r Actual predicted CT Plots}
+```{r Actual predicted CT Plots, fig.width=6.5, fig.height=3}
+n <- 1.2
+par(mfrow=c(1,2), family="serif", cex=n, mar=c(3,4.25,.1,0))
+
 actual <- unlist(lapply(results.ls, function(x) x[,4]))
 predicted <- unlist(lapply(results.ls, function(x) x[,6]))
+stats.str <- c(paste("R2",round(cor(actual, predicted),3)),
+               paste("RMSE", round(mean(sapply(i:length(actual), function(x) (actual[x]-predicted[x])^2))^0.5,2)))
 plot(x=actual,
      y=predicted, 
      xlim=c(min(c(actual, predicted)), max(c(actual, predicted))), 
      ylim=c(min(c(actual, predicted)), max(c(actual, predicted))), 
-     pch=20, xlab="", ylab="")
-mtext(text="Actual Integrated CT", side=1, line=2.75)
-mtext(text="Predicted PAA, Integrated CT", side=2, line=2.75)
+     pch=20, xlab="", ylab="", cex=0.8)
+mtext(text="Actual CT", side=1, line=2, cex=n)
+mtext(text="Predicted PAA,", side=2, line=3, cex=n)
+mtext(text="Calculated CT", side=2, line=2, cex=n)
 abline(a=0, b=1)
+mtext(stats.str[1], side=3, adj=0.04, line=-1)
+mtext(stats.str[2], side=3, adj=0.04, line=-2)
+
+load("results/ct-ann-results-ls.RData")
+# actual <- rowMeans(do.call("cbind",lapply(ct.results.ls[[1]][[1]], function(x) x[,3])))
+predicted <- rowMeans(do.call("cbind",lapply(ct.results.ls[[1]][[1]], function(x) x[,2])))
+predicted <- c(predicted, rowMeans(do.call("cbind",lapply(ct.results.ls[[2]][[1]], function(x) x[,2]))))
+stats.str <- c(paste("R2",round(cor(actual, predicted),3)),
+               paste("RMSE", round(mean(sapply(i:length(actual), function(x) (actual[x]-predicted[x])^2))^0.5,2)))
+plot(x=actual,
+     y=predicted, 
+     xlim=c(min(c(actual, predicted)), max(c(actual, predicted))), 
+     ylim=c(min(c(actual, predicted)), max(c(actual, predicted))), 
+     pch=20, xlab="", ylab="", cex=0.8)
+mtext(text="Actual CT", side=1, line=2, cex=n)
+# mtext(text="Predicted PAA,", side=2, line=3, cex=n)
+mtext(text="Predicted CT", side=2, line=2, cex=n)
+abline(a=0, b=1)
+mtext(stats.str[1], side=3, adj=0.04, line=-1)
+mtext(stats.str[2], side=3, adj=0.04, line=-2)
 ```
 
 
@@ -621,8 +654,9 @@ mtext(expression(paste("R"^"2")), side=2, line=2.25, cex=1.25)
 ```
 
 
-```{r Ecoli log removal calcs, eval=FALSE, include=FALSE}
-library(plot3D)
+```{r Ecoli traditional models, echo=FALSE, fig.width=6.5, fig.height=3.5}
+library(xts)
+load("data/ecoli/ecoli-data-ls.RData")
 load("results/ct-all-results-ls.RData")
 ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
   m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
@@ -638,35 +672,154 @@ CT.index <- sapply(1:nrow(log.removal), function(n) {
   return(m)
 })
 all.data <- cbind(log.removal, as.numeric(CT[CT.index]))
-plot(x=as.numeric(all.data[,2]), y=as.numeric(all.data[,1]), pch=20, ylab="Log removal (Log(N/N0))", xlab="CT (mg/L*min)")
+# plot(x=as.numeric(all.data[,2]), y=as.numeric(all.data[,1]), pch=20, ylab="Log removal (Log(N/N0))", xlab="CT (mg/L*min)")
 x=as.numeric(all.data[,2]);y=as.numeric(all.data[,1])
 
 # Double exponential
 x <- as.numeric(all.data[,2])
-y <- as.numeric(all.data[,1])
-mod <- nls(formula=10^y~((1-b)*exp(-d*x^m)), start = list(d=0.01163, b=0.99101, m=1.2))
-# mod <- nls(formula=y~(1-b)*exp(-d*x^m)+b*exp(-p*x), start = list(b=0.99,
-#                                                                  d=0.01,
-#                                                                  m=1,
-#                                                                  p=0.01))
+y <- 10^as.numeric(all.data[,1])
+# mod.lm <- lm(y~x)
+# mod.ex <- lm(log(y)~x)
+mod.equ <- nls(formula=y~((1-b)*exp(-d*x^m)+(b)*exp(-p*x)), start = list(d=0.302423268558496,
+                                                                     p=0.00762109588278754, 
+                                                                     b=0.00783362128131085, 
+                                                                     m=1.61089440219181)) # Used excel solver to start
+x.mod <- seq(min(x), max(x), by=1)
+# y.mod.lm <- x.mod*coefficients(mod.lm)[2]+coefficients(mod.lm)[1]
+# y.mod.ex <- exp(x.mod*coefficients(mod.ex)[2]+coefficients(mod.ex)[1])
+y.mod.equ <- ((1-coefficients(mod.equ)[3])*exp(-coefficients(mod.equ)[1]*x.mod^coefficients(mod.equ)[4])+(coefficients(mod.equ)[3])*exp(-coefficients(mod.equ)[2]*x.mod))
 
-# Linear model
-exponential.mod <- lm(y~x)
-cor(y,x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])
-# lines(x,x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1])
 
-# Exponential model
-exponential.mod <- lm(exp(-y)~x)
-cor(y,-log(x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1]))
-lines(x,-log(x*exponential.mod$coefficients[2]+exponential.mod$coefficients[1]))
+# plot(x=x, y=y, pch=20, xlab="", ylab="")
+# lines(x=x.mod, y=y.mod.equ, lty=2)
+# 
+# mtext(text="CT (mg/L*min)", side=1, line=2.75)
+# mtext(text=expression(paste("N / ",N[0])), side=2, line=2.75)
+# legend("topright", legend=c("Actual", "Equ 5.3"), pch=c(20,NA, NA), lty=c(NA,1,2))
 
+layout(mat=matrix(data=c(1,2), nrow=1), widths = c(0.60,0.40))
+n <- 1.25
+par(family="serif", mar=c(4,4,1,1), cex=n)
+plot(x=x,y=-log10(y), pch=20,ylab="", xlab="", cex=n)
+mtext(text="CT (mg/L*min)", side=1, line=2.75, cex=n)
+mtext(text=expression(paste("Log Removal ( ",Log[10],"N / ",N[0]," )")), side=2, line=2.75, cex=n)
+mod.lm <- lm(-log10(y)~x)
+mod.ex  <- lm(log(-log10(y))~x)    
+mod.ex <- nls(-log10(y)~a*exp(b*x), start=list(a=1,b=0.01)) 
+mod.p <- nls(-log10(y)~a^x+b, start=list(a=1.005,b=1.088))
+
+lines(x=x.mod, y=x.mod*coefficients(mod.lm)[2]+coefficients(mod.lm)[1], lty=2, col="blue")
+lines(x=x.mod, y=coefficients(mod.ex)[1]*exp(x.mod*coefficients(mod.ex)[2]), lty=2, col="purple")
+lines(x=x.mod, y=-log10(y.mod.equ), lty=2, col="red")
+lines(x=x.mod, y=coefficients(mod.p)[1]^x.mod+coefficients(mod.p)[2], lty=2, col="orange")
+
+
+
+### Doesn't work
+# k.star <- -as.numeric(do.call("rbind", results.ls)[CT.index,2])
+# y <- log(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+# C <- as.numeric(do.call("rbind", results.ls)[CT.index,3] - do.call("rbind", results.ls)[CT.index,1])
+# t <- as.numeric(do.call("rbind", results.ls)[CT.index,7])
+# CT.x <- as.numeric(CT[CT.index])
+# t <- t[which(k.star>0)]
+# C <- C[which(k.star>0)]
+# y <- y[which(k.star>0)]
+# CT.x <- CT.x[which(k.star>0)]
+# k.star <- k.star[which(k.star>0)]
+# data <- list(y=y, k.star=k.star,C=C,t=t)
+# mod.cw <- nls(y~-k*C^n/(k.star*n)*(1-exp(-n*k.star*t)), start=list(n=0.16338361, k=0.06631719), data=data)
+# pred.cw <- -0.06631719*C^0.16338361/(k.star*0.16338361)*(1-exp(-0.16338361*k.star*t))
+# lines(x=CT.x[order(CT.x)], y=-pred.cw[order(CT.x)], lty=2, col="blue")
+
+
+# library(mgcv)
+# mod.gam <- mgcv::gam(-log10(y) ~ s(x, bs="cr"))
+# y.gam <- predict(mod.gam, x.mod, type='response', se=T, newdata.guaranteed=TRUE)
+
+linear.str <- paste0("Linear (R2 = ",
+                    round(cor(-log10(y),
+                              x*coefficients(mod.lm)[2]+coefficients(mod.lm)[1]),2),")")
+ex.str <- paste0("Exponential (R2 = ",
+                    round(cor(-log10(y),
+                              coefficients(mod.ex)[1]*exp(x*coefficients(mod.ex)[2])),2),")")
+p.str <- paste0("Power (R2 = ",
+                    round(cor(-log10(y),
+                              coefficients(mod.p)[1]^x+coefficients(mod.p)[2]),2),")")
+equ.str <- paste0("Equ 5.3 (R2 = ",
+                 round(cor(-log10(y),-log10(((1-coefficients(mod.equ)[3])*exp(-coefficients(mod.equ)[1]*x^coefficients(mod.equ)[4])+(coefficients(mod.equ)[3])*exp(-coefficients(mod.equ)[2]*x)))),2),")")
+par(mar=c(0,0,0,0))
+plot(1, type="n", axes=F, xlab="", ylab="")
+legend("center", legend=c(linear.str, ex.str, p.str, equ.str),  lty=2, col=c("blue", "purple", "orange","red"))
+```
+
+```{r chick-watsom kinetic model, echo=FALSE, fig.width=3.75, fig.height=3}
+library(xts)
+load("data/ecoli/ecoli-data-ls.RData")
+load("results/ct-all-results-ls.RData")
+ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- xts(log.removal, order.by=ecoli.data.ls[[2]][,1])
+removal <- 10^log.removal
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+CT.index <- sapply(1:nrow(log.removal), function(n) {
+  m <- which(min(abs(difftime(index(log.removal)[n],index(CT))))==abs(difftime(index(log.removal)[n],index(CT))))
+  return(m)
+})
+
+k.star <- -as.numeric(do.call("rbind", results.ls)[CT.index,2])
+y <- log(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+C <- as.numeric(do.call("rbind", results.ls)[CT.index,3] - do.call("rbind", results.ls)[CT.index,1])
+# C <- as.numeric(do.call("rbind", results.ls)[CT.index,3])
+t <- as.numeric(do.call("rbind", results.ls)[CT.index,7])
+CT.x <- as.numeric(CT[CT.index])
+t <- t[which(k.star>0)]
+C <- C[which(k.star>0)]
+y <- y[which(k.star>0)]
+CT.x <- CT.x[which(k.star>0)]
+k.star <- k.star[which(k.star>0)]
+# 
+data <- list(y=y, k.star=k.star,C=C,t=t)
+# data <- lapply(data, function(x) x[which(k.star>0)])
+
+mod.cw <- nls(y~-k*C^n/(k.star*n)*(1-exp(-n*k.star*t)), start=list(n=0.16338361, k=0.06631719), data=data)
+pred.cw <- -0.06631719*C^0.16338361/(k.star*0.16338361)*(1-exp(-0.16338361*k.star*t))
+# plot(x=log(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2]), y=pred.cw);abline(0,1) 
+
+n <- 1.2
+par(family="serif", cex=n, mar=c(3,4.25,.1,0))
+
+actual <- y
+predicted <- pred.cw
+stats.str <- c(paste("R2",round(cor(actual, predicted),3)),
+               paste("RMSE", round(mean(sapply(i:length(actual), function(x) (actual[x]-predicted[x])^2))^0.5,2)))
+plot(x=-actual,
+     y=-predicted, 
+     xlim=c(min(c(-actual, -predicted)), max(c(-actual, -predicted))),
+     ylim=c(min(c(-actual, -predicted)), max(c(-actual, -predicted))),
+     # xlim=c(2.5,6.5), ylim=c(2.5,6.5),
+     pch=20, xlab="", ylab="", cex=0.8)
+mtext(text="Actual Log Inactivation", side=1, line=2, cex=n)
+mtext(text="Chick-Watson", side=2, line=3, cex=n)
+mtext(text="Predicted Inactivation", side=2, line=2, cex=n)
+abline(a=0, b=1)
+mtext(stats.str[1], side=1, adj=0.97, line=-2)
+mtext(stats.str[2], side=1, adj=0.97, line=-1)
+```
+
+
+
+```{r Ecoli CT Predis 3D, echo=FALSE, fig.width=6.5}
 # 3D plot
-z <- ecoli.data.ls[[1]][ecoli.index,2]
-scatter3D(x, y, z, theta = 30, phi = 40, pch=20, xlab="CT", ylab="Log removal", zlab="Predisinfection E.coli", ticktype = "detailed")
-
+library(plot3D)
+y <- -log10(y)
+z <- ecoli.data.ls[[1]][ecoli.index,2] # Predisinfection E.coli
 fit <- lm(z ~ x + y)
 # predict values on regular xy grid
-grid.lines = 26
+grid.lines = 100
 x.pred <- seq(min(x), max(x), length.out = grid.lines)
 y.pred <- seq(min(y), max(y), length.out = grid.lines)
 xy <- expand.grid( x = x.pred, y = y.pred)
@@ -675,13 +828,13 @@ z.pred <- matrix(predict(fit, newdata = xy),
 # fitted points for droplines to surface
 fitpoints <- predict(fit)
 # scatter plot with regression plane
-scatter3D(x, y, z, pch = 18, cex = 2, 
-    theta = 30, phi = 40, ticktype = "detailed",
-    xlab="CT", ylab="Log removal", zlab="Predisinfection E.coli",  
+par(cex=n, mar=c(1.5,3,0,0))
+scatter3D(x, y, z, colvar = z, pch = 18, cex = 2, bty = "b2",
+    theta = 290, phi = 10, ticktype = "detailed", nticks=4,
+    xlab="CT", ylab="Log removal", zlab="Predisinfection E.coli", 
+    colkey = list(side = 2, length = 0.5),
     surf = list(x = x.pred, y = y.pred, z = z.pred,  
     facets = NA, fit = fitpoints))
-
-
 ```
 
 ```{r Build Ecoli ANN, include=FALSE}
@@ -764,6 +917,22 @@ save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
   load("results/ecoli-ann-all-results-ls.RData")
 }
 ```
+
+
+```{r Ecoli autocorrelation, fig.width=6.5, fig.height=3}
+titles <- c(expression(paste(Log[10], " Predisinfection ", italic("E. coli"))), expression(paste(Log[10], " Postdisinfection ", italic("E. coli"))))
+par(mfrow=c(1,2), mar=c(3,3,2,1), family="serif", cex=1.2)
+load("results/ecoli-ann-all-results-ls.RData")
+for(i in 1:length(all.results.ls)) {
+  acf(all.results.ls[[i]][[1]][[1]][,3], main="")
+  mtext(text="Lag", side=1, line=2, cex=1.2)
+  mtext(text="ACF", side=2, line=2, cex=1.2)
+  mtext(text=titles[i], side=3, line=0.5, cex=1.2)
+}
+
+```
+
+
 
 ```{r plot Ecoli squared error, eval=FALSE, include=FALSE}
 ## NOT WORKING
