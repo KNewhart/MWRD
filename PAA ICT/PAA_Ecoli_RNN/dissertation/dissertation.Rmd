@@ -257,6 +257,7 @@ results <- array(data=NA,
                        5, # 4 columns (r2 and rmse, RMSE IQR)
                        3)) # matrices (averageing)
 rmse.results.ls <- list()
+sd.results.ls <- list()
 r <- 1
 for(avg in 1:3) {
   for(year in 1:length(all.results.ls)) {
@@ -265,6 +266,8 @@ for(avg in 1:3) {
       results[r,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
       results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
       rmse.results.ls[[length(rmse.results.ls)+1]] <- unlist(lapply(data, function(x) mean((x[,2]-x[,3])^2)^0.5))
+      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
+      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
       results[r,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
       results[r,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
       results[r,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
@@ -334,6 +337,19 @@ legend("bottomright", fill = cols, legend = c("24h avg","Avg","Instant"), horiz 
 mtext("RMSE", side=2, line=2.25, cex=1.2)
 axis(side=1, at=bar.pos[seq(2,length(bar.pos),3)], labels=FALSE)
 text(x=bar.pos[seq(2,length(bar.pos),3)], y=min(foo$stats)-.01, labels = unique(as.character(plot.results$loc)), xpd=TRUE, srt = 30, adj = 1)
+
+ci_95 <- unlist(sd.results.ls)*1.96
+plot.results <- data.frame(
+  data=ci_95,
+  loc=rep(c(rep("2018 1-min",1), rep("2018 Half",1),rep("2019 1-min",1), rep("2019 10-min",1),rep("2019 20-min",1), rep("2019 30-min", 1)),3), 
+  avg=c(rep("Instant", 1*6), rep("Avg", 1*6), rep("24-hr avg", 1*6))
+)
+plot.results <- plot.results[order(plot.results$loc),]
+par(mar=c(3.5,3.5,0.1,0.1), family="serif", cex=1.2)
+foo <- barplot(data ~ avg +loc, data = plot.results, beside=T, col = cols, ylab="", xlab="", ylim=c(0,0.45), border=TRUE)
+legend("topleft", fill = cols, legend = c("24h avg","Avg","Instant"), horiz = T)
+mtext("95% confidence interval", side=2, line=2.25, cex=1.2)
+text(x=as.vector(foo), y=plot.results[order(plot.results$loc, plot.results$avg),1]+0.01, labels = round(plot.results[order(plot.results$loc, plot.results$avg),1],2), pos=3)
 ```
 
 ```{r Timeseries PAA prediction actual, fig.height=8.5, fig.width=6.5}
@@ -812,7 +828,7 @@ mtext(stats.str[2], side=1, adj=0.97, line=-1)
 
 
 
-```{r Ecoli CT Predis 3D, echo=FALSE, fig.width=6.5}
+```{r Ecoli CT Predis 3D, eval=FALSE, fig.width=6.5, include=FALSE}
 # 3D plot
 library(plot3D)
 y <- -log10(y)
@@ -1080,7 +1096,7 @@ results <- array(data=NA,
                  dim=c(3, # 3 rows pre, post, log removal
                        5, # 5 columns (r2 and rmse, RMSE IQR)
                        3)) # matrices (averageing)
-
+sd.results.ls <- list()
 for(loc in 1:length(all.results.ls)) {
   for(avg in 1:length(all.results.ls[[loc]])) {
       data <- all.results.ls[[loc]][[avg]]
@@ -1089,6 +1105,8 @@ for(loc in 1:length(all.results.ls)) {
       results[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
       results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
       results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
+      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
   }
 }
 
@@ -1109,6 +1127,7 @@ for(i in 1:nrow(plot.data)) {
                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
 }
 
+ci_95 <- unlist(sd.results.ls)*1.96
 
 ```
 
@@ -1194,7 +1213,6 @@ save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
 ```{r Build Ecoli RNN 50-50, eval=FALSE, include=FALSE}
 if(!("results/ecoli-rnn-50-50-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
 
-
   # Load process data
   load("data/ecoli/process-data-ls.RData")
   
@@ -1276,7 +1294,7 @@ results <- array(data=NA,
                  dim=c(3, # 3 rows pre, post, log removal
                        6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
                        3)) # matrices (averageing)
-
+sd.results.ls <-list()
 for(loc in 1:length(all.results.ls)) {
   for(avg in 1:length(all.results.ls[[loc]])) {
       data <- all.results.ls[[loc]][[avg]]
@@ -1286,8 +1304,11 @@ for(loc in 1:length(all.results.ls)) {
       results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
       results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
       results[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
+      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
+      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
   }
 }
+ci_95 <- unlist(sd.results.ls)*1.96
 
 
 # Barplot of prediction error (RMSE)
@@ -1438,3 +1459,198 @@ abline(h=results.p[i,1], col="red", xpd=FALSE)
 
 
 ```
+
+```{r Build real-time Ecoli, eval=FALSE, include=FALSE}
+## Need to add real time CT prediction
+ # Load process data
+  load("data/ecoli/process-data-ls.RData")
+  
+  # Calculate log removal
+  ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
+
+  load("results/ct-all-results-ls.RData")
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+for(i in 1:2) {
+  ecoli <- ecoli.data.ls[[i]] # Pre, post, or log removal
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  test.results.ls <- list()
+  for(j in 3) { # 24 h avg data
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    
+    
+        # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, as.matrix(vis))
+    
+        # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    lagged.times <- sapply(index(ecoli), function(t) {
+      tail(which(index(ecoli) < (t-1.9*24*60*60)), n=1)
+    })
+    merged.data <- cbind(merged.data[which(lapply(lagged.times, length)>0), ], as.numeric(log10(ecoli[unlist(lagged.times)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+    
+    predict.var <- "log10.ecoli."
+    predict.col <- which(colnames(merged.data)==predict.var)
+    
+    all.data <- merged.data
+    scale <- TRUE
+    act.function="softsign"
+    n_epoch=3000
+    n_nodes=NULL
+    
+    pkgs <- c("xts", "dplyr", "parallel", "doSNOW", "foreach")
+  sapply(pkgs, require, character.only = TRUE)
+  if(!("keras" %in% rownames(installed.packages()))) {
+    install.packages("keras")
+    library(keras)
+    keras::install_keras()
+  } else {
+    library(keras)
+  }
+  
+  # Scale training data
+   train.sd <- apply(all.data,2,sd)
+   if(length(which(train.sd==0))) {
+     predict.var <- colnames(all.data)[predict.col]
+     all.data <- all.data[,-which(train.sd==0)]
+     train.sd <- apply(all.data[-test.obs,],2,sd)
+     predict.col <- which(colnames(all.data)==predict.var)
+     
+   }
+   # train.mean <- apply(all.data[-test.obs,],2,mean)
+   
+   # Create 3D array of training data to simulate time sequence in batches of 1
+   # if(scale) train.x <- scale(all.data[-test.obs,], center=train.mean, scale=train.sd)[,-predict.col]
+   if(scale) train.x <- min.max.norm(all.data[,-predict.col])
+   if(!scale) train.x <- all.data[,-predict.col]
+   if(length(which(apply(train.x,2,anyNA)))>0) train.x <- train.x[,-which(apply(train.x,2,anyNA))]
+   
+   train.x <- simplify2array(list(train.x))
+   
+   
+   
+   if(length(dim(train.x)) == 3) {
+     # if(scale) train.y <- simplify2array(list(scale(all.data[-test.obs,], center=train.mean, scale=train.sd)[,predict.col]))
+     if(scale) train.y <- simplify2array(list(min.max.norm(all.data)[,predict.col]))
+     if(!scale) train.y <- simplify2array(list(all.data[,predict.col]))
+     
+     n_batch <- dim(train.x)[1]
+     if(is.null(n_nodes)) n_nodes <- c(dim(train.x)[2], round(dim(train.x)[2]*3))
+     
+     # Setup model
+     model <- keras_model_sequential() %>%
+       layer_dense(units=n_nodes[1], 
+                   input_shape=dim(train.x)[2], 
+                   activation = act.function)
+     for(i in 2:length(n_nodes)) {
+       layer_dense(object=model,
+                   units=n_nodes[i], 
+                   activation = act.function)
+     }
+     layer_dense(object=model, units = 1)
+     model %>% compile(
+       optimizer = optimizer_rmsprop(),
+       loss = "mean_squared_error"
+     )
+     
+     # Train model
+     # history.loss <- vector(length=n_epoch)
+     # for(i in seq(1,n_epoch)) {
+     history <- model %>% fit(
+       x=train.x[,,1],
+       y=train.y,
+       batch_size=n_batch,
+       epochs=n_epoch,
+       shuffle=TRUE
+       # stateful=TRUE
+     )
+     # history.loss[i] <- history$metrics$loss
+     # model %>% reset_states()
+     # }
+     
+     # # Testing...
+     #   history <- model %>% fit(
+     #     x=train.x[,,1],
+     #     y=train.y,
+     #     batch_size=n_batch,
+     #     epochs=n_epoch,
+     #     shuffle=FALSE,
+     #     stateful=TRUE
+     #   )
+     #   validation <- model %>% fit(
+     #     x=train.x[,,1],
+     #     y=train.y,
+     #     batch_size=n_batch,
+     #     epochs=n_epoch,
+     #     shuffle=FALSE,
+     #     stateful=TRUE
+     #   )
+     # plot(history$metric$loss,pch=20, ylim=c(0,1));points(validation$metrics$loss, col="red", pch=20)
+     # plot(history$metric$loss,pch=20, ylim=c(0,1))
+     
+     # Calculate model fit to training data
+     validation <- model %>% predict(
+       x=train.x[,,1],
+       batch_size=1
+     )
+     
+     r2 <- cor(validation, train.y)^2;r2
+     
+     ## Setup testing data
+    
+     if(scale) test.x <- min.max.norm(all.data[-test.obs,-predict.col], all.data[test.obs,-predict.col])
+     if(!scale) test.x <- all.data[test.obs,-predict.col]
+
+     
+     # Predict E coli
+     pred <- model %>% predict(
+       x=matrix(test.x, nrow=1),
+       batch_size=1
+     )
+     
+     # if(scale) pred <- pred*train.sd[predict.col]+train.mean[predict.col]
+     if(scale) pred <- pred*(max(all.data[-test.obs,predict.col]) - min(all.data[-test.obs,predict.col]))+ min(all.data[-test.obs,predict.col])
+     
+     data.frame("R2"=r2,
+                "Prediction"=pred,
+                "Actual"=all.data[test.obs,predict.col])
+   } else {
+     data.frame("R2"=NA, 
+                "Prediction"=NA,
+                "Actual"=NA)
+   }
+
+}
+}
+```
+
