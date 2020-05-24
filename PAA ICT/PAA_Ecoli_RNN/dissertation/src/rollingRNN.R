@@ -55,7 +55,9 @@ rollingRNN <- function(all.data, predict.col, train.obs,
       train.x <- simplify2array(list(train.x))
       if(length(dim(train.x)) == 3) {
         
-        train.y <- simplify2array(list(min.max.norm(all.data[train.start:train.end,predict.col])))
+        train.y <- simplify2array(list(min.max.norm(all.data[train.start:train.end,predict.col]))) 
+        # 5/22/2020: IDK why the above isn't working, below is added as a fix
+        train.y <- as.numeric(unlist(min.max.norm(all.data[train.start:train.end,predict.col])))
         n_batch <- dim(train.x)[1]
         if(is.null(n_nodes)) n_nodes <- c(dim(train.x)[2], round(dim(train.x)[2]*3))
         

@@ -191,7 +191,7 @@ for(i in 1:length(paa.data.ls)) {
       combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
       print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
   }
-  #### WHICH COMBO HAS THE HIGHEST MSE? REMOVE AND RE-RUN ####
+
   rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
   previous.rmse <- min(rmse.results)
   current.rmse <- min(rmse.results)
@@ -226,12 +226,12 @@ for(i in 1:length(paa.data.ls)) {
     current.rmse <- min(rmse.results)
   }
   
-  #### SAVE VARIABLE COMINATION AND RESULTS TO OBJECTS ####
+
     resultsANN.k[[length(resultsANN.k)+1]] <- previous.results 
     var.results.ls[[length(var.results.ls)+1]] <- colnames(all.data)[c(which(colnames(merged.data) %in% predict.var), previous.vars)]
     print(paste("Finished",i,"year and",k,"sampling location"))
   } 
-  ###### CHECK RMSE AND WRITE CONDITIONAL STATEMENT TO REMOVE WORSE COMBO ######
+
   
   # save(combo.results.ls,file="testing.RData")
   all.results.ls[[length(all.results.ls)+1]] <- resultsANN.k # Results of all combos for 2018/2019
@@ -389,7 +389,7 @@ year <- c("2018", "2019")
 for(i in 1:length(paa.data.ls)) {
   paa <- paa.data.ls[[i]] # 2018 or 2019
   hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
-  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
   flow <- process.data.ls[[1]]$`North Flow to Dis`
   t_f <- 2690.3*flow^-0.959
   data <- array(data=NA, 
@@ -425,6 +425,152 @@ for(i in 1:length(paa.data.ls)) {
 save(all.results.ls,file="results/ct-all-results-ls.RData")
 ```
 
+```{r Calculate Persistence CT for 2019, echo=FALSE, fig.width=6.5, fig.height=2.5}
+load("results/ct-all-results-ls.RData")
+load("data/paa/process-data-ls.RData")
+load("results/ct-ann-results-ls.RData")
+
+avg.k <- lapply(all.results.ls, function(x) mean(x[,2]))
+avg.D <- lapply(all.results.ls, function(x) mean(x[,3]-exp(as.numeric(x[,1]))))
+n <- 1
+par(family="serif", mar=c(2,3.1,.1,0.6), mfcol=c(1,2))
+
+for(i in 1:length(all.results.ls)) {
+
+  # Decay plots when assuming constant k
+  x <- as.numeric(difftime(index(all.results.ls[[i]]), index(all.results.ls[[i]])[1]))
+  y <- -as.numeric(all.results.ls[[i]][,2])
+  
+  lab.tic <- seq(as.numeric(difftime(as.Date(index(all.results.ls[[i]][1]))+1, 
+                                            index(all.results.ls[[i]])[1], units="sec")), max(x), by=60*60*24)
+  lab.tex <- seq.Date(as.Date(index(all.results.ls[[i]][1]))+1, as.Date(tail(index(all.results.ls[[i]]),n=1)), by=1)
+  lab.tex <- format(lab.tex, "%m/%d")
+  
+  plot(x=x, y=y, pch=20, ylab="", xlab="", xaxt="n", ylim=c(0,max(-unlist(lapply(all.results.ls, function(x) x[,2])))), cex=0.8)
+  axis(side=1, at = lab.tic, 
+       labels = FALSE)
+  m <- 8
+  if(length(lab.tex) < 15) m <- 3
+  text(lab.tex[seq(1,length(lab.tex),by=m)], 
+       x=lab.tic[seq(1,length(lab.tex),by=m)], 
+       y=-(range(y)[2])/7, xpd=TRUE, srt = 0, adj = 0.5)
+  abline(h=-avg.k[[i]], lty=2, col="red", lwd=2)
+  mtext(side=2, text="Decay (k, min-1)", line=2.25)
+  # if(i==1) legend("topright", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+  #          pch=c(20,NA), lty=c(NA, 2), horiz = TRUE)
+  # if(i==2) legend("topleft", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+  #          pch=c(20,NA), lty=c(NA, 2), horiz = TRUE)
+}
+
+for(i in 1:length(all.results.ls)) {
+  
+  flow <- process.data.ls[[1]]$`North Flow to Dis`
+
+  t_f <- 2690.3*flow^-0.959
+  if(i == 1) t_f <- t_f[1:nrow(all.results.ls[[1]])]
+  if(i == 2) t_f <- t_f[(nrow(all.results.ls[[1]])+1):length(t_f)]
+  C0 <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
+  if(i == 1) C0 <- C0[1:nrow(all.results.ls[[1]])]
+  if(i == 2) C0 <- C0[(nrow(all.results.ls[[1]])+1):length(C0)]
+
+  k <- -avg.k[[i]]
+  
+  if(i==1) D <- mean(C0-exp(all.results.ls[[i]][,1])) # Constant D
+  if(i==2) {
+    t_a <- 267.62*flow^-0.952
+    t_a <- t_a[(nrow(all.results.ls[[1]])+1):length(t_a)]
+    paa.sensor <- process.data.ls[[1]][,2]
+    paa.sensor <- paa.sensor[(nrow(all.results.ls[[1]])+1):length(paa.sensor)]
+    D <- C0-paa.sensor*exp(k*t_a) # Variable D, constant k
+  }
+  
+    # Demand plots when assuming constant k
+  x <- as.numeric(difftime(index(all.results.ls[[i]]), index(all.results.ls[[i]])[1]))
+  y <- as.numeric(all.results.ls[[i]][,3]-exp(as.numeric(all.results.ls[[i]][,1])))
+  
+  
+  lab.tic <- seq(as.numeric(difftime(as.Date(index(all.results.ls[[i]][1]))+1, 
+                                            index(all.results.ls[[i]])[1], units="sec")), max(x), by=60*60*24)
+  lab.tex <- seq.Date(as.Date(index(all.results.ls[[i]][1]))+1, as.Date(tail(index(all.results.ls[[i]]),n=1)), by=1)
+  lab.tex <- format(lab.tex, "%m/%d")
+  
+  plot(x=x, y=y, pch=20, ylab="", xlab="", xaxt="n", ylim=c(0,2), cex=0.8)
+  axis(side=1, at = lab.tic, 
+       labels = FALSE)
+  m <- 8
+  if(length(lab.tex) < 15) m <- 3
+  text(lab.tex[seq(1,length(lab.tex),by=m)], 
+       x=lab.tic[seq(1,length(lab.tex),by=m)], 
+       y=-(2)/7, xpd=TRUE, srt = 0, adj = 0.5)
+  mtext(side=2, text="Demand (D, mg/L)", line=2.25)
+  if(i==1) {
+    abline(h=avg.D[[i]], lty=2, col="red", lwd=2)
+    # legend("topleft", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+    #        pch=c(20,NA), lty=c(NA, 2), horiz = TRUE)
+  }
+  if(i ==2) {
+    points(x=x, y=D, col="red", cex=0.8, pch=20)
+        # legend("topleft", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+        #    pch=c(20,20), horiz = TRUE)
+  }
+  
+}
+
+for(i in 1:length(all.results.ls)) {
+  
+  flow <- process.data.ls[[1]]$`North Flow to Dis`
+
+  t_f <- 2690.3*flow^-0.959
+  if(i == 1) t_f <- t_f[1:nrow(all.results.ls[[1]])]
+  if(i == 2) t_f <- t_f[(nrow(all.results.ls[[1]])+1):length(t_f)]
+  C0 <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
+  if(i == 1) C0 <- C0[1:nrow(all.results.ls[[1]])]
+  if(i == 2) C0 <- C0[(nrow(all.results.ls[[1]])+1):length(C0)]
+
+  k <- -avg.k[[i]]
+  
+  if(i==1) D <- mean(C0-exp(all.results.ls[[i]][,1])) # Constant D
+  if(i==2) {
+    t_a <- 267.62*flow^-0.952
+    t_a <- t_a[(nrow(all.results.ls[[1]])+1):length(t_a)]
+    paa.sensor <- process.data.ls[[1]][,2]
+    paa.sensor <- paa.sensor[(nrow(all.results.ls[[1]])+1):length(paa.sensor)]
+    D <- C0-paa.sensor*exp(k*t_a) # Variable D, constant k
+  }
+  
+  # CT plots when assuming constant k and constant/variable D
+  CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f)
+  
+  x <- as.numeric(difftime(index(all.results.ls[[i]]), index(all.results.ls[[i]])[1]))
+  y <- as.numeric(all.results.ls[[i]][,4])
+  
+  
+  lab.tic <- seq(as.numeric(difftime(as.Date(index(all.results.ls[[i]][1]))+1, 
+                                            index(all.results.ls[[i]])[1], units="sec")), max(x), by=60*60*24)
+  lab.tex <- seq.Date(as.Date(index(all.results.ls[[i]][1]))+1, as.Date(tail(index(all.results.ls[[i]]),n=1)), by=1)
+  lab.tex <- format(lab.tex, "%m/%d")
+  
+  plot(x=x, y=y, pch=20, ylab="", xlab="", xaxt="n", cex=0.8)
+  axis(side=1, at = lab.tic, 
+       labels = FALSE)
+  m <- 8
+  if(length(lab.tex) < 15) m <- 3
+  text(lab.tex[seq(1,length(lab.tex),by=m)], 
+       x=lab.tic[seq(1,length(lab.tex),by=m)], 
+       y=-0.5, xpd=TRUE, srt = 0, adj = 0.5)
+  points(x=x, y=CT, col="red", cex=0.8, pch=20) # Persistence
+  predicted <- rowMeans(do.call("cbind",lapply(ct.results.ls[[i]][[1]], function(x) x[,2])))
+  points(x=x, y=predicted, col="blue", cex=0.8, pch=20)
+  points(x=x, y=y, pch=20, cex=0.8)
+  mtext(side=2, text="CT (mg/L*min)", line=2.25)
+  # if(i==1) mtext(side=3, text="k and D are held constant")
+  # if(i==2) mtext(side=3, text="k is held constant, D is variable")
+  # legend("topleft", legend=c("Observed", "Presistence", "Predicted"), col=c("black", "red", "blue"),
+  #        pch=c(20,20,20), horiz = TRUE)
+  mtext(side=3, line=-1.1, adj=0.01, text=round(mean(sapply(1:length(y), function(z) (y[z]-CT[z])^2))^0.5,2)) # Persistence
+  mtext(side=3, line=-2.1, adj=0.01, text=round(mean(sapply(1:length(y), function(z) (y[z]-predicted[z])^2))^0.5,2)) # Prediction
+}
+```
 
 ```{r Boxplots of CT D k, echo=FALSE}
 load("results/ct-all-results-ls.RData")
@@ -434,6 +580,7 @@ par(mar=c(1,2,1,1))
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
   boxplot(as.numeric(all.results.ls[[i]][,3])-exp(as.numeric(all.results.ls[[i]][,1])), ylim=c(0,2.5))
+  points(mean(as.numeric(all.results.ls[[i]][,3])-exp(as.numeric(all.results.ls[[i]][,1]))), col="red", cex=2, pch=20)
   if(i==1) mtext("2018", side=3, line=1)
   if(i==1) mtext("Demand (D)", side=2, line=3)
   if(i==2) mtext("2019", side=3, line=1)
@@ -441,11 +588,13 @@ for(i in 1:length(all.results.ls)) {
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
   boxplot(-as.numeric(all.results.ls[[i]][,2]), ylim=c(0,0.08))
+  points(mean(-as.numeric(all.results.ls[[i]][,2])), col="red", cex=2, pch=20)
   if(i==1) mtext("Decay (k)", side=2, line=3)
 }
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
   boxplot(as.numeric(all.results.ls[[i]][,4]), ylim=c(0,max(unlist(lapply(all.results.ls,function(x) x[,4])))))
+  points(mean(as.numeric(all.results.ls[[i]][,4])), col="red", cex=2, pch=20)
   if(i==1) mtext("CT (mg/L*min)", side=2, line=3)
 }
 ```
@@ -467,7 +616,7 @@ for(i in 1:length(paa.data.ls)) {
   pred <- all.results.ls[[i]][[1]] # Real time was found to be the best
   pred <- lapply(pred, function(x) apply(do.call("cbind",lapply(x, function(y) y[,2])),1,mean)) # For each sampling location, mean predicted values
   hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
-  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
   flow <- process.data.ls[[1]]$`North Flow to Dis`
   t_f <- 2690.3*flow^-0.959
   data <- array(data=NA, 
@@ -655,6 +804,7 @@ mtext(expression(paste("R"^"2")), side=2, line=2.25, cex=1.25)
 
 
 ```{r Ecoli traditional models, echo=FALSE, fig.width=6.5, fig.height=3.5}
+
 library(xts)
 load("data/ecoli/ecoli-data-ls.RData")
 load("results/ct-all-results-ls.RData")
@@ -776,7 +926,8 @@ C <- as.numeric(do.call("rbind", results.ls)[CT.index,3] - do.call("rbind", resu
 # C <- as.numeric(do.call("rbind", results.ls)[CT.index,3])
 t <- as.numeric(do.call("rbind", results.ls)[CT.index,7])
 CT.x <- as.numeric(CT[CT.index])
-t <- t[which(k.star>0)]
+clean <- which(k.star>0)
+t <- t[clean]
 C <- C[which(k.star>0)]
 y <- y[which(k.star>0)]
 CT.x <- CT.x[which(k.star>0)]
@@ -812,12 +963,13 @@ mtext(stats.str[2], side=1, adj=0.97, line=-1)
 
 
 
-```{r Ecoli CT Predis 3D, echo=FALSE, fig.width=6.5}
+```{r Ecoli CT Predis 3D, eval=FALSE, fig.width=6.5, include=FALSE}
+## NEEDS TO BE RUN WITH CODE CHUNK ABOVE ##
 # 3D plot
 library(plot3D)
 y <- -log10(y)
 z <- ecoli.data.ls[[1]][ecoli.index,2] # Predisinfection E.coli
-fit <- lm(z ~ x + y)
+fit <- lm(z[clean] ~ x[clean] + y)
 # predict values on regular xy grid
 grid.lines = 100
 x.pred <- seq(min(x), max(x), length.out = grid.lines)
@@ -856,7 +1008,7 @@ log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
-for(i in 1:3) {
+for(i in 1:2) {
   ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
   ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
   test.results.ls <- list()
@@ -883,15 +1035,20 @@ for(i in 1:3) {
         p <- which(abs(d)==min(abs(d)))
         return(p)
   })
-    merged.data <- cbind(merged.data, CT[CT.index])
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
     
     # 3. Add vis
     vis <- na.locf(vis)
     vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
-    merged.data <- cbind(merged.data, vis)
+    merged.data <- cbind(merged.data, as.matrix(vis))
     
         # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
-    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    # merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    # FIX: 2-timesteps is not representative... it needs to be last sample outside 48 hrs...
+    lagged.times <- sapply(index(ecoli), function(t) {
+      tail(which(index(ecoli) < (t-1.9*24*60*60)), n=1)
+    })
+    merged.data <- cbind(merged.data[which(lapply(lagged.times, length)>0), ], as.numeric(log10(ecoli[unlist(lagged.times)])))
     colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
     
     predict.var <- "log10.ecoli."
