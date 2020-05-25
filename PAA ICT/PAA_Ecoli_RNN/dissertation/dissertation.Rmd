@@ -186,7 +186,7 @@ for(i in 2) { # Test on 2019 dataset first
     vars <- which(!(colnames(merged.data) %in% colnames(paa)))
     combos <- combn(vars,1) # Initialize
     previous.rmse <- 100 # Dummy
-    current.rmse <- previous.rmse-0.01 # Dummy
+    current.rmse <- 0 # Dummy
     results.ls <- list() # Store all combination results
     
     # Loop over RMSE
