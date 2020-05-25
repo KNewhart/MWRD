@@ -75,6 +75,23 @@ if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
 }
 ```
 
+```{r Process variables plot, fig.width=6.5, fig.height=7.5}
+load("data/paa/process-data-ls.RData")
+par(mfrow=c(5,3), mar=c(2,2,2.4,1), family="serif", oma=c(0,0,0,0), xpd=TRUE)
+data.lab <- c("Instant", "Short-Avearge", "24h-Avg")
+for(j in 2:ncol(process.data.ls[[1]])) {
+  for(i in 1:length(process.data.ls)) {
+    plot(process.data.ls[[i]][,j], pch=20, ylab="", xlab="")
+    if(i==2) mtext(text=colnames(process.data.ls[[i]])[j], side=3, line=1.1, cex=0.8)
+    mtext(text=data.lab[i], side=3, line=0.1, cex=0.7)
+    abline(v=head(which(process.data.ls[[1]][,1] > as.POSIXct("2019-01-01")),n=1)-0.5, col="red", xpd=FALSE)
+  }
+}
+
+```
+
+
+
 ```{r Build ANN PAA, include=FALSE}
 if(!("results/paa-all-results-ls.RData" %in% list.files(recursive=TRUE))) {
   load("data/paa/process-data-ls.RData")
@@ -234,6 +251,7 @@ results <- array(data=NA,
                        5, # 4 columns (r2 and rmse, RMSE IQR)
                        3)) # matrices (averageing)
 rmse.results.ls <- list()
+sd.results.ls <- list()
 r <- 1
 for(avg in 1:3) {
   for(year in 1:length(all.results.ls)) {
@@ -242,6 +260,8 @@ for(avg in 1:3) {
       results[r,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
       results[r,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
       rmse.results.ls[[length(rmse.results.ls)+1]] <- unlist(lapply(data, function(x) mean((x[,2]-x[,3])^2)^0.5))
+      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
+      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
       results[r,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
       results[r,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
       results[r,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
@@ -311,6 +331,19 @@ legend("bottomright", fill = cols, legend = c("24h avg","Avg","Instant"), horiz 
 mtext("RMSE", side=2, line=2.25, cex=1.2)
 axis(side=1, at=bar.pos[seq(2,length(bar.pos),3)], labels=FALSE)
 text(x=bar.pos[seq(2,length(bar.pos),3)], y=min(foo$stats)-.01, labels = unique(as.character(plot.results$loc)), xpd=TRUE, srt = 30, adj = 1)
+
+ci_95 <- unlist(sd.results.ls)*1.96
+plot.results <- data.frame(
+  data=ci_95,
+  loc=rep(c(rep("2018 1-min",1), rep("2018 Half",1),rep("2019 1-min",1), rep("2019 10-min",1),rep("2019 20-min",1), rep("2019 30-min", 1)),3), 
+  avg=c(rep("Instant", 1*6), rep("Avg", 1*6), rep("24-hr avg", 1*6))
+)
+plot.results <- plot.results[order(plot.results$loc),]
+par(mar=c(3.5,3.5,0.1,0.1), family="serif", cex=1.2)
+foo <- barplot(data ~ avg +loc, data = plot.results, beside=T, col = cols, ylab="", xlab="", ylim=c(0,0.45), border=TRUE)
+legend("topleft", fill = cols, legend = c("24h avg","Avg","Instant"), horiz = T)
+mtext("95% confidence interval", side=2, line=2.25, cex=1.2)
+text(x=as.vector(foo), y=plot.results[order(plot.results$loc, plot.results$avg),1]+0.01, labels = round(plot.results[order(plot.results$loc, plot.results$avg),1],2), pos=3)
 ```
 
 ```{r Timeseries PAA prediction actual, fig.height=8.5, fig.width=6.5}
@@ -366,7 +399,7 @@ year <- c("2018", "2019")
 for(i in 1:length(paa.data.ls)) {
   paa <- paa.data.ls[[i]] # 2018 or 2019
   hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
-  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
   flow <- process.data.ls[[1]]$`North Flow to Dis`
   t_f <- 2690.3*flow^-0.959
   data <- array(data=NA, 
@@ -402,6 +435,152 @@ for(i in 1:length(paa.data.ls)) {
 save(all.results.ls,file="results/ct-all-results-ls.RData")
 ```
 
+```{r Calculate Persistence CT for 2019, echo=FALSE, fig.width=6.5, fig.height=2.5}
+load("results/ct-all-results-ls.RData")
+load("data/paa/process-data-ls.RData")
+load("results/ct-ann-results-ls.RData")
+
+avg.k <- lapply(all.results.ls, function(x) mean(x[,2]))
+avg.D <- lapply(all.results.ls, function(x) mean(x[,3]-exp(as.numeric(x[,1]))))
+n <- 1
+par(family="serif", mar=c(2,3.1,.1,0.6), mfcol=c(1,2))
+
+for(i in 1:length(all.results.ls)) {
+
+  # Decay plots when assuming constant k
+  x <- as.numeric(difftime(index(all.results.ls[[i]]), index(all.results.ls[[i]])[1]))
+  y <- -as.numeric(all.results.ls[[i]][,2])
+  
+  lab.tic <- seq(as.numeric(difftime(as.Date(index(all.results.ls[[i]][1]))+1, 
+                                            index(all.results.ls[[i]])[1], units="sec")), max(x), by=60*60*24)
+  lab.tex <- seq.Date(as.Date(index(all.results.ls[[i]][1]))+1, as.Date(tail(index(all.results.ls[[i]]),n=1)), by=1)
+  lab.tex <- format(lab.tex, "%m/%d")
+  
+  plot(x=x, y=y, pch=20, ylab="", xlab="", xaxt="n", ylim=c(0,max(-unlist(lapply(all.results.ls, function(x) x[,2])))), cex=0.8)
+  axis(side=1, at = lab.tic, 
+       labels = FALSE)
+  m <- 8
+  if(length(lab.tex) < 15) m <- 3
+  text(lab.tex[seq(1,length(lab.tex),by=m)], 
+       x=lab.tic[seq(1,length(lab.tex),by=m)], 
+       y=-(range(y)[2])/7, xpd=TRUE, srt = 0, adj = 0.5)
+  abline(h=-avg.k[[i]], lty=2, col="red", lwd=2)
+  mtext(side=2, text="Decay (k, min-1)", line=2.25)
+  # if(i==1) legend("topright", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+  #          pch=c(20,NA), lty=c(NA, 2), horiz = TRUE)
+  # if(i==2) legend("topleft", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+  #          pch=c(20,NA), lty=c(NA, 2), horiz = TRUE)
+}
+
+for(i in 1:length(all.results.ls)) {
+  
+  flow <- process.data.ls[[1]]$`North Flow to Dis`
+
+  t_f <- 2690.3*flow^-0.959
+  if(i == 1) t_f <- t_f[1:nrow(all.results.ls[[1]])]
+  if(i == 2) t_f <- t_f[(nrow(all.results.ls[[1]])+1):length(t_f)]
+  C0 <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
+  if(i == 1) C0 <- C0[1:nrow(all.results.ls[[1]])]
+  if(i == 2) C0 <- C0[(nrow(all.results.ls[[1]])+1):length(C0)]
+
+  k <- -avg.k[[i]]
+  
+  if(i==1) D <- mean(C0-exp(all.results.ls[[i]][,1])) # Constant D
+  if(i==2) {
+    t_a <- 267.62*flow^-0.952
+    t_a <- t_a[(nrow(all.results.ls[[1]])+1):length(t_a)]
+    paa.sensor <- process.data.ls[[1]][,2]
+    paa.sensor <- paa.sensor[(nrow(all.results.ls[[1]])+1):length(paa.sensor)]
+    D <- C0-paa.sensor*exp(k*t_a) # Variable D, constant k
+  }
+  
+    # Demand plots when assuming constant k
+  x <- as.numeric(difftime(index(all.results.ls[[i]]), index(all.results.ls[[i]])[1]))
+  y <- as.numeric(all.results.ls[[i]][,3]-exp(as.numeric(all.results.ls[[i]][,1])))
+  
+  
+  lab.tic <- seq(as.numeric(difftime(as.Date(index(all.results.ls[[i]][1]))+1, 
+                                            index(all.results.ls[[i]])[1], units="sec")), max(x), by=60*60*24)
+  lab.tex <- seq.Date(as.Date(index(all.results.ls[[i]][1]))+1, as.Date(tail(index(all.results.ls[[i]]),n=1)), by=1)
+  lab.tex <- format(lab.tex, "%m/%d")
+  
+  plot(x=x, y=y, pch=20, ylab="", xlab="", xaxt="n", ylim=c(0,2), cex=0.8)
+  axis(side=1, at = lab.tic, 
+       labels = FALSE)
+  m <- 8
+  if(length(lab.tex) < 15) m <- 3
+  text(lab.tex[seq(1,length(lab.tex),by=m)], 
+       x=lab.tic[seq(1,length(lab.tex),by=m)], 
+       y=-(2)/7, xpd=TRUE, srt = 0, adj = 0.5)
+  mtext(side=2, text="Demand (D, mg/L)", line=2.25)
+  if(i==1) {
+    abline(h=avg.D[[i]], lty=2, col="red", lwd=2)
+    # legend("topleft", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+    #        pch=c(20,NA), lty=c(NA, 2), horiz = TRUE)
+  }
+  if(i ==2) {
+    points(x=x, y=D, col="red", cex=0.8, pch=20)
+        # legend("topleft", legend=c("Actual", "Persistence"), col=c("black", "red"), 
+        #    pch=c(20,20), horiz = TRUE)
+  }
+  
+}
+
+for(i in 1:length(all.results.ls)) {
+  
+  flow <- process.data.ls[[1]]$`North Flow to Dis`
+
+  t_f <- 2690.3*flow^-0.959
+  if(i == 1) t_f <- t_f[1:nrow(all.results.ls[[1]])]
+  if(i == 2) t_f <- t_f[(nrow(all.results.ls[[1]])+1):length(t_f)]
+  C0 <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
+  if(i == 1) C0 <- C0[1:nrow(all.results.ls[[1]])]
+  if(i == 2) C0 <- C0[(nrow(all.results.ls[[1]])+1):length(C0)]
+
+  k <- -avg.k[[i]]
+  
+  if(i==1) D <- mean(C0-exp(all.results.ls[[i]][,1])) # Constant D
+  if(i==2) {
+    t_a <- 267.62*flow^-0.952
+    t_a <- t_a[(nrow(all.results.ls[[1]])+1):length(t_a)]
+    paa.sensor <- process.data.ls[[1]][,2]
+    paa.sensor <- paa.sensor[(nrow(all.results.ls[[1]])+1):length(paa.sensor)]
+    D <- C0-paa.sensor*exp(k*t_a) # Variable D, constant k
+  }
+  
+  # CT plots when assuming constant k and constant/variable D
+  CT <- (C0-D)/k-(C0-D)/k*exp(-k*t_f)
+  
+  x <- as.numeric(difftime(index(all.results.ls[[i]]), index(all.results.ls[[i]])[1]))
+  y <- as.numeric(all.results.ls[[i]][,4])
+  
+  
+  lab.tic <- seq(as.numeric(difftime(as.Date(index(all.results.ls[[i]][1]))+1, 
+                                            index(all.results.ls[[i]])[1], units="sec")), max(x), by=60*60*24)
+  lab.tex <- seq.Date(as.Date(index(all.results.ls[[i]][1]))+1, as.Date(tail(index(all.results.ls[[i]]),n=1)), by=1)
+  lab.tex <- format(lab.tex, "%m/%d")
+  
+  plot(x=x, y=y, pch=20, ylab="", xlab="", xaxt="n", cex=0.8)
+  axis(side=1, at = lab.tic, 
+       labels = FALSE)
+  m <- 8
+  if(length(lab.tex) < 15) m <- 3
+  text(lab.tex[seq(1,length(lab.tex),by=m)], 
+       x=lab.tic[seq(1,length(lab.tex),by=m)], 
+       y=-0.5, xpd=TRUE, srt = 0, adj = 0.5)
+  points(x=x, y=CT, col="red", cex=0.8, pch=20) # Persistence
+  predicted <- rowMeans(do.call("cbind",lapply(ct.results.ls[[i]][[1]], function(x) x[,2])))
+  points(x=x, y=predicted, col="blue", cex=0.8, pch=20)
+  points(x=x, y=y, pch=20, cex=0.8)
+  mtext(side=2, text="CT (mg/L*min)", line=2.25)
+  # if(i==1) mtext(side=3, text="k and D are held constant")
+  # if(i==2) mtext(side=3, text="k is held constant, D is variable")
+  # legend("topleft", legend=c("Observed", "Presistence", "Predicted"), col=c("black", "red", "blue"),
+  #        pch=c(20,20,20), horiz = TRUE)
+  mtext(side=3, line=-1.1, adj=0.01, text=round(mean(sapply(1:length(y), function(z) (y[z]-CT[z])^2))^0.5,2)) # Persistence
+  mtext(side=3, line=-2.1, adj=0.01, text=round(mean(sapply(1:length(y), function(z) (y[z]-predicted[z])^2))^0.5,2)) # Prediction
+}
+```
 
 ```{r Boxplots of CT D k, echo=FALSE}
 load("results/ct-all-results-ls.RData")
@@ -411,6 +590,7 @@ par(mar=c(1,2,1,1))
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
   boxplot(as.numeric(all.results.ls[[i]][,3])-exp(as.numeric(all.results.ls[[i]][,1])), ylim=c(0,2.5))
+  points(mean(as.numeric(all.results.ls[[i]][,3])-exp(as.numeric(all.results.ls[[i]][,1]))), col="red", cex=2, pch=20)
   if(i==1) mtext("2018", side=3, line=1)
   if(i==1) mtext("Demand (D)", side=2, line=3)
   if(i==2) mtext("2019", side=3, line=1)
@@ -418,11 +598,13 @@ for(i in 1:length(all.results.ls)) {
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
   boxplot(-as.numeric(all.results.ls[[i]][,2]), ylim=c(0,0.08))
+  points(mean(-as.numeric(all.results.ls[[i]][,2])), col="red", cex=2, pch=20)
   if(i==1) mtext("Decay (k)", side=2, line=3)
 }
 for(i in 1:length(all.results.ls)) {
   # apply(abs(all.results.ls[[i]]),2,boxplot)
   boxplot(as.numeric(all.results.ls[[i]][,4]), ylim=c(0,max(unlist(lapply(all.results.ls,function(x) x[,4])))))
+  points(mean(as.numeric(all.results.ls[[i]][,4])), col="red", cex=2, pch=20)
   if(i==1) mtext("CT (mg/L*min)", side=2, line=3)
 }
 ```
@@ -444,7 +626,7 @@ for(i in 1:length(paa.data.ls)) {
   pred <- all.results.ls[[i]][[1]] # Real time was found to be the best
   pred <- lapply(pred, function(x) apply(do.call("cbind",lapply(x, function(y) y[,2])),1,mean)) # For each sampling location, mean predicted values
   hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
-  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
   flow <- process.data.ls[[1]]$`North Flow to Dis`
   t_f <- 2690.3*flow^-0.959
   data <- array(data=NA, 
@@ -632,6 +814,7 @@ mtext(expression(paste("R"^"2")), side=2, line=2.25, cex=1.25)
 
 
 ```{r Ecoli traditional models, echo=FALSE, fig.width=6.5, fig.height=3.5}
+
 library(xts)
 load("data/ecoli/ecoli-data-ls.RData")
 load("results/ct-all-results-ls.RData")
@@ -753,7 +936,8 @@ C <- as.numeric(do.call("rbind", results.ls)[CT.index,3] - do.call("rbind", resu
 # C <- as.numeric(do.call("rbind", results.ls)[CT.index,3])
 t <- as.numeric(do.call("rbind", results.ls)[CT.index,7])
 CT.x <- as.numeric(CT[CT.index])
-t <- t[which(k.star>0)]
+clean <- which(k.star>0)
+t <- t[clean]
 C <- C[which(k.star>0)]
 y <- y[which(k.star>0)]
 CT.x <- CT.x[which(k.star>0)]
@@ -789,12 +973,13 @@ mtext(stats.str[2], side=1, adj=0.97, line=-1)
 
 
 
-```{r Ecoli CT Predis 3D, echo=FALSE, fig.width=6.5}
+```{r Ecoli CT Predis 3D, eval=FALSE, fig.width=6.5, include=FALSE}
+## NEEDS TO BE RUN WITH CODE CHUNK ABOVE ##
 # 3D plot
 library(plot3D)
 y <- -log10(y)
 z <- ecoli.data.ls[[1]][ecoli.index,2] # Predisinfection E.coli
-fit <- lm(z ~ x + y)
+fit <- lm(z[clean] ~ x[clean] + y)
 # predict values on regular xy grid
 grid.lines = 100
 x.pred <- seq(min(x), max(x), length.out = grid.lines)
@@ -833,7 +1018,7 @@ log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
-for(i in 1:3) {
+for(i in 1:2) {
   ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
   ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
   test.results.ls <- list()
@@ -860,19 +1045,24 @@ for(i in 1:3) {
         p <- which(abs(d)==min(abs(d)))
         return(p)
   })
-    merged.data <- cbind(merged.data, CT[CT.index])
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
     
     # 3. Add vis
     vis <- na.locf(vis)
     vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
-    merged.data <- cbind(merged.data, vis)
+    merged.data <- cbind(merged.data, as.matrix(vis))
     
         # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
-    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    # merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    # FIX: 2-timesteps is not representative... it needs to be last sample outside 48 hrs...
+    lagged.times <- sapply(index(ecoli), function(t) {
+      tail(which(index(ecoli) < (t-1.9*24*60*60)), n=1)
+    })
+    merged.data <- cbind(merged.data[which(lapply(lagged.times, length)>0), ], as.numeric(log10(ecoli[unlist(lagged.times)])))
     colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
     
     predict.var <- "log10.ecoli."
-      predict.col <- which(colnames(merged.data)==predict.var)
+    predict.col <- which(colnames(merged.data)==predict.var)
     
 
       resultsANN.n <- list()
@@ -894,6 +1084,139 @@ save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
   load("results/ecoli-ann-all-results-ls.RData")
 }
 ```
+
+
+```{r Variable selection ANN Ecoli, eval=FALSE, include=FALSE}
+if(!("results/ecoli-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
+  # Load process data anf CT
+  load("data/ecoli/process-data-ls.RData")
+  load("results/ct-all-results-ls.RData")
+  CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+var.results.ls <- list()
+i <- 1
+
+for(i in 1:length(ecoli.data.ls)) {
+  ecoli <- ecoli.data.ls[[i]] # Pre, post
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  process <- process.data.ls[[1]] # Instantaneous process data
+  vis <- vis.data
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  
+  # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
+    colnames(merged.data)[ncol(merged.data)] <- "CT"
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, as.matrix(vis))
+    
+     # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+   
+  
+  # 5. Remove vars that are constant
+  merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
+  
+    predict.var <- "log10.ecoli."
+    predict.col <- which(colnames(merged.data)==predict.var)
+ 
+  if(length(predict.col)==0) break
+    
+  # 4. Set variable combinations
+  vars <- which(!(colnames(merged.data) %in% predict.var))
+  combos <- combn(vars,1)
+  
+  combo.results.ls <- list()
+  for(j in 1:ncol(combos)) {
+
+      all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
+      predict.col <- which(colnames(all.data)==predict.var)
+      resultsANN.n <- list()
+      for(n in 1:3) {
+        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                          predict.col=predict.col, 
+                                          act.function="softsign", 
+                                          n_epoch=3000,
+                                          # n_nodes=NULL, 
+                                          scale=TRUE)
+      }
+      
+      
+      combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+      print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
+  }
+
+  rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
+  previous.rmse <- min(rmse.results)
+  current.rmse <- min(rmse.results)
+  while(current.rmse <= previous.rmse) {
+    previous.rmse <- min(rmse.results) 
+    previous.vars <- combos[,which(rmse.results==min(rmse.results))]
+    previous.results <- combo.results.ls
+    
+    combos <- matrix(data=rep(previous.vars, length(vars[!vars %in% previous.vars])), byrow=TRUE, nrow=length(previous.vars))
+    combos <- rbind(combos, vars[!vars %in% previous.vars])
+    
+    combo.results.ls <- list()
+    for(j in 1:ncol(combos)) {
+        all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
+        predict.col <- which(colnames(all.data)==predict.var)
+        resultsANN.n <- list()
+        for(n in 1:3) {
+          resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                            predict.col=predict.col, 
+                                            act.function="softsign", 
+                                            n_epoch=3000,
+                                            # n_nodes=NULL, 
+                                            scale=TRUE)
+        }
+        
+        
+        combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+        print(paste(Sys.time(),"Combo", j, "of", length(combos), "completed"))
+    }
+    
+    rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
+    current.rmse <- min(rmse.results)
+  }
+  
+    var.results.ls[[length(var.results.ls)+1]] <- colnames(all.data)[c(which(colnames(merged.data) %in% predict.var), previous.vars)]
+    print(paste("Finished",i,"year and",k,"sampling location"))
+  
+  # save(combo.results.ls,file="testing.RData")
+  all.results.ls[[length(all.results.ls)+1]] <- previous.results  # Results of all combos for 2018/2019
+  print(paste("Finished",i,"year"))
+}
+
+save(all.results.ls, file="results/ecoli-var-results-ls.RData")
+} else {
+  load("results/ecoli-var-results-ls.RData")
+}
+```
+
+
+
 
 
 ```{r Ecoli autocorrelation, fig.width=6.5, fig.height=3}
@@ -924,7 +1247,7 @@ results <- array(data=NA,
                  dim=c(3, # 3 rows pre, post, log removal
                        5, # 5 columns (r2 and rmse, RMSE IQR)
                        3)) # matrices (averageing)
-
+sd.results.ls <- list()
 for(loc in 1:length(all.results.ls)) {
   for(avg in 1:length(all.results.ls[[loc]])) {
       data <- all.results.ls[[loc]][[avg]]
@@ -933,6 +1256,8 @@ for(loc in 1:length(all.results.ls)) {
       results[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
       results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
       results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
+      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
   }
 }
 
@@ -942,19 +1267,21 @@ for(loc in 1:length(all.results.ls)) {
 # colnames(plot.data) <- c("Pre-disinfection", "Post-disinfection")
 # rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
 # barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data))
-par(mfrow=c(1,2))
-plot.data <- results[,3,]
-rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
-colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
-for(i in 1:nrow(plot.data)) {
-  barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
-               # border=NA, 
-               # ylim=c(0,max(highs)), 
-               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
-}
+# par(mfrow=c(1,2))
+# plot.data <- results[,3,]
+# rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
+# colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# for(i in 1:nrow(plot.data)) {
+#   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+#                # border=NA, 
+#                # ylim=c(0,max(highs)), 
+#                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+# }
 
+ci_95 <- unlist(sd.results.ls)*1.96
 
 ```
+
 ```{r Build Ecoli RNN, eval=FALSE, include=FALSE}
 if(!("results/ecoli-rnn-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
 
@@ -1034,6 +1361,83 @@ save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
 }
 ```
 
+```{r Build Ecoli RNN 50-50, eval=FALSE, include=FALSE}
+if(!("results/ecoli-rnn-50-50-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+
+  # Load process data
+  load("data/ecoli/process-data-ls.RData")
+  
+  # Calculate log removal
+  ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
+
+  load("results/ct-all-results-ls.RData")
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+for(i in 1:2) {
+  ecoli <- c(ecoli.data.ls, list(log.removal))[[i]] # Pre, post, or log removal
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  test.results.ls <- list()
+  for(j in 1:length(process.data.ls)) {
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    
+    
+    # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, as.matrix(vis))
+    
+    # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    merged.data <- cbind(merged.data[3:nrow(merged.data),], as.numeric(log10(ecoli[1:(length(ecoli)-2)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+
+      predict.var <- "log10.ecoli."
+      predict.col <- which(colnames(merged.data)==predict.var)
+      resultsRNN.n <- list()
+      for(n in 1:10) {
+        resultsRNN.n[[length(resultsRNN.n)+1]] <- rollingRNN(all.data=merged.data, predict.col, train.obs=ceiling(nrow(merged.data)*0.5),
+                act.function="softsign", n_epoch=3000)
+      }
+
+   test.results.ls[[length(test.results.ls)+1]] <- resultsRNN.n
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- test.results.ls
+}
+end <- Sys.time()
+end-start
+save(all.results.ls, file="results/ecoli-rnn-50-50-all-results-ls.RData")
+} else {
+  load("results/ecoli-rnn-50-50-all-results-ls.RData")
+}
+```
 
 ```{r Plot Ecoli Double RNN Error, echo=FALSE}
 load("results/ecoli-rnn-all-results-ls.RData")
@@ -1041,7 +1445,7 @@ results <- array(data=NA,
                  dim=c(3, # 3 rows pre, post, log removal
                        6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
                        3)) # matrices (averageing)
-
+sd.results.ls <-list()
 for(loc in 1:length(all.results.ls)) {
   for(avg in 1:length(all.results.ls[[loc]])) {
       data <- all.results.ls[[loc]][[avg]]
@@ -1051,8 +1455,11 @@ for(loc in 1:length(all.results.ls)) {
       results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
       results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
       results[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
+      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
+      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
   }
 }
+ci_95 <- unlist(sd.results.ls)*1.96
 
 
 # Barplot of prediction error (RMSE)
@@ -1203,3 +1610,198 @@ abline(h=results.p[i,1], col="red", xpd=FALSE)
 
 
 ```
+
+```{r Build real-time Ecoli, eval=FALSE, include=FALSE}
+## Need to add real time CT prediction
+ # Load process data
+  load("data/ecoli/process-data-ls.RData")
+  
+  # Calculate log removal
+  ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
+  m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
+  if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
+  return(m)
+  })
+log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
+log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
+
+  load("results/ct-all-results-ls.RData")
+CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
+
+all.results.ls <- list()
+for(i in 1:2) {
+  ecoli <- ecoli.data.ls[[i]] # Pre, post, or log removal
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  test.results.ls <- list()
+  for(j in 3) { # 24 h avg data
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    
+    
+        # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, as.matrix(vis))
+    
+        # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+    lagged.times <- sapply(index(ecoli), function(t) {
+      tail(which(index(ecoli) < (t-1.9*24*60*60)), n=1)
+    })
+    merged.data <- cbind(merged.data[which(lapply(lagged.times, length)>0), ], as.numeric(log10(ecoli[unlist(lagged.times)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+    
+    predict.var <- "log10.ecoli."
+    predict.col <- which(colnames(merged.data)==predict.var)
+    
+    all.data <- merged.data
+    scale <- TRUE
+    act.function="softsign"
+    n_epoch=3000
+    n_nodes=NULL
+    
+    pkgs <- c("xts", "dplyr", "parallel", "doSNOW", "foreach")
+  sapply(pkgs, require, character.only = TRUE)
+  if(!("keras" %in% rownames(installed.packages()))) {
+    install.packages("keras")
+    library(keras)
+    keras::install_keras()
+  } else {
+    library(keras)
+  }
+  
+  # Scale training data
+   train.sd <- apply(all.data,2,sd)
+   if(length(which(train.sd==0))) {
+     predict.var <- colnames(all.data)[predict.col]
+     all.data <- all.data[,-which(train.sd==0)]
+     train.sd <- apply(all.data[-test.obs,],2,sd)
+     predict.col <- which(colnames(all.data)==predict.var)
+     
+   }
+   # train.mean <- apply(all.data[-test.obs,],2,mean)
+   
+   # Create 3D array of training data to simulate time sequence in batches of 1
+   # if(scale) train.x <- scale(all.data[-test.obs,], center=train.mean, scale=train.sd)[,-predict.col]
+   if(scale) train.x <- min.max.norm(all.data[,-predict.col])
+   if(!scale) train.x <- all.data[,-predict.col]
+   if(length(which(apply(train.x,2,anyNA)))>0) train.x <- train.x[,-which(apply(train.x,2,anyNA))]
+   
+   train.x <- simplify2array(list(train.x))
+   
+   
+   
+   if(length(dim(train.x)) == 3) {
+     # if(scale) train.y <- simplify2array(list(scale(all.data[-test.obs,], center=train.mean, scale=train.sd)[,predict.col]))
+     if(scale) train.y <- simplify2array(list(min.max.norm(all.data)[,predict.col]))
+     if(!scale) train.y <- simplify2array(list(all.data[,predict.col]))
+     
+     n_batch <- dim(train.x)[1]
+     if(is.null(n_nodes)) n_nodes <- c(dim(train.x)[2], round(dim(train.x)[2]*3))
+     
+     # Setup model
+     model <- keras_model_sequential() %>%
+       layer_dense(units=n_nodes[1], 
+                   input_shape=dim(train.x)[2], 
+                   activation = act.function)
+     for(i in 2:length(n_nodes)) {
+       layer_dense(object=model,
+                   units=n_nodes[i], 
+                   activation = act.function)
+     }
+     layer_dense(object=model, units = 1)
+     model %>% compile(
+       optimizer = optimizer_rmsprop(),
+       loss = "mean_squared_error"
+     )
+     
+     # Train model
+     # history.loss <- vector(length=n_epoch)
+     # for(i in seq(1,n_epoch)) {
+     history <- model %>% fit(
+       x=train.x[,,1],
+       y=train.y,
+       batch_size=n_batch,
+       epochs=n_epoch,
+       shuffle=TRUE
+       # stateful=TRUE
+     )
+     # history.loss[i] <- history$metrics$loss
+     # model %>% reset_states()
+     # }
+     
+     # # Testing...
+     #   history <- model %>% fit(
+     #     x=train.x[,,1],
+     #     y=train.y,
+     #     batch_size=n_batch,
+     #     epochs=n_epoch,
+     #     shuffle=FALSE,
+     #     stateful=TRUE
+     #   )
+     #   validation <- model %>% fit(
+     #     x=train.x[,,1],
+     #     y=train.y,
+     #     batch_size=n_batch,
+     #     epochs=n_epoch,
+     #     shuffle=FALSE,
+     #     stateful=TRUE
+     #   )
+     # plot(history$metric$loss,pch=20, ylim=c(0,1));points(validation$metrics$loss, col="red", pch=20)
+     # plot(history$metric$loss,pch=20, ylim=c(0,1))
+     
+     # Calculate model fit to training data
+     validation <- model %>% predict(
+       x=train.x[,,1],
+       batch_size=1
+     )
+     
+     r2 <- cor(validation, train.y)^2;r2
+     
+     ## Setup testing data
+    
+     if(scale) test.x <- min.max.norm(all.data[-test.obs,-predict.col], all.data[test.obs,-predict.col])
+     if(!scale) test.x <- all.data[test.obs,-predict.col]
+
+     
+     # Predict E coli
+     pred <- model %>% predict(
+       x=matrix(test.x, nrow=1),
+       batch_size=1
+     )
+     
+     # if(scale) pred <- pred*train.sd[predict.col]+train.mean[predict.col]
+     if(scale) pred <- pred*(max(all.data[-test.obs,predict.col]) - min(all.data[-test.obs,predict.col]))+ min(all.data[-test.obs,predict.col])
+     
+     data.frame("R2"=r2,
+                "Prediction"=pred,
+                "Actual"=all.data[test.obs,predict.col])
+   } else {
+     data.frame("R2"=NA, 
+                "Prediction"=NA,
+                "Actual"=NA)
+   }
+
+}
+}
+```
+
