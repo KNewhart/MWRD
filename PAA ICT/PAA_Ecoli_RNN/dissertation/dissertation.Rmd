@@ -759,7 +759,7 @@ if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
 ```
 
 
-```{r Variable selection ANN PAA, eval=FALSE, include=FALSE}
+```{r Variable selection ANN CT, eval=FALSE, include=FALSE}
 if(!("results/ct-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
   load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
   ct.ls <- lapply(all.results.ls, function(x) x[,4])
