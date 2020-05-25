@@ -137,10 +137,9 @@ if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
 load("data/paa/process-data-ls.RData")
 
 all.results.ls <- list()
-var.results.ls <- list()
-i <- 1
-# 5. Merge data for testing
-for(i in 1:length(paa.data.ls)) {
+
+# for(i in 1:length(paa.data.ls)) {
+for(i in 2) { # Test on 2019 dataset first
   paa <- paa.data.ls[[i]] # 2018 or 2019
   process <- process.data.ls[[1]] # Instantaneous process data
   vis <- vis.data
@@ -162,77 +161,55 @@ for(i in 1:length(paa.data.ls)) {
   # 4. Remove vars that are constant
   merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
   
-  resultsANN.k <- list()
-  k<-1
-  for(k in 1:ncol(paa)) {
-  predict.var <- colnames(paa)[k]
-  
-  # 4. Set variable combinations
-  vars <- which(!(colnames(merged.data) %in% colnames(paa)))
-  combos <- combn(vars,1)
-  
-  combo.results.ls <- list()
-  for(j in 1:ncol(combos)) {
-  # for(j in 16:ncol(combos)) { # interupted, bad col removed
-
-      all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
-      predict.col <- which(colnames(all.data)==predict.var)
-      resultsANN.n <- list()
-      for(n in 1:3) {
-        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
-                                          predict.col=predict.col, 
-                                          act.function="softsign", 
-                                          n_epoch=3000,
-                                          # n_nodes=NULL, 
-                                          scale=TRUE)
-      }
-      
-      
-      combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
-      print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
-  }
-  #### WHICH COMBO HAS THE HIGHEST MSE? REMOVE AND RE-RUN ####
-  rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
-  previous.rmse <- min(rmse.results)
-  current.rmse <- min(rmse.results)
-  while(current.rmse <= previous.rmse) {
-    previous.rmse <- min(rmse.results) 
-    previous.vars <- combos[,which(rmse.results==min(rmse.results))]
-    previous.results <- combo.results.ls
+  resultsANN.k <- list() # Store the results of each sampling location 
+  for(k in 1:ncol(paa)) { # For each sampling location
+    predict.var <- colnames(paa)[k]
     
-    combos <- matrix(data=rep(previous.vars, length(vars[!vars %in% previous.vars])), byrow=TRUE, nrow=length(previous.vars))
-    combos <- rbind(combos, vars[!vars %in% previous.vars])
+    # Initialize loop
+    vars <- which(!(colnames(merged.data) %in% colnames(paa)))
+    combos <- combn(vars,1) # Initialize
+    previous.rmse <- 100 # Dummy
+    current.rmse <- previous.rmse-0.01 # Dummy
+    results.ls <- list() # Store all combination results
     
+    # Loop over RMSE
+    while(previous.rmse >= current.rmse) {
     combo.results.ls <- list()
-    for(j in 1:ncol(combos)) {
-        all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])]
-        predict.col <- which(colnames(all.data)==predict.var)
-        resultsANN.n <- list()
-        for(n in 1:3) {
-          resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
-                                            predict.col=predict.col, 
-                                            act.function="softsign", 
-                                            n_epoch=3000,
-                                            # n_nodes=NULL, 
-                                            scale=TRUE)
-        }
-        
-        
-        combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
-        print(paste(Sys.time(),"Combo", j, "of", length(combos), "completed"))
+    # Train all combinations n times
+      for(j in 1:ncol(combos)) {
+          all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])] # Create training data
+          predict.col <- which(colnames(all.data)==predict.var)
+          resultsANN.n <- list()
+          for(n in 1:3) {
+            resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                              predict.col=predict.col, 
+                                              act.function="softsign", 
+                                              n_epoch=3000,
+                                              # n_nodes=NULL, 
+                                              scale=TRUE)
+          }
+          combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+          print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
+      }
+    # Calcaulte performance of each combo
+    rsq <- unlist(lapply(combo.results.ls, function(combo) mean(unlist(lapply(combo, function(trial) trial[,1])) )))
+    rmse <- unlist(lapply(combo.results.ls, function(combo) mean(unlist(lapply(combo, function(trial) (trial[,2]-trial[,3])^2)) )^0.5))
+    
+    # Save results
+    results.ls[[length(results.ls)+1]] <- list(combos, rsq, rmse)
+    
+    # Compare to previous
+    previous.rmse <- current.rmse
+    current.rmse <- min(rmse)
+    
+    # Set new combo
+    combos <- matrix(data=rep(combos[,which(rmse==current.rmse)], ncol(combos)-1), nrow=nrow(combos))
+    combos <- rbind(combos, vars[-which(vars %in% combos)])
     }
     
-    rmse.results <- unlist(lapply(combo.results.ls, function(set) mean(unlist(lapply(set, function(trial) mean((trial[,2]-trial[,3])^2)^0.5)))))
-    current.rmse <- min(rmse.results)
-  }
-  
-  #### SAVE VARIABLE COMINATION AND RESULTS TO OBJECTS ####
-    resultsANN.k[[length(resultsANN.k)+1]] <- previous.results 
-    var.results.ls[[length(var.results.ls)+1]] <- colnames(all.data)[c(which(colnames(merged.data) %in% predict.var), previous.vars)]
+    resultsANN.k[[length(resultsANN.k)+1]] <- results.ls
     print(paste("Finished",i,"year and",k,"sampling location"))
-  } 
-  ###### CHECK RMSE AND WRITE CONDITIONAL STATEMENT TO REMOVE WORSE COMBO ######
-  
+  }
   # save(combo.results.ls,file="testing.RData")
   all.results.ls[[length(all.results.ls)+1]] <- resultsANN.k # Results of all combos for 2018/2019
   print(paste("Finished",i,"year"))
