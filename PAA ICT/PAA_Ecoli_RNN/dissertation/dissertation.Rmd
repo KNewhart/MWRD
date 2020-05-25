@@ -75,6 +75,23 @@ if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
 }
 ```
 
+```{r Process variables plot, fig.width=6.5, fig.height=7.5}
+load("data/paa/process-data-ls.RData")
+par(mfrow=c(5,3), mar=c(2,2,2.4,1), family="serif", oma=c(0,0,0,0), xpd=TRUE)
+data.lab <- c("Instant", "Short-Avearge", "24h-Avg")
+for(j in 2:ncol(process.data.ls[[1]])) {
+  for(i in 1:length(process.data.ls)) {
+    plot(process.data.ls[[i]][,j], pch=20, ylab="", xlab="")
+    if(i==2) mtext(text=colnames(process.data.ls[[i]])[j], side=3, line=1.1, cex=0.8)
+    mtext(text=data.lab[i], side=3, line=0.1, cex=0.7)
+    abline(v=head(which(process.data.ls[[1]][,1] > as.POSIXct("2019-01-01")),n=1)-0.5, col="red", xpd=FALSE)
+  }
+}
+
+```
+
+
+
 ```{r Build ANN PAA, include=FALSE}
 if(!("results/paa-all-results-ls.RData" %in% list.files(recursive=TRUE))) {
   load("data/paa/process-data-ls.RData")
@@ -1273,16 +1290,16 @@ for(loc in 1:length(all.results.ls)) {
 # colnames(plot.data) <- c("Pre-disinfection", "Post-disinfection")
 # rownames(plot.data) <- c("Instant", "Avg", "24h Avg")
 # barplot(plot.data, beside = TRUE, legend.text =rownames(plot.data))
-par(mfrow=c(1,2))
-plot.data <- results[,3,]
-rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
-colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
-for(i in 1:nrow(plot.data)) {
-  barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
-               # border=NA, 
-               # ylim=c(0,max(highs)), 
-               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
-}
+# par(mfrow=c(1,2))
+# plot.data <- results[,3,]
+# rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
+# colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# for(i in 1:nrow(plot.data)) {
+#   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+#                # border=NA, 
+#                # ylim=c(0,max(highs)), 
+#                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+# }
 
 ci_95 <- unlist(sd.results.ls)*1.96
 
