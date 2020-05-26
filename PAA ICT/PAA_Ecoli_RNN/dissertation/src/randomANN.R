@@ -59,14 +59,20 @@ randomANN <- function(all.data,
                              if(!scale) train.x <- all.data[-test.obs,-predict.col]
                              if(length(which(apply(train.x,2,anyNA)))>0) train.x <- train.x[,-which(apply(train.x,2,anyNA))]
                              
-                             train.x <- simplify2array(list(train.x))
+                             train.x <- array(data=as.matrix(train.x), dim=c(nrow(train.x), ncol(train.x),1))
                              
                              
                              
                              if(length(dim(train.x)) == 3) {
                                # if(scale) train.y <- simplify2array(list(scale(all.data[-test.obs,], center=train.mean, scale=train.sd)[,predict.col]))
-                               if(scale) train.y <- simplify2array(list(min.max.norm(all.data[-test.obs,])[,predict.col]))
-                               if(!scale) train.y <- simplify2array(list(all.data[-test.obs,predict.col]))
+                               
+                               if(scale) {
+                                 train.y <- min.max.norm(all.data[-test.obs,predict.col])
+                               }
+                               if(!scale) {
+                                 train.y <- all.data[-test.obs,predict.col]
+                               }
+                               train.y <- array(data=as.matrix(train.y), dim=c(nrow(train.y), 1,1))
                                
                                n_batch <- dim(train.x)[1]
                                if(is.null(n_nodes)) n_nodes <- c(dim(train.x)[2], round(dim(train.x)[2]*3))
