@@ -389,7 +389,7 @@ year <- c("2018", "2019")
 for(i in 1:length(paa.data.ls)) {
   paa <- paa.data.ls[[i]] # 2018 or 2019
   hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
-  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[i]]$`North Flow to Dis`)
+  dose <- process.data.ls[[1]]$PAA_N_FlowRate*0.15*1.16/(process.data.ls[[1]]$`North Flow to Dis`)
   flow <- process.data.ls[[1]]$`North Flow to Dis`
   t_f <- 2690.3*flow^-0.959
   data <- array(data=NA, 
