@@ -1,0 +1,1 @@
+"%ProgramFiles%\R\R-4.0.0\bin\Rscript.exe" "%homepath%\Documents\MWRD\PAA ICT\PAA_Ecoli_RNN\real_time\real_time.R"
