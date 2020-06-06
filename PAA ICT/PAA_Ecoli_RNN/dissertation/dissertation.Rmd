@@ -1197,6 +1197,103 @@ save(all.results.ls, file="results/ecoli-var-results-ls.RData")
 ```
 
 
+```{r Var Ecoli exploratory}
+load("results/ecoli-var-results-ls.RData")
+var.df.ls <- list()
+for(ecoli.i in 1:2) { # Pre = 1, post = 2
+optimum.run <- length(all.results.ls[[ecoli.i]])-1
+
+# Prep training data in the same way as above for column names
+{
+  ecoli <- ecoli.data.ls[[ecoli.i]] # Pre, post
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  process <- process.data.ls[[1]] # Instantaneous process data
+  vis <- vis.data
+  hrt <- hrt.ls[[1]][[1]] # Use only real-time HRT
+  
+  # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
+    colnames(merged.data)[ncol(merged.data)] <- "CT"
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, as.matrix(vis))
+    
+     # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+lagged.times <- sapply(index(ecoli), function(t) {
+      tail(which(index(ecoli) < (t-1.9*24*60*60)), n=1)
+    })
+    merged.data <- cbind(merged.data[which(lapply(lagged.times, length)>0), ], as.numeric(log10(ecoli[unlist(lagged.times)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+   
+  
+  # 5. Remove vars that are constant
+  merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
+  
+    predict.var <- "log10.ecoli."
+    predict.col <- which(colnames(merged.data)==predict.var)
+    
+    # Initialize loop
+    vars <- which(!(colnames(merged.data) %in% predict.var))
+    combos <- combn(vars,1) # Initialize
+}
+
+# For the 2019 dataset, the UV transmittance data is garbage
+
+var.df <- data.frame(Variable=NA, RMSE=NA, Label=NA)
+for(i in 1:(optimum.run+1)) {
+  optimum.combo <- which(all.results.ls[[ecoli.i]][[i]][[3]]==min(all.results.ls[[ecoli.i]][[i]][[3]])) # Min RMSE
+  optimum.rmse <- min(all.results.ls[[ecoli.i]][[i]][[3]])
+  n <- all.results.ls[[ecoli.i]][[i]][[1]][nrow(all.results.ls[[ecoli.i]][[i]][[1]]),optimum.combo]
+  var.df[i,1] <- var.names[n]
+  # var.df[i,2] <- all.results.ls[[ecoli.i]][[1]][[3]][which(all.results.ls[[ecoli.i]][[1]][[1]]==n)]
+  var.df[i,2] <- optimum.rmse
+  var.df[i,3] <- ecoli.i
+}
+var.df.ls[[length(var.df.ls)+1]] <- var.df
+}
+
+var.df <- do.call("rbind", var.df.ls)
+pre <- var.df[which(var.df$Label==1),2]
+post <- var.df[which(var.df$Label==2),2]
+
+# Plot RMSE as variables are added
+
+plot(x=c(1:length(pre)), y=pre, ylim=c(min(c(pre,post)-.0025), max(c(pre,post))), pch=20, type="b", xaxt="n", ylab="", xlab="")
+lines(x=c(1:length(post)), y=post, type="b", col="blue", pch=20)
+mtext("RMSE", side=2, line=2.25)
+axis(side=1, at = c(1:5), labels = FALSE)
+legend("topright", legend=c("Predisinfection E. coli", "Postdisinfection E. coli"), col=c("black", "blue"), pch=20)
+
+for(x in 1:length(pre)) {
+  y <- pre[x]
+  text(var.df[x,1],x=x,y=y,pos=1)
+}
+
+for(x in 1:length(post)) {
+  y <- post[x]
+  text(var.df[x,1],x=x,y=y,pos=1, col="blue")
+}
+```
+
 
 
 
