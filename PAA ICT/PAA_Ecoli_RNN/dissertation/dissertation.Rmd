@@ -90,7 +90,35 @@ for(j in 2:ncol(process.data.ls[[1]])) {
 
 ```
 
+```{r Process variables plot overlay, fig.width=6.5, fig.height=7.5}
+load("data/paa/process-data-ls.RData")
+vis <- importCarbovis()
+par(mfrow=c(4,3), mar=c(2,2,2.4,1), family="serif", oma=c(0,0,0,0), xpd=TRUE)
+data.lab <- c("Instant", "Short-Avearge", "24h-Avg")
+data.col <- c("blue", "green", "orange")
+for(j in 2:ncol(process.data.ls[[1]])) {
+  plot(x=-200,y=0, 
+       ylim=range(do.call("c", lapply(process.data.ls, function(x) na.omit(x[,j])))), 
+       xlim=c(1,nrow(process.data.ls[[1]])), 
+       xlab="", 
+       ylab="")
+  mtext(text=colnames(process.data.ls[[1]])[j], side=3, line=1.1, cex=0.8)
+  for(i in 1:length(process.data.ls)) {
+    points(process.data.ls[[i]][,j], pch=20, ylab="", xlab="", col=data.col[i])
+    abline(v=head(which(process.data.ls[[1]][,1] > as.POSIXct("2019-01-01")),n=1)-0.5, col="red", xpd=FALSE)
+  }
+}
 
+vis <- na.locf(vis)
+vis <- xts(vis[sapply(process.data.ls[[1]][,1], function(t) tail(which(index(vis)<=t), n=1)),], order.by=process.data.ls[[1]][,1])
+for(i in 1:ncol(vis)) {
+  plot(as.numeric(vis[,i]), xlab="", ylab="", pch=20)
+    mtext(text=colnames(vis)[i], side=3, line=1.1, cex=0.8)
+    abline(v=head(which(index(vis) > as.POSIXct("2019-01-01")),n=1)-0.5, col="red", xpd=FALSE)
+}
+
+
+```
 
 ```{r Build ANN PAA, include=FALSE}
 if(!("results/paa-all-results-ls.RData" %in% list.files(recursive=TRUE))) {
