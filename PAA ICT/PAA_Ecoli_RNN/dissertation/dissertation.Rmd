@@ -10,6 +10,7 @@ knitr::opts_chunk$set(
 	fig.path = "figures/",
 	dev = "pdf"
 )
+sapply(list.files("src", full.names = TRUE), source)
 ```
 
 
@@ -638,17 +639,18 @@ for(i in 1:length(all.results.ls)) {
 ```
 
 
-```{r Plot prediction on CT, fig.height=11,fig.width=8.5}
+```{r Plot prediction on CT, fig.height=4,fig.width=6.5}
 load("results/paa-all-results-ls.RData")
 load("data/paa/process-data-ls.RData")
 i <- 1;j <- 1
-plot.these <- list(c(4,11,14,15,28,32),
-                   c(20,27,42,52,61,63))
+plot.these <- list(c(56, 32, 4),
+                   c(20,63,8))
 results.ls <- list()
 r2.ls <- list()
 anova.ls <- list()
 # 5. Merge data for testing
 year <- c("2018", "2019")
+par(mfrow=c(2,3), mar=c(c(4, 4, 2.5, 1) + 0.1), family="serif")
 for(i in 1:length(paa.data.ls)) {
   paa <- paa.data.ls[[i]] # 2018 or 2019
   pred <- all.results.ls[[i]][[1]] # Real time was found to be the best
@@ -672,7 +674,7 @@ for(i in 1:length(paa.data.ls)) {
     }
   }
   # layout(mat=matrix(1:dim(results)[1]/4, ncol=4, byrow = TRUE))
-  par(mfrow=c(4,3), mar=c(c(4, 4, 4, 1) + 0.1))
+  
   for(j in 1:dim(results)[1]) {
     # for(j in plot.these[[i]]) {
     C <- data[,1,j]
@@ -700,23 +702,25 @@ for(i in 1:length(paa.data.ls)) {
     CTp <- (C0-Dp)/kp-(C0-Dp)/kp*exp(-kp*t_f[n])
     
     results[j,] <- c(as.numeric(exponential.mod$coefficients), C0, CT, r2, CTp, t_f[n])
-
-    plot(y=C,
+    
+    if(j %in% plot.these[[i]]) {
+      plot(y=C,
          x=t,
          ylim=c(0,2),
          xlim=c(0,80),
          pch=20,
          xlab="",
          ylab="",
-         cex.axis=1.5)
+         cex.axis=1.5,
+         lwd=5)
     new.data <- data.frame(x=seq(0, t_f[n], length.out=100))
     new.data <- cbind(new.data, 
                       exp(results[j,2]*new.data+results[j,1]),
                       exp(as.numeric(exponential.mod.p$coefficients)[2]*new.data+as.numeric(exponential.mod.p$coefficients)[1]))
     polygon(x=c(0,new.data[,1],max(new.data[,1]),0), y=c(exp(results[j,1]), new.data[,2],0,0), col="#0000007F", border=NA)
-    points(x=new.data[,1],y=new.data[,2], type="l", lty=2)
-    points(x=new.data[,1],y=new.data[,3], type="l", lty=2, col="red")
-    points(x=t,y=data[,3,j], col="red", pch=20)
+    points(x=new.data[,1],y=new.data[,2], type="l", lty=2, lwd=2)
+    points(x=new.data[,1],y=new.data[,3], type="l", lty=2, col="red", lwd=2)
+    points(x=t,y=data[,3,j], col="red", pch=20, lwd=5)
     # mtext(paste("Demand =", round(C0-exp(results[j,1]),2)), side=3,line=-1.1,adj = 0.99)
     # mtext(paste("k =", round(-results[j,2],2)), side=3,line=-2.1,adj = 0.99)
     # mtext(paste("R-sq =", round(results[j,5],2)), side=3,line=-3.2,adj = 0.99)
@@ -725,12 +729,15 @@ for(i in 1:length(paa.data.ls)) {
     mtext(paste(year[i],"Trial",j), side=3, line=.25, font=2)
     mtext("PAA (mg/L)", side=2,line=2.5)
     mtext("HRT (min)",side=1,line=2.25)
+    }
+    
   
   }
   
     r2.ls[[length(r2.ls)+1]] <- r2.results
     results.ls[[length(results.ls)+1]] <- results
 }
+
 ```
 
 
