@@ -23,12 +23,22 @@ sapply(pkgs, function(x) library(x, character.only = TRUE))
 sapply(list.files("src", full.names = TRUE), source)
 
 # 1. Import PAA sampling data (offline)
-paa.data.ls <- list()
-paa.data.ls[[1]] <- import2018() # UTC
-paa.data.ls[[2]] <- import2019() # UTC
+if(!("paa-data-ls.RData" %in% list.files("data/paa/"))) {
+  paa.data.ls <- list()
+  paa.data.ls[[1]] <- import2018() # UTC
+  paa.data.ls[[2]] <- import2019() # UTC
+  save(paa.data.ls, file="data/paa/paa-data-ls.RData")
+} else {
+  load("data/paa/paa-data-ls.RData")
+}
 
 # 2. Import Carbovis data (offline)
-vis.data <- importCarbovis() # Unknown timezone, assumed GMT+6 and converted to UTC
+if(!("vis-data.RData" %in% list.files("data/"))) {
+  vis.data <- importCarbovis() # Unknown timezone, assumed GMT+6 and converted to UTC
+  save(vis.data, file="data/vis-data.RData")
+} else {
+  load("data/vis-data.RData")
+}
 
 # 3. Import process data (online, instantaneous interpolated values)
 if(!("process-data-ls.RData" %in% list.files("data/paa/"))) {
@@ -1467,9 +1477,11 @@ save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
 
 ```{r Build Ecoli RNN 50-50, eval=FALSE, include=FALSE}
 if(!("results/ecoli-rnn-50-50-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
-
+  library(xts)
+  load("data/ecoli/ecoli-data-ls.RData")
   # Load process data
   load("data/ecoli/process-data-ls.RData")
+  load("data/vis-data.RData")
   
   # Calculate log removal
   ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
@@ -1543,118 +1555,7 @@ save(all.results.ls, file="results/ecoli-rnn-50-50-all-results-ls.RData")
 }
 ```
 
-```{r Plot Ecoli Double RNN Error, echo=FALSE}
-load("results/ecoli-rnn-all-results-ls.RData")
-results <- array(data=NA, 
-                 dim=c(3, # 3 rows pre, post, log removal
-                       6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
-                       3)) # matrices (averageing)
-sd.results.ls <-list()
-for(loc in 1:length(all.results.ls)) {
-  for(avg in 1:length(all.results.ls[[loc]])) {
-      data <- all.results.ls[[loc]][[avg]]
-      results[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
-      results[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
-      results[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
-      results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
-      results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
-      results[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
-      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
-      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
-  }
-}
-ci_95 <- unlist(sd.results.ls)*1.96
 
-
-# Barplot of prediction error (RMSE)
-par(mfrow=c(1,2))
-plot.data <- results[1:2,3,]
-rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
-colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
-for(i in 1:nrow(plot.data)) {
-  barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
-               # border=NA, 
-               # ylim=c(0,max(highs)), 
-               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
-}
-
-# par(mfrow=c(1,3))
-# plot.data <- results[,3,]
-# rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
-# colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
-# for(i in 1:nrow(plot.data)) {
-#   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
-#                # border=NA, 
-#                # ylim=c(0,max(highs)), 
-#                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
-# }
-
-```
-
-```{r Barplot of Ecoli prediction error, echo=FALSE}
-load("results/ecoli-ann-all-results-ls.RData")
-results.ann <- array(data=NA, 
-                 dim=c(3, # 3 rows pre, post, log removal
-                       5, # 5 columns (r2 and rmse, RMSE IQR)
-                       3)) # matrices (averageing)
-
-for(loc in 1:length(all.results.ls)) {
-  for(avg in 1:length(all.results.ls[[loc]])) {
-      data <- all.results.ls[[loc]][[avg]]
-      results.ann[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
-      results.ann[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
-      results.ann[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
-      results.ann[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
-      results.ann[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
-  }
-}
-
-
-
-
-load("results/ecoli-rnn-all-results-ls.RData")
-results.rnn <- array(data=NA, 
-                 dim=c(3, # 3 rows pre, post, log removal
-                       6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
-                       3)) # matrices (averageing)
-
-for(loc in 1:length(all.results.ls)) {
-  for(avg in 1:length(all.results.ls[[loc]])) {
-      data <- all.results.ls[[loc]][[avg]]
-      results.rnn[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
-      results.rnn[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
-      results.rnn[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
-      results.rnn[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
-      results.rnn[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
-      results.rnn[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
-  }
-}
-
-
-# Barplot of prediction error (RMSE)
-par(mfrow=c(2,1), family="serif", mar=c(2,3,3,1))
-plot.data <- array(data=NA,
-                   dim=c(2,
-                         3,
-                         3)
-                   )
-plot.data[,,1] <- results.ann[1:2,2,]^0.5
-plot.data[,,2] <- results.rnn[1:2,2,]^0.5
-plot.data[,,3] <- results.rnn[1:2,6,]^0.5
-rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
-colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
-for(i in 1:dim(plot.data)[1]) {
-  # for(j in 1:nrow(plot.data))
-  # barplot(plot.data[i,,j], beside = TRUE, main=rownames(plot.data)[i],
-  barplot(t(plot.data[1,,]), beside = TRUE, main=rownames(plot.data)[i],
-               # border=NA, 
-               # ylim=c(0,max(highs)), 
-               # col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
-          col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="RMSE")
-}
-
-
-```
 
 ```{r Boxplot of Ecoli prediction error, fig.height=4.5, fig.width=6}
 load("results/ecoli-ann-all-results-ls.RData")
@@ -1714,6 +1615,8 @@ abline(h=results.p[i,1], col="red", xpd=FALSE)
 
 
 ```
+
+
 
 ```{r Build real-time Ecoli, eval=FALSE, include=FALSE}
 ## Need to add real time CT prediction
