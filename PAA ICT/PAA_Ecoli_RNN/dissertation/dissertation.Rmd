@@ -40,12 +40,12 @@ if(!("vis-data.RData" %in% list.files("data/"))) {
   load("data/vis-data.RData")
 }
 
-# 3. Import process data (online, instantaneous interpolated values)
-if(!("process-data-ls.RData" %in% list.files("data/paa/"))) {
+# 3. Import PAA process data (online, instantaneous interpolated values)
+if(!("process-data-ls-v2.RData" %in% list.files("data/paa/"))) {
   process.data.ls <- importProcess(times=do.call("c", lapply(paa.data.ls, index)))
-  save(process.data.ls, file="data/paa/process-data-ls.RData")
+  save(process.data.ls, file="data/paa/process-data-ls-v2.RData")
 } else {
-  load("data/paa/process-data-ls.RData")
+  load("data/paa/process-data-ls-v2.RData")
 }
 
 # 4. Calculate HRT
@@ -59,7 +59,7 @@ hrt.ls <- lapply(paa.data.ls, function(paa) {
 })
 
 # 5. Ecoli data
-if(!("ecoli-data-ls.RData" %in% list.files("data/ecoli/"))) {
+if(!("ecoli-data-ls-v2.RData" %in% list.files("data/ecoli/"))) {
   ecoli.data.ls <- list()
   ecoli.data.ls[[1]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
                                save=FALSE, obj.return=TRUE, 
@@ -73,21 +73,21 @@ if(!("ecoli-data-ls.RData" %in% list.files("data/ecoli/"))) {
                               piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
                                save=FALSE, obj.return=TRUE, 
                                start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
-  save(ecoli.data.ls, file="data/ecoli/ecoli-data-ls.RData")
+  save(ecoli.data.ls, file="data/ecoli/ecoli-data-ls-v2.RData")
 } else {
-  load("data/ecoli/ecoli-data-ls.RData")
+  load("data/ecoli/ecoli-data-ls-v2.RData")
 }
 # 6. Import process data (online, instantaneous interpolated values)
-if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
+if(!("process-data-ls-v2.RData" %in% list.files("data/ecoli/"))) {
   process.data.ls <- importProcess(times=ecoli.data.ls[[1]][,1])
-  save(process.data.ls, file="data/ecoli/process-data-ls.RData")
+  save(process.data.ls, file="data/ecoli/process-data-ls-v2.RData")
 } else {
-  load("data/ecoli/process-data-ls.RData")
+  load("data/ecoli/process-data-ls-v2.RData")
 }
 ```
 
 ```{r Process variables plot, fig.width=6.5, fig.height=7.5}
-load("data/paa/process-data-ls.RData")
+load("data/paa/process-data-ls-v2.RData")
 par(mfrow=c(5,3), mar=c(2,2,2.4,1), family="serif", oma=c(0,0,0,0), xpd=TRUE)
 data.lab <- c("Instant", "Short-Avearge", "24h-Avg")
 for(j in 2:ncol(process.data.ls[[1]])) {
@@ -102,7 +102,7 @@ for(j in 2:ncol(process.data.ls[[1]])) {
 ```
 
 ```{r Process variables plot overlay, fig.width=6.5, fig.height=7.5}
-load("data/paa/process-data-ls.RData")
+load("data/paa/process-data-ls-v2.RData")
 vis <- importCarbovis()
 par(mfrow=c(4,3), mar=c(2,2,2.4,1), family="serif", oma=c(0,0,0,0), xpd=TRUE)
 data.lab <- c("Instant", "Short-Avearge", "24h-Avg")
@@ -132,8 +132,8 @@ for(i in 1:ncol(vis)) {
 ```
 
 ```{r Build ANN PAA, include=FALSE}
-if(!("results/paa-all-results-ls.RData" %in% list.files(recursive=TRUE))) {
-  load("data/paa/process-data-ls.RData")
+if(!("results/paa-all-results-ls-v2.RData" %in% list.files(recursive=TRUE))) {
+  load("data/paa/process-data-ls-v2.RData")
   start <- Sys.time()
 all.results.ls <- list()
 # 5. Merge data for testing
@@ -181,16 +181,16 @@ for(i in 1:length(paa.data.ls)) {
 }
 end <- Sys.time()
 end-start
-save(all.results.ls, file="results/paa-all-results-ls.RData")
+save(all.results.ls, file="results/paa-all-results-ls-v2.RData")
 } else {
-  load("results/paa-all-results-ls.RData")
+  load("results/paa-all-results-ls-v2.RData")
 }
 ```
 
 
 ```{r Variable selection ANN PAA, eval=FALSE, include=FALSE}
-if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
-load("data/paa/process-data-ls.RData")
+if(!("results/paa-var-results-ls-v2.RData" %in% list.files(recursive=TRUE))) {
+load("data/paa/process-data-ls-v2.RData")
 
 all.results.ls <- list()
 
@@ -271,9 +271,9 @@ for(i in 2) { # Test on 2019 dataset first
   print(paste("Finished",i,"year"))
 }
 
-save(all.results.ls, file="results/paa-var-results-ls.RData")
+save(all.results.ls, file="results/paa-var-results-ls-v2.RData")
 } else {
-  load("results/paa-var-results-ls.RData")
+  load("results/paa-var-results-ls-v2.RData")
 }
 ```
 
@@ -284,7 +284,7 @@ save(all.results.ls, file="results/paa-var-results-ls.RData")
 # 3: PAA sampling location
 # 4: Model results x10
 # Summarize average r2 and rmse of 4 by 3 and 2
-load("results/paa-all-results-ls.RData")
+load("results/paa-all-results-ls-v2.RData")
 results <- array(data=NA, 
                  dim=c(6, # 6 rows (sampling location)
                        5, # 4 columns (r2 and rmse, RMSE IQR)
@@ -386,7 +386,7 @@ text(x=as.vector(foo), y=plot.results[order(plot.results$loc, plot.results$avg),
 ```
 
 ```{r Timeseries PAA prediction actual, fig.height=8.5, fig.width=6.5}
-load("results/paa-all-results-ls.RData")
+load("results/paa-all-results-ls-v2.RData")
 
 actual.predicted.plot <- function(actual, predicted, label) {
   par(mar=c(2, 2, 2, 1) + 0.1, family="serif")
@@ -429,8 +429,8 @@ for(avg in 1:3) {
 
 
 ```{r Calculate CT, eval=FALSE, include=FALSE}
-load("results/paa-all-results-ls.RData")
-load("data/paa/process-data-ls.RData")
+load("results/paa-all-results-ls-v2.RData")
+load("data/paa/process-data-ls-v2.RData")
 i <- 1;j <- 1
 all.results.ls <- list()
 # 5. Merge data for testing
@@ -471,13 +471,13 @@ for(i in 1:length(paa.data.ls)) {
   results <- xts(results, order.by=index(paa))
   all.results.ls[[length(all.results.ls)+1]] <- results
 }
-save(all.results.ls,file="results/ct-all-results-ls.RData")
+save(all.results.ls,file="results/ct-all-results-ls-v2.RData")
 ```
 
 ```{r Calculate Persistence CT for 2019, echo=FALSE, fig.width=6.5, fig.height=2.5}
-load("results/ct-all-results-ls.RData")
-load("data/paa/process-data-ls.RData")
-load("results/ct-ann-results-ls.RData")
+load("results/ct-all-results-ls-v2.RData")
+load("data/paa/process-data-ls-v2.RData")
+load("results/ct-ann-results-ls-v2.RData")
 
 avg.k <- lapply(all.results.ls, function(x) mean(x[,2]))
 avg.D <- lapply(all.results.ls, function(x) mean(x[,3]-exp(as.numeric(x[,1]))))
@@ -622,7 +622,7 @@ for(i in 1:length(all.results.ls)) {
 ```
 
 ```{r Boxplots of CT D k, echo=FALSE}
-load("results/ct-all-results-ls.RData")
+load("results/ct-all-results-ls-v2.RData")
 layout(mat=matrix(c(1,2,3,4,5,6), ncol=2, byrow = TRUE))
 par(oma=c(0,2.5,2,0))
 par(mar=c(1,2,1,1))
@@ -650,8 +650,8 @@ for(i in 1:length(all.results.ls)) {
 
 
 ```{r Plot prediction on CT, fig.height=4,fig.width=6.5}
-load("results/paa-all-results-ls.RData")
-load("data/paa/process-data-ls.RData")
+load("results/paa-all-results-ls-v2.RData")
+load("data/paa/process-data-ls-v2.RData")
 i <- 1;j <- 1
 plot.these <- list(c(56, 32, 4),
                    c(20,63,8))
@@ -751,11 +751,11 @@ for(i in 1:length(paa.data.ls)) {
 ```
 
 
-```{r Build CT ANN, eval=FALSE, include=FALSE}
+```{r Build CT ANN, include=FALSE}
 
-if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
-  load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
-  load("data/paa/process-data-ls.RData")
+if(!("results/ct-ann-results-ls-v2.RData" %in% list.files(recursive=TRUE))) {
+  load("results/ct-all-results-ls-v2.RData") # CT is all.results.ls[[1]][,4]
+  load("data/paa/process-data-ls-v2.RData")
   ct.results.ls <- list()
   # 5. Merge data for testing
   for(i in 1:length(all.results.ls)) {
@@ -797,18 +797,18 @@ if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
     ct.results.ls[[length(ct.results.ls)+1]] <- annual.results.ls
   }
 
-  save(ct.results.ls, file="results/ct-ann-results-ls.RData")
+  save(ct.results.ls, file="results/ct-ann-results-ls-v2.RData")
 } else {
-  load("results/ct-ann-results-ls.RData")
+  load("results/ct-ann-results-ls-v2.RData")
 }
 ```
 
 
 ```{r Variable selection ANN CT, eval=FALSE, include=FALSE}
-if(!("results/ct-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
-  load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
+if(!("results/ct-var-results-ls-v2.RData" %in% list.files(recursive=TRUE))) {
+  load("results/ct-all-results-ls-v2.RData") # CT is all.results.ls[[1]][,4]
   ct.ls <- lapply(all.results.ls, function(x) x[,4])
-  load("data/paa/process-data-ls.RData")
+  load("data/paa/process-data-ls-v2.RData")
 
 all.results.ls <- list()
 
@@ -883,9 +883,9 @@ for(i in 1:length(all.results.ls)) {
   }
 
 
-save(all.results.ls, file="results/ct-var-results-ls.RData")
+save(all.results.ls, file="results/ct-var-results-ls-v2.RData")
 } else {
-  load("results/ct-var-results-ls.RData")
+  load("results/ct-var-results-ls-v2.RData")
 }
 ```
 
@@ -913,7 +913,7 @@ abline(a=0, b=1)
 mtext(stats.str[1], side=3, adj=0.04, line=-1)
 mtext(stats.str[2], side=3, adj=0.04, line=-2)
 
-load("results/ct-ann-results-ls.RData")
+load("results/ct-ann-results-ls-v2.RData")
 # actual <- rowMeans(do.call("cbind",lapply(ct.results.ls[[1]][[1]], function(x) x[,3])))
 predicted <- rowMeans(do.call("cbind",lapply(ct.results.ls[[1]][[1]], function(x) x[,2])))
 predicted <- c(predicted, rowMeans(do.call("cbind",lapply(ct.results.ls[[2]][[1]], function(x) x[,2]))))
@@ -949,8 +949,8 @@ mtext(expression(paste("R"^"2")), side=2, line=2.25, cex=1.25)
 ```{r Ecoli traditional models, echo=FALSE, fig.width=6.5, fig.height=3.5}
 
 library(xts)
-load("data/ecoli/ecoli-data-ls.RData")
-load("results/ct-all-results-ls.RData")
+load("data/ecoli/ecoli-data-ls-v2.RData")
+load("results/ct-all-results-ls-v2.RData")
 ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
   m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
   if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
@@ -1047,8 +1047,8 @@ legend("center", legend=c(linear.str, ex.str, p.str, equ.str),  lty=2, col=c("bl
 
 ```{r chick-watsom kinetic model, echo=FALSE, fig.width=3.75, fig.height=3}
 library(xts)
-load("data/ecoli/ecoli-data-ls.RData")
-load("results/ct-all-results-ls.RData")
+load("data/ecoli/ecoli-data-ls-v2.RData")
+load("results/ct-all-results-ls-v2.RData")
 ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
   m <- which(as.Date(ecoli.data.ls[[1]][,1])==as.Date(ecoli.data.ls[[2]][n,1]))
   if(length(m>1))m <- m[which(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))==min(abs(difftime(ecoli.data.ls[[1]][m,1],ecoli.data.ls[[2]][n,1]))))]
@@ -1106,7 +1106,7 @@ mtext(stats.str[2], side=1, adj=0.97, line=-1)
 
 
 
-```{r Ecoli CT Predis 3D, eval=FALSE, fig.width=6.5, include=FALSE}
+```{r Ecoli CT Predis 3D, echo=FALSE, fig.width=6.5}
 ## NEEDS TO BE RUN WITH CODE CHUNK ABOVE ##
 # 3D plot
 library(plot3D)
@@ -1133,10 +1133,10 @@ scatter3D(x, y, z, colvar = z, pch = 18, cex = 2, bty = "b2",
 ```
 
 ```{r Build Ecoli ANN, include=FALSE}
-if(!("results/ecoli-ann-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+if(!("results/ecoli-ann-all-results-ls-v2.RData" %in% list.files(recursive=TRUE))) { 
 
   # Load process data
-  load("data/ecoli/process-data-ls.RData")
+  load("data/ecoli/process-data-ls-v2.RData")
   
   # Calculate log removal
   ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
@@ -1147,7 +1147,7 @@ if(!("results/ecoli-ann-all-results-ls.RData" %in% list.files(recursive=TRUE))) 
 log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
 log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 
-  load("results/ct-all-results-ls.RData")
+  load("results/ct-all-results-ls-v2.RData")
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
@@ -1212,18 +1212,18 @@ for(i in 1:2) {
   }
   all.results.ls[[length(all.results.ls)+1]] <- test.results.ls
 }
-save(all.results.ls, file="results/ecoli-ann-all-results-ls.RData")
+save(all.results.ls, file="results/ecoli-ann-all-results-ls-v2.RData")
 } else {
-  load("results/ecoli-ann-all-results-ls.RData")
+  load("results/ecoli-ann-all-results-ls-v2.RData")
 }
 ```
 
 
 ```{r Variable selection ANN Ecoli, eval=FALSE, include=FALSE}
-if(!("results/ecoli-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
+if(!("results/ecoli-var-results-ls-v2.RData" %in% list.files(recursive=TRUE))) {
   # Load process data anf CT
-  load("data/ecoli/process-data-ls.RData")
-  load("results/ct-all-results-ls.RData")
+  load("data/ecoli/process-data-ls-v2.RData")
+  load("results/ct-all-results-ls-v2.RData")
   CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
@@ -1323,12 +1323,109 @@ lagged.times <- sapply(index(ecoli), function(t) {
   print(paste("Finished",i, "E.coli"))
 }
 
-save(all.results.ls, file="results/ecoli-var-results-ls.RData")
+save(all.results.ls, file="results/ecoli-var-results-ls-v2.RData")
 } else {
-  load("results/ecoli-var-results-ls.RData")
+  load("results/ecoli-var-results-ls-v2.RData")
 }
 ```
 
+
+```{r Var Ecoli exploratory}
+load("results/ecoli-var-results-ls-v2.RData")
+var.df.ls <- list()
+for(ecoli.i in 1:2) { # Pre = 1, post = 2
+optimum.run <- length(all.results.ls[[ecoli.i]])-1
+
+# Prep training data in the same way as above for column names
+{
+  ecoli <- ecoli.data.ls[[ecoli.i]] # Pre, post
+  ecoli <- xts(ecoli[,2], order.by=ecoli[,1])
+  process <- process.data.ls[[1]] # Instantaneous process data
+  vis <- vis.data
+  hrt <- hrt.ls[[1]][[1]] # Use only real-time HRT
+  
+  # 1. Combine ecoli and process data
+      process.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(process$times,e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(data.frame(log10(ecoli)),
+                         process[process.index,-1])
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add CT
+    CT.index <- sapply(1:nrow(ecoli), function (n) {
+        e <- index(ecoli)[n]
+        d <- difftime(index(CT),e)
+        p <- which(abs(d)==min(abs(d)))
+        return(p)
+  })
+    merged.data <- cbind(merged.data, as.numeric(CT[CT.index]))
+    colnames(merged.data)[ncol(merged.data)] <- "CT"
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- vis[sapply(index(ecoli), function(t) tail(which(index(vis)<t), n=1)),]
+    merged.data <- cbind(merged.data, as.matrix(vis))
+    
+     # 4. Lag Ecoli by 2 timesteps (usual lag of most recent observation)
+lagged.times <- sapply(index(ecoli), function(t) {
+      tail(which(index(ecoli) < (t-1.9*24*60*60)), n=1)
+    })
+    merged.data <- cbind(merged.data[which(lapply(lagged.times, length)>0), ], as.numeric(log10(ecoli[unlist(lagged.times)])))
+    colnames(merged.data)[ncol(merged.data)] <- "Lagged.ecoli"
+   
+  
+  # 5. Remove vars that are constant
+  merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
+  
+    predict.var <- "log10.ecoli."
+    predict.col <- which(colnames(merged.data)==predict.var)
+    
+    # Initialize loop
+    vars <- which(!(colnames(merged.data) %in% predict.var))
+    combos <- combn(vars,1) # Initialize
+}
+
+# For the 2019 dataset, the UV transmittance data is garbage
+
+var.df <- data.frame(Variable=NA, RMSE=NA, Label=NA)
+for(i in 1:(optimum.run+1)) {
+  optimum.combo <- which(all.results.ls[[ecoli.i]][[i]][[3]]==min(all.results.ls[[ecoli.i]][[i]][[3]])) # Min RMSE
+  optimum.rmse <- min(all.results.ls[[ecoli.i]][[i]][[3]])
+  n <- all.results.ls[[ecoli.i]][[i]][[1]][nrow(all.results.ls[[ecoli.i]][[i]][[1]]),optimum.combo]
+  var.df[i,1] <- var.names[n]
+  # var.df[i,2] <- all.results.ls[[ecoli.i]][[1]][[3]][which(all.results.ls[[ecoli.i]][[1]][[1]]==n)]
+  var.df[i,2] <- optimum.rmse
+  var.df[i,3] <- ecoli.i
+}
+var.df.ls[[length(var.df.ls)+1]] <- var.df
+}
+
+var.df <- do.call("rbind", var.df.ls)
+pre <- var.df[which(var.df$Label==1),2]
+post <- var.df[which(var.df$Label==2),2]
+
+# Plot RMSE as variables are added
+
+plot(x=c(1:length(pre)), y=pre, ylim=c(min(c(pre,post)-.0025), max(c(pre,post))), pch=20, type="b", xaxt="n", ylab="", xlab="")
+lines(x=c(1:length(post)), y=post, type="b", col="blue", pch=20)
+mtext("RMSE", side=2, line=2.25)
+axis(side=1, at = c(1:5), labels = FALSE)
+legend("topright", legend=c("Predisinfection E. coli", "Postdisinfection E. coli"), col=c("black", "blue"), pch=20)
+
+for(x in 1:length(pre)) {
+  y <- pre[x]
+  text(var.df[x,1],x=x,y=y,pos=1)
+}
+
+for(x in 1:length(post)) {
+  y <- post[x]
+  text(var.df[x,1],x=x,y=y,pos=1, col="blue")
+}
+```
 
 
 
@@ -1336,7 +1433,7 @@ save(all.results.ls, file="results/ecoli-var-results-ls.RData")
 ```{r Ecoli autocorrelation, fig.width=6.5, fig.height=3}
 titles <- c(expression(paste(Log[10], " Predisinfection ", italic("E. coli"))), expression(paste(Log[10], " Postdisinfection ", italic("E. coli"))))
 par(mfrow=c(1,2), mar=c(3,3,2,1), family="serif", cex=1.2)
-load("results/ecoli-ann-all-results-ls.RData")
+load("results/ecoli-ann-all-results-ls-v2.RData")
 for(i in 1:length(all.results.ls)) {
   acf(all.results.ls[[i]][[1]][[1]][,3], main="")
   mtext(text="Lag", side=1, line=2, cex=1.2)
@@ -1356,7 +1453,7 @@ for(i in 1:length(all.results.ls)) {
 # 3: PAA sampling location
 # 4: Model results x10
 # Summarize average r2 and rmse of 4 by 3 and 2
-load("results/ecoli-ann-all-results-ls.RData")
+load("results/ecoli-ann-all-results-ls-v2.RData")
 results <- array(data=NA, 
                  dim=c(3, # 3 rows pre, post, log removal
                        5, # 5 columns (r2 and rmse, RMSE IQR)
@@ -1396,12 +1493,12 @@ ci_95 <- unlist(sd.results.ls)*1.96
 
 ```
 
-```{r Build Ecoli RNN, eval=FALSE, include=FALSE}
-if(!("results/ecoli-rnn-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+```{r Build Ecoli RNN, include=FALSE}
+if(!("results/ecoli-rnn-all-results-ls-v2.RData" %in% list.files(recursive=TRUE))) { 
 
 
   # Load process data
-  load("data/ecoli/process-data-ls.RData")
+  load("data/ecoli/process-data-ls-v2.RData")
   
   # Calculate log removal
   ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
@@ -1412,7 +1509,7 @@ if(!("results/ecoli-rnn-all-results-ls.RData" %in% list.files(recursive=TRUE))) 
 log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
 log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 
-  load("results/ct-all-results-ls.RData")
+  load("results/ct-all-results-ls-v2.RData")
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
@@ -1469,9 +1566,9 @@ for(i in 1:2) {
 }
 end <- Sys.time()
 end-start
-save(all.results.ls, file="results/ecoli-rnn-all-results-ls.RData")
+save(all.results.ls, file="results/ecoli-rnn-all-results-ls-v2.RData")
 } else {
-  load("results/ecoli-rnn-all-results-ls.RData")
+  load("results/ecoli-rnn-all-results-ls-v2.RData")
 }
 ```
 
@@ -1492,7 +1589,7 @@ if(!("results/ecoli-rnn-50-50-all-results-ls.RData" %in% list.files(recursive=TR
 log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
 log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 
-  load("results/ct-all-results-ls.RData")
+  load("results/ct-all-results-ls-v2.RData")
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
@@ -1555,10 +1652,119 @@ save(all.results.ls, file="results/ecoli-rnn-50-50-all-results-ls.RData")
 }
 ```
 
+```{r Plot Ecoli Double RNN Error, echo=FALSE}
+load("results/ecoli-rnn-all-results-ls-v2.RData")
+results <- array(data=NA, 
+                 dim=c(3, # 3 rows pre, post, log removal
+                       6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
+                       3)) # matrices (averageing)
+sd.results.ls <-list()
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+      results[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
+      se <- unlist(lapply(data, function(x) (x[,2]-x[,3])^2))
+      sd.results.ls[[length(sd.results.ls)+1]] <- (sum(se)/(length(se)-2))^0.5 # sample standard dev
+  }
+}
+ci_95 <- unlist(sd.results.ls)*1.96
+
+
+# Barplot of prediction error (RMSE)
+par(mfrow=c(1,2))
+plot.data <- results[1:2,3,]
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
+colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+for(i in 1:nrow(plot.data)) {
+  barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+               # border=NA, 
+               # ylim=c(0,max(highs)), 
+               col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+}
+
+# par(mfrow=c(1,3))
+# plot.data <- results[,3,]
+# rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli", "Log Removal")
+# colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+# for(i in 1:nrow(plot.data)) {
+#   barplot(plot.data[i,], beside = TRUE, main=rownames(plot.data)[i],
+#                # border=NA, 
+#                # ylim=c(0,max(highs)), 
+#                col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+# }
+
+```
+
+```{r Barplot of Ecoli prediction error, echo=FALSE}
+load("results/ecoli-ann-all-results-ls-v2.RData")
+results.ann <- array(data=NA, 
+                 dim=c(3, # 3 rows pre, post, log removal
+                       5, # 5 columns (r2 and rmse, RMSE IQR)
+                       3)) # matrices (averageing)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results.ann[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results.ann[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results.ann[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results.ann[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results.ann[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+  }
+}
+
+
+
+
+load("results/ecoli-rnn-all-results-ls-v2.RData")
+results.rnn <- array(data=NA, 
+                 dim=c(3, # 3 rows pre, post, log removal
+                       6, # 5 columns (r2 and rmse, RMSE IQR, persistence)
+                       3)) # matrices (averageing)
+
+for(loc in 1:length(all.results.ls)) {
+  for(avg in 1:length(all.results.ls[[loc]])) {
+      data <- all.results.ls[[loc]][[avg]]
+      results.rnn[loc,1,avg] <- mean(unlist(lapply(data, function(x) x[,1]))) # r2
+      results.rnn[loc,2,avg] <- mean(unlist(lapply(data, function(x) (x[,2]-x[,3])^2))) # se
+      results.rnn[loc,3,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.5))
+      results.rnn[loc,4,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.25)) # se 25% quantile
+      results.rnn[loc,5,avg] <- as.numeric(quantile(unlist(lapply(data, function(x) (x[,2]-x[,3])^2)), probs=0.75))
+      results.rnn[loc,6,avg] <- mean(unlist(lapply(data, function(x) (x[,4]-x[,3])^2))) # persistence se
+  }
+}
+
+
+# Barplot of prediction error (RMSE)
+par(mfrow=c(2,1), family="serif", mar=c(2,3,3,1))
+plot.data <- array(data=NA,
+                   dim=c(2,
+                         3,
+                         3)
+                   )
+plot.data[,,1] <- results.ann[1:2,2,]^0.5
+plot.data[,,2] <- results.rnn[1:2,2,]^0.5
+plot.data[,,3] <- results.rnn[1:2,6,]^0.5
+rownames(plot.data) <- c("Predisinfection E.coli", "Postdisinfection E.coli")
+colnames(plot.data) <- c("Instant", "Avg", "24h Avg")
+for(i in 1:dim(plot.data)[1]) {
+  # for(j in 1:nrow(plot.data))
+  # barplot(plot.data[i,,j], beside = TRUE, main=rownames(plot.data)[i],
+  barplot(t(plot.data[1,,]), beside = TRUE, main=rownames(plot.data)[i],
+               # border=NA, 
+               # ylim=c(0,max(highs)), 
+               # col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="Median squared error")
+          col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="RMSE")
+}
 
 
 ```{r Boxplot of Ecoli prediction error, fig.height=4.5, fig.width=6}
-load("results/ecoli-ann-all-results-ls.RData")
+load("results/ecoli-ann-all-results-ls-v2.RData")
 results.ann <- array(data=NA, 
                  dim=c(2, # 3 rows pre, post, log removal
                        10, # 5 columns (r2 and rmse, RMSE IQR)
@@ -1574,7 +1780,7 @@ for(loc in 1:length(all.results.ls)) {
 
 
 
-load("results/ecoli-rnn-all-results-ls.RData")
+load("results/ecoli-rnn-all-results-ls-v2.RData")
 results.rnn <- array(data=NA, 
                  dim=c(2, # 3 rows pre, post, log removal
                        10, # 5 columns (r2 and rmse, RMSE IQR)
@@ -1621,7 +1827,7 @@ abline(h=results.p[i,1], col="red", xpd=FALSE)
 ```{r Build real-time Ecoli, eval=FALSE, include=FALSE}
 ## Need to add real time CT prediction
  # Load process data
-  load("data/ecoli/process-data-ls.RData")
+  load("data/ecoli/process-data-ls-v2.RData")
   
   # Calculate log removal
   ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
@@ -1632,7 +1838,7 @@ abline(h=results.p[i,1], col="red", xpd=FALSE)
 log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
 log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 
-  load("results/ct-all-results-ls.RData")
+  load("results/ct-all-results-ls-v2.RData")
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
