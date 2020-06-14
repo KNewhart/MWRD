@@ -23,12 +23,22 @@ sapply(pkgs, function(x) library(x, character.only = TRUE))
 sapply(list.files("src", full.names = TRUE), source)
 
 # 1. Import PAA sampling data (offline)
-paa.data.ls <- list()
-paa.data.ls[[1]] <- import2018() # UTC
-paa.data.ls[[2]] <- import2019() # UTC
+if(!("paa-data-ls.RData" %in% list.files("data/paa/"))) {
+  paa.data.ls <- list()
+  paa.data.ls[[1]] <- import2018() # UTC
+  paa.data.ls[[2]] <- import2019() # UTC
+  save(paa.data.ls, file="data/paa/paa-data-ls.RData")
+} else {
+  load("data/paa/paa-data-ls.RData")
+}
 
 # 2. Import Carbovis data (offline)
-vis.data <- importCarbovis() # Unknown timezone, assumed GMT+6 and converted to UTC
+if(!("vis-data.RData" %in% list.files("data/"))) {
+  vis.data <- importCarbovis() # Unknown timezone, assumed GMT+6 and converted to UTC
+  save(vis.data, file="data/vis-data.RData")
+} else {
+  load("data/vis-data.RData")
+}
 
 # 3. Import PAA process data (online, instantaneous interpolated values)
 if(!("process-data-ls-v2.RData" %in% list.files("data/paa/"))) {
@@ -1562,11 +1572,13 @@ save(all.results.ls, file="results/ecoli-rnn-all-results-ls-v2.RData")
 }
 ```
 
-```{r Build Ecoli RNN 50-50, include=FALSE}
-if(!("results/ecoli-rnn-50-50-all-results-ls-v2.RData" %in% list.files(recursive=TRUE))) { 
-
+```{r Build Ecoli RNN 50-50, eval=FALSE, include=FALSE}
+if(!("results/ecoli-rnn-50-50-all-results-ls.RData" %in% list.files(recursive=TRUE))) { 
+  library(xts)
+  load("data/ecoli/ecoli-data-ls.RData")
   # Load process data
-  load("data/ecoli/process-data-ls-v2.RData")
+  load("data/ecoli/process-data-ls.RData")
+  load("data/vis-data.RData")
   
   # Calculate log removal
   ecoli.index <- sapply(1:nrow(ecoli.data.ls[[2]]), function (n) {
@@ -1634,9 +1646,9 @@ for(i in 1:2) {
 }
 end <- Sys.time()
 end-start
-save(all.results.ls, file="results/ecoli-rnn-50-50-all-results-ls-v2.RData")
+save(all.results.ls, file="results/ecoli-rnn-50-50-all-results-ls.RData")
 } else {
-  load("results/ecoli-rnn-50-50-all-results-ls-v2.RData")
+  load("results/ecoli-rnn-50-50-all-results-ls.RData")
 }
 ```
 
@@ -1751,8 +1763,6 @@ for(i in 1:dim(plot.data)[1]) {
 }
 
 
-```
-
 ```{r Boxplot of Ecoli prediction error, fig.height=4.5, fig.width=6}
 load("results/ecoli-ann-all-results-ls-v2.RData")
 results.ann <- array(data=NA, 
@@ -1811,6 +1821,8 @@ abline(h=results.p[i,1], col="red", xpd=FALSE)
 
 
 ```
+
+
 
 ```{r Build real-time Ecoli, eval=FALSE, include=FALSE}
 ## Need to add real time CT prediction
