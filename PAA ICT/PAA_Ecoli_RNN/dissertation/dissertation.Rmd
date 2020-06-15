@@ -275,7 +275,7 @@ save(all.results.ls, file="results/paa-var-results-ls-v2.RData")
 ```
 
 
-```{r plot PAA squared error, echo=FALSE}
+```{r plot PAA squared error v2, echo=FALSE}
 # 1: 2018 or 2019
 # 2: Instantaneous process data, Avg, or 24h avg
 # 3: PAA sampling location
@@ -1211,7 +1211,7 @@ if(!("results/ecoli-ann-all-results-ls-v2.RData" %in% list.files(recursive=TRUE)
 log.removal <- log10(ecoli.data.ls[[2]][,2]/ecoli.data.ls[[1]][ecoli.index,2])
 log.removal <- cbind(data.frame(ecoli.data.ls[[2]][,1]),data.frame(log.removal))
 
-  load("results/ct-all-results-ls-v2.RData")
+  load("results/ct-all-results-ls.RData")
 CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
@@ -1287,7 +1287,7 @@ save(all.results.ls, file="results/ecoli-ann-all-results-ls-v2.RData")
 if(!("results/ecoli-var-results-ls-v2.RData" %in% list.files(recursive=TRUE))) {
   # Load process data anf CT
   load("data/ecoli/process-data-ls-v2.RData")
-  load("results/ct-all-results-ls-v2.RData")
+  load("results/ct-all-results-ls.RData")
   CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
