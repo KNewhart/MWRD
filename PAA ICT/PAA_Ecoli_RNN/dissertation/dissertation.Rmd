@@ -11,10 +11,7 @@ knitr::opts_chunk$set(
 	dev = "pdf"
 )
 sapply(list.files("src", full.names = TRUE), source)
-```
 
-
-```{r PAA data, include=FALSE}
 # 0. Set working directory and import functions
 # setwd("../Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
 # setwd("GitHub/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
@@ -891,6 +888,73 @@ save(all.results.ls, file="results/ct-var-results-ls-v2.RData")
 
 
 
+```{r Var CT exploratory}
+
+i <- 1
+# Prep training data in the same way as above for column names
+{
+  load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
+  ct.ls <- lapply(all.results.ls, function(x) x[,4])
+  load("data/paa/process-data-ls.RData")
+
+  ct <- ct.ls[[i]]
+  process <- process.data.ls[[1]] # Instantaneous process data
+  vis <- vis.data
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  
+  # 1. Combine paa and process data
+  merged.data <- cbind(ct,
+                       xts(process[which(process[,1] %in% index(ct)),-1], order.by=process[which(process[,1] %in% index(ct)),1]))
+  merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+  
+  # 2. Add HRT
+  merged.data <- cbind(merged.data, hrt)
+  
+  # 3. Add vis
+  vis <- na.locf(vis)
+  vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+  merged.data <- cbind(merged.data, vis)
+  
+  # 4. Remove vars that are constant
+  merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
+  
+    predict.var <- colnames(merged.data)[1]
+
+    # Initialize loop
+    vars <- which(!(colnames(merged.data) %in% predict.var))
+    combos <- combn(vars,1) # Initialize
+}
+
+# For the 2019 dataset, the UV transmittance data is garbage
+
+load("results/ct-var-results-ls.RData")
+var.names <- colnames(merged.data)[combos]
+var.df.ls <- list()
+i <- 1
+optimum.run <- length(all.results.ls[[i]])-1
+
+var.df <- data.frame(Variable=NA, RMSE=NA, Label=NA)
+for(j in 1:(optimum.run+1)) {
+  optimum.combo <- which(all.results.ls[[i]][[j]][[3]]==min(all.results.ls[[i]][[j]][[3]])) # Min RMSE
+  optimum.rmse <- min(all.results.ls[[i]][[j]][[3]])
+  n <- all.results.ls[[i]][[j]][[1]][nrow(all.results.ls[[i]][[j]][[1]]),optimum.combo]
+  var.df[j,1] <- var.names[n]
+  # var.df[i,2] <- all.results.ls[[ecoli.i]][[1]][[3]][which(all.results.ls[[ecoli.i]][[1]][[1]]==n)]
+  var.df[j,2] <- optimum.rmse
+  var.df[j,3] <- i
+}
+
+# When only 3 repetitions are used for v1
+#                      Variable     RMSE Label
+# 1 X2515.NSEC.Quad.4.MLR.SVI_G 8.585191     1
+# 2                     AI_N99C 8.222428     1
+# 3           NSEC.INF..FY.F25. 8.167425     1
+# 4                    TI.R3003 7.942821     1
+# 5                  HRT.2018.2 7.753953     1
+# 6                 ASRT_ASRT_N 7.674088     1
+# 7     NSEC.EFF.FLOW..FY.F225. 7.695667     1
+```
+
 
 
 ```{r Actual predicted CT Plots, fig.width=6.5, fig.height=3}
@@ -1762,7 +1826,7 @@ for(i in 1:dim(plot.data)[1]) {
           col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="RMSE")
 }
 
-
+```
 ```{r Boxplot of Ecoli prediction error, fig.height=4.5, fig.width=6}
 load("results/ecoli-ann-all-results-ls-v2.RData")
 results.ann <- array(data=NA, 
