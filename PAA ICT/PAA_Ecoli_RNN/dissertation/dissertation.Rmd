@@ -1331,7 +1331,7 @@ save(all.results.ls, file="results/ecoli-var-results-ls-v2.RData")
 
 
 ```{r Var Ecoli exploratory}
-load("results/ecoli-var-results-ls-v2.RData")
+load("results/ecoli-var-results-ls.RData")
 var.df.ls <- list()
 for(ecoli.i in 1:2) { # Pre = 1, post = 2
 optimum.run <- length(all.results.ls[[ecoli.i]])-1
@@ -1762,9 +1762,10 @@ for(i in 1:dim(plot.data)[1]) {
           col=RColorBrewer::brewer.pal(3,"Dark2"), ylab="RMSE")
 }
 
+```
 
 ```{r Boxplot of Ecoli prediction error, fig.height=4.5, fig.width=6}
-load("results/ecoli-ann-all-results-ls-v2.RData")
+load("results/ecoli-ann-all-results-ls.RData")
 results.ann <- array(data=NA, 
                  dim=c(2, # 3 rows pre, post, log removal
                        10, # 5 columns (r2 and rmse, RMSE IQR)
@@ -1780,7 +1781,7 @@ for(loc in 1:length(all.results.ls)) {
 
 
 
-load("results/ecoli-rnn-all-results-ls-v2.RData")
+load("results/ecoli-rnn-all-results-ls.RData")
 results.rnn <- array(data=NA, 
                  dim=c(2, # 3 rows pre, post, log removal
                        10, # 5 columns (r2 and rmse, RMSE IQR)
