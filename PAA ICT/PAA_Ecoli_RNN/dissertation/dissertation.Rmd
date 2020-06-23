@@ -848,6 +848,7 @@ for(i in 1:length(all.results.ls)) {
     combo.results.ls <- list()
     # Train all combinations n times
       for(j in 1:ncol(combos)) {
+        t1 <- Sys.time()
           all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])] # Create training data
           predict.col <- which(colnames(all.data)==predict.var)
           resultsANN.n <- list()
@@ -860,7 +861,10 @@ for(i in 1:length(all.results.ls)) {
                                               scale=TRUE)
           }
           combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+          save(combo.results.ls, file="results-temp-combo-results-ls-ct.RData")
           print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
+          t2 <- Sys.time()
+          print(paste("Estimated time to combo completion:", Sys.time()+as.numeric(difftime(t2,t1, units="secs"))*(ncol(combos)-j)))
       }
     # Calcaulte performance of each combo
     rsq <- unlist(lapply(combo.results.ls, function(combo) mean(unlist(lapply(combo, function(trial) trial[,1])) )))
@@ -868,7 +872,7 @@ for(i in 1:length(all.results.ls)) {
     
     # Save results
     results.ls[[length(results.ls)+1]] <- list(combos, rsq, rmse)
-    
+    save(results.ls, file="results/temp-results-ls-ct.RData")
     # Compare to previous
     previous.rmse <- current.rmse
     current.rmse <- min(rmse)
@@ -879,6 +883,7 @@ for(i in 1:length(all.results.ls)) {
   }
   
   all.results.ls[[length(all.results.ls)+1]] <- results.ls
+  save(all.results.ls, file="results/temp-all-results-ls-ct.RData")
 }
 
 
@@ -1286,10 +1291,10 @@ save(all.results.ls, file="results/ecoli-ann-all-results-ls-v2.RData")
 
 
 ```{r Variable selection ANN Ecoli, eval=FALSE, include=FALSE}
-if(!("results/ecoli-var-results-ls-v2.RData" %in% list.files(recursive=TRUE))) {
+if(!("results/ecoli-var-results-ls-n.RData" %in% list.files(recursive=TRUE))) {
   # Load process data anf CT
-  load("data/ecoli/process-data-ls-v2.RData")
-  load("results/ct-all-results-ls-v2.RData")
+  load("data/ecoli/process-data-ls.RData")
+  load("results/ct-all-results-ls.RData")
   CT <- do.call("rbind",lapply(all.results.ls, function(x) x[,4]))
 
 all.results.ls <- list()
@@ -1345,29 +1350,36 @@ lagged.times <- sapply(index(ecoli), function(t) {
     
     # Initialize loop
     vars <- which(!(colnames(merged.data) %in% predict.var))
+    vars.key <- data.frame("Name"=colnames(merged.data)[vars],
+                           "Number"=vars)
     combos <- combn(vars,1) # Initialize
     previous.rmse <- 100 # Dummy
-    current.rmse <- 10 # Dummy
+    current.rmse <- 90 # Dummy
     results.ls <- list() # Store all combination results
     
     # Loop over RMSE
-    while(previous.rmse >= current.rmse) {
+  while(previous.rmse >= current.rmse) {
     combo.results.ls <- list()
     # Train all combinations n times
+    
       for(j in 1:ncol(combos)) {
+          t1 <- Sys.time()
           all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])] # Create training data
           predict.col <- which(colnames(all.data)==predict.var)
           resultsANN.n <- list()
-          for(n in 1:3) {
+          for(n in 1:10) {
             resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
                                               predict.col=predict.col, 
                                               act.function="softsign", 
-                                              n_epoch=3000,
+                                              n_epoch=250,
                                               # n_nodes=NULL, 
                                               scale=TRUE)
           }
           combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+          save(combo.results.ls, file="results/temp-combo-results-ls.RData")
           print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
+          t2 <- Sys.time()
+          print(paste("Estimated time to combo completion:", Sys.time()+as.numeric(difftime(t2,t1, units="secs"))*(ncol(combos)-j)))
       }
     # Calcaulte performance of each combo
     rsq <- unlist(lapply(combo.results.ls, function(combo) mean(unlist(lapply(combo, function(trial) trial[,1])) )))
@@ -1375,6 +1387,7 @@ lagged.times <- sapply(index(ecoli), function(t) {
     
     # Save results
     results.ls[[length(results.ls)+1]] <- list(combos, rsq, rmse)
+    save(results.ls, file="results/temp-results-ls-ecoli.RData")
     
     # Compare to previous
     previous.rmse <- current.rmse
@@ -1383,15 +1396,15 @@ lagged.times <- sapply(index(ecoli), function(t) {
     # Set new combo
     combos <- matrix(data=rep(combos[,which(rmse==current.rmse)], ncol(combos)-1), nrow=nrow(combos))
     combos <- rbind(combos, vars[-which(vars %in% combos)])
-    }
+  }
   
   all.results.ls[[length(all.results.ls)+1]] <- results.ls
-  print(paste("Finished",i, "E.coli"))
+  save(all.results.ls, file="results/temp-all-results-ls-ecoli.RData")
 }
 
-save(all.results.ls, file="results/ecoli-var-results-ls-v2.RData")
+save(all.results.ls, file="results/ecoli-var-results-ls-n.RData")
 } else {
-  load("results/ecoli-var-results-ls-v2.RData")
+  load("results/ecoli-var-results-ls-n.RData")
 }
 ```
 
