@@ -38,6 +38,14 @@ if(!("process-data-ls.RData" %in% list.files("data/paa/"))) {
   load("data/paa/process-data-ls.RData")
 }
 
+# 3. Import process data (online, instantaneous interpolated values)
+if(!("process-data-ls-lablag.RData" %in% list.files("data/paa/"))) {
+  process.data.ls <- importProcess(times=do.call("c", lapply(paa.data.ls, index)))
+  save(process.data.ls, file="data/paa/process-data-ls-lablag.RData")
+} else {
+  load("data/paa/process-data-ls-lablag.RData")
+}
+
 # 4. Calculate HRT
 hrt.ls <- lapply(paa.data.ls, function(paa) {
   lapply(process.data.ls, function(data) {
@@ -178,6 +186,64 @@ save(all.results.ls, file="results/paa-all-results-ls.RData")
 ```
 
 
+
+
+```{r Build ANN PAA Lab lag, include=FALSE}
+if(!("results/paa-all-results-ls-lablag.RData" %in% list.files(recursive=TRUE))) {
+  load("data/paa/process-data-ls-lablag.RData")
+  start <- Sys.time()
+all.results.ls <- list()
+# 5. Merge data for testing
+for(i in 1:length(paa.data.ls)) {
+  paa <- paa.data.ls[[i]] # 2018 or 2019
+  annual.results.ls <- list()
+  for(j in 1:length(process.data.ls)) {
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+    
+    # 1. Combine paa and process data
+    merged.data <- cbind(paa,
+                         xts(process[which(process[,1] %in% index(paa)),-1], order.by=process[which(process[,1] %in% index(paa)),1]))
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add HRT
+    merged.data <- cbind(merged.data, hrt)
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+    merged.data <- cbind(merged.data, vis)
+    
+    resultsANN.k <- list()
+    for(k in 1:ncol(paa)) {
+      predict.var <- colnames(paa)[k]
+      remove.var <- colnames(paa)[-k]
+      all.data <- merged.data[,-which(colnames(merged.data) %in% remove.var)]
+      predict.col <- which(colnames(all.data)==predict.var)
+      resultsANN.n <- list()
+      for(n in 1:10) {
+        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                          predict.col=predict.col, 
+                                          act.function="softsign", 
+                                          n_epoch=3000,
+                                          # n_nodes=NULL, 
+                                          scale=TRUE)
+      }
+      resultsANN.k[[length(resultsANN.k)+1]] <- resultsANN.n
+    }
+    annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.k
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- annual.results.ls
+}
+end <- Sys.time()
+end-start
+save(all.results.ls, file="results/paa-all-results-ls-lablag.RData")
+} else {
+  load("results/paa-all-results-ls-lablag.RData")
+}
+```
+
 ```{r Variable selection ANN PAA, eval=FALSE, include=FALSE}
 if(!("results/paa-var-results-ls.RData" %in% list.files(recursive=TRUE))) {
 load("data/paa/process-data-ls.RData")
@@ -274,7 +340,7 @@ save(all.results.ls, file="results/paa-var-results-ls.RData")
 # 3: PAA sampling location
 # 4: Model results x10
 # Summarize average r2 and rmse of 4 by 3 and 2
-load("results/paa-all-results-ls.RData")
+load("results/paa-all-results-ls-lablag.RData")
 results <- array(data=NA, 
                  dim=c(6, # 6 rows (sampling location)
                        5, # 4 columns (r2 and rmse, RMSE IQR)
