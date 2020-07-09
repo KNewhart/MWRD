@@ -872,9 +872,9 @@ wilcox.test(results[,4], results[,6], paired = TRUE)
 
 ```{r Build CT ANN, include=FALSE}
 
-if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
+if(!("results/ct-ann-results-ls-lablag.RData" %in% list.files(recursive=TRUE))) {
   load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
-  load("data/paa/process-data-ls.RData")
+  load("data/paa/process-data-ls-lablag.RData")
   ct.results.ls <- list()
   # 5. Merge data for testing
   for(i in 1:length(all.results.ls)) {
@@ -916,9 +916,9 @@ if(!("results/ct-ann-results-ls.RData" %in% list.files(recursive=TRUE))) {
     ct.results.ls[[length(ct.results.ls)+1]] <- annual.results.ls
   }
 
-  save(ct.results.ls, file="results/ct-ann-results-ls.RData")
+  save(ct.results.ls, file="results/ct-ann-results-ls-lablag.RData")
 } else {
-  load("results/ct-ann-results-ls.RData")
+  load("results/ct-ann-results-ls-lablag.RData")
 }
 ```
 
