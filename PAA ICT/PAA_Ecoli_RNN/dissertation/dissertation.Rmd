@@ -423,6 +423,9 @@ plot.results <- data.frame(
   loc=rep(c(rep("2018 1-min",10), rep("2018 Half",10),rep("2019 1-min",10), rep("2019 10-min",10),rep("2019 20-min",10), rep("2019 30-min", 10)),3), 
   avg=c(rep("Instant", 10*6), rep("Avg", 10*6), rep("24-hr avg", 10*6))
 )
+
+plot.results$loc <- factor(plot.results$loc, levels=c("2018 1-min", "2019 1-min", "2019 10-min", 
+                                                        "2018 Half", "2019 20-min", "2019 30-min"))
 plot.results <- plot.results[order(plot.results$loc),]
 par(mar=c(4.5,3.5,0.1,0.1), family="serif", cex=1.2)
 cols <- RColorBrewer::brewer.pal(3,"Dark2")
@@ -449,7 +452,7 @@ text(x=as.vector(foo), y=plot.results[order(plot.results$loc, plot.results$avg),
 ```
 
 ```{r Timeseries PAA prediction actual, fig.height=8.5, fig.width=6.5}
-load("results/paa-all-results-ls.RData")
+load("results/paa-all-results-ls-lablag.RData")
 
 actual.predicted.plot <- function(actual, predicted, label) {
   par(mar=c(2, 2, 2, 1) + 0.1, family="serif")
@@ -489,7 +492,7 @@ for(avg in 1:3) {
 }
 ```
 ```{r Timeseries PAA prediction actual v2, fig.height=2.5, fig.width=7.5}
-load("results/paa-all-results-ls.RData")
+load("results/paa-all-results-ls-lablag.RData")
 
 actual.predicted.plot <- function(actual, predicted, label) {
   par(mar=c(2, 2, 3, 0) + 0.1, family="serif")
@@ -535,8 +538,8 @@ for(avg in 1) {
 
 
 ```{r Calculate CT, eval=FALSE, include=FALSE}
-load("results/paa-all-results-ls.RData")
-load("data/paa/process-data-ls.RData")
+load("results/paa-all-results-ls-lablag.RData")
+load("data/paa/process-data-ls-lablag.RData")
 i <- 1;j <- 1
 all.results.ls <- list()
 # 5. Merge data for testing
@@ -582,8 +585,8 @@ save(all.results.ls,file="results/ct-all-results-ls.RData")
 
 ```{r Calculate Persistence CT for 2019, echo=FALSE, fig.width=6.5, fig.height=6.5}
 load("results/ct-all-results-ls.RData")
-load("data/paa/process-data-ls.RData")
-load("results/ct-ann-results-ls.RData")
+load("data/paa/process-data-ls-lablag.RData")
+load("results/ct-ann-results-ls-lablag.RData")
 
 avg.k <- lapply(all.results.ls, function(x) mean(x[,2]))
 avg.D <- lapply(all.results.ls, function(x) mean(x[,3]-exp(as.numeric(x[,1]))))
@@ -767,8 +770,8 @@ for(i in 1:length(all.results.ls)) {
 
 
 ```{r Plot prediction on CT, fig.height=4,fig.width=6.5}
-load("results/paa-all-results-ls.RData")
-load("data/paa/process-data-ls.RData")
+load("results/paa-all-results-ls-lablag.RData")
+load("data/paa/process-data-ls-lablag.RData")
 i <- 1;j <- 1
 plot.these <- list(c(156),
                    c(54))
