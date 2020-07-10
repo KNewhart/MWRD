@@ -48,9 +48,16 @@ importProcess <- function(times) {
     for(t in 1:length(times)) {
     # for(t in 1:3) {
       print(paste("Starting timestamp", t))
-      start <- as.POSIXct(times[t]) - as.numeric(d)
-      start.24 <- as.POSIXct(times[t]) - as.numeric(d.24)
-      end <- as.POSIXct(times[t])
+      # if(p %in% grep("Labworks Data", data.parameters[,1])) {
+      #   start <- as.POSIXct(times[t]) - as.numeric(d) - 24*60*60
+      #   start.24 <- as.POSIXct(times[t]) - as.numeric(d.24) - 24*60*60
+      #   end <- as.POSIXct(times[t]) - 24*60*60
+      # } else {
+        start <- as.POSIXct(times[t]) - as.numeric(d)
+        start.24 <- as.POSIXct(times[t]) - as.numeric(d.24)
+        end <- as.POSIXct(times[t])
+      # }
+      
       
       test <- piPull(tag=data.parameters[p,1], start=start, end=end, save=FALSE, obj.return = TRUE)
       test.24 <- piPull(tag=data.parameters[p,1], start=start.24, end=end, save=FALSE, obj.return = TRUE)
