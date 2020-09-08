@@ -248,10 +248,10 @@ for(j in 1:(optimum.run+1)) {
 
 print(var.df)
 
-ct <- var.df[,2]
-ct.lab <- var.df[,1]
+k <- var.df[,2]
+k.lab <- var.df[,1]
 
-lab.fix <- function(lab) {
+lab.fix <- funkion(lab) {
   name.mat <- matrix(data=c("RAS %","Sec RAS (%)",
                             "BOD","Final BOD",
                             "TSS", "Sec Eff TSS",
@@ -286,22 +286,22 @@ lab.fix <- function(lab) {
   return(lab)
 }
 
-ct.lab <- sapply(ct.lab, function(lab) lab.fix(lab))
+k.lab <- sapply(k.lab, function(lab) lab.fix(lab))
 
 # Plot RMSE as variables are added
 
-# pdf(file="figures/var-select-ct.pdf", width=6.5, height=3)
+pdf(file="figures/var-select-k.pdf", width=6.5, height=3)
 par(mar=c(3.5,3.5,1,1))
-plot(x=c(1:length(ct)), y=ct, 
-     ylim=c(min(ct-.0001), max(ct)),
-     pch=20, type="b", xaxt="n", ylab="", xlab="", xlim=c(0.5,length(ct)+.5))
+plot(x=c(1:length(k)), y=k, 
+     ylim=c(min(k-.0001), max(k)),
+     pch=20, type="b", xaxt="n", ylab="", xlab="", xlim=c(0.5,length(k)+.5))
 mtext("RMSE", side=2, line=2.25)
 mtext("Iteration", side=1, line=2.25)
-axis(side=1, at = c(1:length(ct)), labels = c(1:length(ct)))
+axis(side=1, at = c(1:length(k)), labels = c(1:length(k)))
 
-for(x in 1:length(ct)) {
-  y <- ct[x]
-  text(ct.lab[x],x=x,y=y,pos=1)
+for(x in 1:length(k)) {
+  y <- k[x]
+  text(k.lab[x],x=x,y=y,pos=1)
 }
 
-# dev.off()
+dev.off()
