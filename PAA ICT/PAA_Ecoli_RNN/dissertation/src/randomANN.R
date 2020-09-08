@@ -3,7 +3,8 @@ randomANN <- function(all.data,
                        predict.col,
                        act.function="softsign", 
                        n_epoch=3000,
-                       n_nodes=NULL, 
+                       n_nodes=NULL,
+                       node_multiply=3,
                        scale=TRUE) {
   # Load required packages
   pkgs <- c("xts", "dplyr", "parallel", "doSNOW", "foreach")
@@ -12,7 +13,6 @@ randomANN <- function(all.data,
     install.packages("keras")
     library(keras)
     keras::install_keras()
-  } else {
     library(keras)
   }
   
@@ -75,7 +75,7 @@ randomANN <- function(all.data,
                                train.y <- array(data=as.matrix(train.y), dim=c(nrow(train.y), 1,1))
                                
                                n_batch <- dim(train.x)[1]
-                               if(is.null(n_nodes)) n_nodes <- c(dim(train.x)[2], round(dim(train.x)[2]*3))
+                               if(is.null(n_nodes)) n_nodes <- c(dim(train.x)[2], round(dim(train.x)[2]*node_multiply))
                                
                                # Setup model
                                model <- keras_model_sequential() %>%
@@ -135,6 +135,11 @@ randomANN <- function(all.data,
                                )
                                
                                r2 <- cor(validation, train.y)^2;r2
+                               sse <- sum((validation-train.y[,,1])^2)
+                               n <- dim(validation)[1]
+                               p <- count_params(model)
+                               aic <- n*log(sse/n)+2*p
+                               bic <- n*log(sse/n)+p*log(n)
                                
                                # Setup testing data
                                # if(scale) test.x <- scale(all.data, center=train.mean, scale=train.sd)[test.obs,-predict.col]
@@ -154,11 +159,15 @@ randomANN <- function(all.data,
                                
                                data.frame("R2"=r2,
                                           "Prediction"=pred,
-                                          "Actual"=all.data[test.obs,predict.col])
+                                          "Actual"=all.data[test.obs,predict.col],
+                                          "AIC"=aic,
+                                          "BIC"=bic)
                              } else {
                                data.frame("R2"=NA, 
                                           "Prediction"=NA,
-                                          "Actual"=NA)
+                                          "Actual"=NA,
+                                          "AIC"=NA,
+                                          "BIC"=NA)
                              }
                            }
     
