@@ -136,6 +136,87 @@ k <- -all.results.ls[[2]][,2]
 # 
 # save(all.results.ls, file="results/D-var-results-ls-n.RData")
 
+load("results/D-var-results-ls-n.RData")
+var.names <- colnames(merged.data)
+var.df.ls <- list()
+i <- 1
+optimum.run <- length(all.results.ls[[i]])-1
+
+var.df <- data.frame(Variable=NA, RMSE=NA)
+for(j in 1:(optimum.run+1)) {
+  optimum.rmse <- min(all.results.ls[[i]][[j]][[3]])
+  optimum.combo <- which(all.results.ls[[i]][[j]][[3]]==optimum.rmse) # Min RMSE
+  
+  n <- all.results.ls[[i]][[j]][[1]][nrow(all.results.ls[[i]][[j]][[1]]),optimum.combo] # New variable that was added
+  var.df[j,1] <- var.names[n]
+  # var.df[j,1] <- vars.key[which(vars.key[,2]==n),1]
+  # var.df[i,2] <- all.results.ls[[ecoli.i]][[1]][[3]][which(all.results.ls[[ecoli.i]][[1]][[1]]==n)]
+  var.df[j,2] <- optimum.rmse
+  # var.df[j,3] <- i
+}
+
+print(var.df)
+
+D <- var.df[,2]
+D.lab <- var.df[,1]
+
+lab.fix <- function(lab) {
+  name.mat <- matrix(data=c("RAS %","Sec RAS (%)",
+                            "BOD","Final BOD",
+                            "TSS", "Sec Eff TSS",
+                            "ASRT", "Sec ASRT", 
+                            "AI_N92C", "Sec NO2",
+                            "COD", "Sec Eff COD",
+                            "AI_N99C", "Sec TSS",
+                            "TN_FC24", "Sec Eff TN",
+                            "AI_N93D", "Sec pH",
+                            "TI-R3003", "Air Temperature",
+                            "F25", "Sec Inf Flow",
+                            "F225", "Sec Eff Flow",
+                            "FI_T632", "GTE to SAR Flow",
+                            "SVI", "Sec SVI",
+                            "TI_N171", "Sec Temperature",
+                            "AC_N94C", "Sec DO",
+                            "AC_N94A", "Sec DO",
+                            "HRT", "HRT",
+                            "AI_N92A", "Sec NH3",
+                            "TIN_FC24", "Eff TIN",
+                            "FC_N231", "WAS Flow",
+                            "NO5_FC24", "Eff NO3+NO2",
+                            "AI_N92H", "Sec PO4",
+                            "PAA_N_FlowRate", "PAA Dose"), 
+                     ncol=2, byrow=TRUE)
+  for(i in 1:nrow(name.mat)) {
+    name <- name.mat[i,1]
+    new.name <- name.mat[i,2]
+    if(length(grep(name,lab))>0) {
+      lab <- new.name
+      break
+    }
+  }
+  
+  return(lab)
+}
+
+D.lab <- sapply(D.lab, function(lab) lab.fix(lab))
+
+# Plot RMSE as variables are added
+
+pdf(file="figures/var-select-D.pdf", width=6.5, height=3)
+par(mar=c(3.5,3.5,1,1))
+plot(x=c(1:length(D)), y=D, 
+     ylim=c(min(D-.01), max(D)),
+     pch=20, type="b", xaxt="n", ylab="", xlab="", xlim=c(0.5,length(D)+.5))
+mtext("RMSE", side=2, line=2.25)
+mtext("Iteration", side=1, line=2.25)
+axis(side=1, at = c(1:length(D)), labels = c(1:length(D)))
+
+for(x in 1:length(D)) {
+  y <- D[x]
+  text(D.lab[x],x=x,y=y,pos=1)
+}
+
+dev.off()
 
 
 
@@ -227,7 +308,7 @@ for(i in 2) {
 
 save(all.results.ls, file="results/k-var-results-ls-n.RData")
 
-
+load("results/k-var-results-ls-n.RData")
 var.names <- colnames(merged.data)[combos]
 var.df.ls <- list()
 i <- 1
