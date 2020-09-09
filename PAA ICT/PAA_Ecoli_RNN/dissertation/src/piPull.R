@@ -99,7 +99,7 @@ piPull <- function(tag, label=NULL, save=TRUE, obj.return = FALSE, start='*-365d
     }
   }
   
-  # Use the last character string from the PI tag as the variable name, unless another label has been provided
+  # Use the last character string from the PI tag as the file name, unless another label has been provided
   if(is.null(label)) label <- gsub("[.]", "_", make.names(tail(strsplit(tag,"[\\]")[[1]],n=1)))
   
   # If we want to save the compiled data, save to CSV
