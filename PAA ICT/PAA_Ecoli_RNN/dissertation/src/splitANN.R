@@ -82,6 +82,7 @@ splitANN <- function(all.data,
        batch_size=n_batch,
        epochs=n_epoch,
        shuffle=TRUE
+       # , validation_split=0.33
        # stateful=TRUE
      )
      # history.loss[i] <- history$metrics$loss

@@ -1,0 +1,414 @@
+---
+title: "Response to reviewers"
+author: "KN"
+date: "9/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	fig.path = "figures/",
+	dev = "pdf"
+)
+sapply(list.files("src", full.names = TRUE), source)
+
+# 0. Set working directory and import functions
+# setwd("../Dropbox/Code/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
+# setwd("GitHub/MWRD/PAA ICT/PAA_Ecoli_RNN/dissertation/")
+pkgs <- c("xts", "readxl", "lubridate", "stringr", "xlsx", "doSNOW", "foreach", "devtools")
+sapply(pkgs, function(x) library(x, character.only = TRUE))
+sapply(list.files("src", full.names = TRUE), source)
+
+# 1. Import PAA sampling data (offline)
+if(!("paa-data-ls.RData" %in% list.files("data/paa/"))) {
+  paa.data.ls <- list()
+  paa.data.ls[[1]] <- import2018() # UTC
+  paa.data.ls[[2]] <- import2019() # UTC
+  save(paa.data.ls, file="data/paa/paa-data-ls.RData")
+} else {
+  load("data/paa/paa-data-ls.RData")
+}
+
+# 2. Import Carbovis data (offline)
+if(!("vis-data.RData" %in% list.files("data/"))) {
+  vis.data <- importCarbovis() # Unknown timezone, assumed GMT+6 and converted to UTC
+  save(vis.data, file="data/vis-data.RData")
+} else {
+  load("data/vis-data.RData")
+}
+
+# 3. Import PAA process data (online, instantaneous interpolated values)
+if(!("process-data-ls.RData" %in% list.files("data/paa/"))) {
+  process.data.ls <- importProcess(times=do.call("c", lapply(paa.data.ls, index)))
+  save(process.data.ls, file="data/paa/process-data-ls.RData")
+} else {
+  load("data/paa/process-data-ls.RData")
+}
+
+# 3. Import process data (online, instantaneous interpolated values)
+if(!("process-data-ls-lablag.RData" %in% list.files("data/paa/"))) {
+  process.data.ls <- importProcess(times=do.call("c", lapply(paa.data.ls, index)))
+  save(process.data.ls, file="data/paa/process-data-ls-lablag.RData")
+} else {
+  load("data/paa/process-data-ls-lablag.RData")
+}
+
+# 4. Calculate HRT
+hrt.ls <- lapply(paa.data.ls, function(paa) {
+  lapply(process.data.ls, function(data) {
+      q <- data[which(data$times %in% index(paa)),which(colnames(data)=="North Flow to Dis")]
+      hrt <- sapply(1:ncol(paa), function(i) calculateHRT(flow=q,c=paa[,i]))
+      colnames(hrt) <- gsub("PAA","HRT",colnames(paa))
+      hrt
+  })
+})
+
+# 5. Ecoli data
+if(!("ecoli-data-ls.RData" %in% list.files("data/ecoli/"))) {
+  ecoli.data.ls <- list()
+  ecoli.data.ls[[1]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
+                              piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\012_700_1011-RWH North, Pre-PAA|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
+  ecoli.data.ls[[2]] <- rbind(piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[1]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[1]][2]),
+                              piPull(tag="\\\\APPLEPI_AF\\MWRD_Production\\Labworks Data\\2B-North Final Effluent Platform|ECIDX_G", 
+                               save=FALSE, obj.return=TRUE, 
+                               start= lapply(paa.data.ls, function(x) range(index(x)))[[2]][1], end= lapply(paa.data.ls, function(x) range(index(x)))[[2]][2]))
+  save(ecoli.data.ls, file="data/ecoli/ecoli-data-ls.RData")
+} else {
+  load("data/ecoli/ecoli-data-ls.RData")
+}
+# 6. Import process data (online, instantaneous interpolated values)
+if(!("process-data-ls.RData" %in% list.files("data/ecoli/"))) {
+  process.data.ls <- importProcess(times=ecoli.data.ls[[1]][,1])
+  save(process.data.ls, file="data/ecoli/process-data-ls.RData")
+} else {
+  load("data/ecoli/process-data-ls.RData")
+}
+```
+
+
+
+
+```{r Build ANN PAA Lab lag, include=FALSE}
+
+all.results.ls <- list()
+# 5. Merge data for testing
+for(i in 1) {
+  paa <- paa.data.ls[[i]] # 2018 or 2019
+  annual.results.ls <- list()
+  # for(j in 1:length(process.data.ls)) {
+  for(j in 1) {
+    process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+    vis <- vis.data
+    hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+    
+    # 1. Combine paa and process data
+    merged.data <- cbind(paa,
+                         xts(process[which(process[,1] %in% index(paa)),-1], order.by=process[which(process[,1] %in% index(paa)),1]))
+    merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+    
+    # 2. Add HRT
+    merged.data <- cbind(merged.data, hrt)
+    
+    # 3. Add vis
+    vis <- na.locf(vis)
+    vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+    merged.data <- cbind(merged.data, vis)
+    
+    resultsANN.k <- list()
+    # for(k in 1:ncol(paa)) {
+    for(k in c(0.05, 0.1,0.25, 0.5,1,1.5,2,2.5, 3)) {
+      predict.var <- colnames(paa)[1]
+      remove.var <- colnames(paa)[-1]
+      all.data <- merged.data[,-which(colnames(merged.data) %in% remove.var)]
+      predict.col <- which(colnames(all.data)==predict.var)
+      resultsANN.n <- list()
+      for(n in 1:10) {
+        resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                          predict.col=predict.col, 
+                                          act.function="softsign", 
+                                          n_epoch=100,
+                                          n_nodes=NULL,
+                                          node_multiply=k,
+                                          scale=TRUE)
+      }
+      resultsANN.k[[length(resultsANN.k)+1]] <- resultsANN.n
+    }
+    annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.k
+  }
+  all.results.ls[[length(all.results.ls)+1]] <- annual.results.ls
+}
+
+# load("results/resultsANN-k-2018-PAA-1.RData")
+# all.results.ls <- c(all.results.ls.2[[1]][[1]], all.results.ls[[1]])
+
+save(resultsANN.k, file="results/resultsANN-k-2018-PAA-1.RData")
+# save(resultsANN.k, file="results/resultsANN-k-2019-PAA-1.RData")
+
+
+# R2
+lapply(resultsANN.k, function(x) mean(na.omit(unlist(lapply(x, function(y) y[,1])))))
+
+# AIC
+lapply(resultsANN.k, function(x) mean(unlist(lapply(x, function(y) y[,4]))))
+
+# BIC
+lapply(resultsANN.k, function(x) mean(unlist(lapply(x, function(y) y[,5]))))
+
+# RMSE
+lapply(resultsANN.k, function(x) mean(unlist(lapply(x, function(y) mean((y[,2]-y[,3])^2)^0.5))))
+```
+
+
+```{r CT split test}
+
+  load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
+  load("data/paa/process-data-ls-lablag.RData")
+  ct.results.ls <- list()
+  # 5. Merge data for testing
+  # for(i in 1:length(all.results.ls)) { # is this 2018 vs 2019?
+  for(i in 1) {
+    ct <- all.results.ls[[i]][,4]
+    annual.results.ls <- list()
+    # for(j in 1:length(process.data.ls)) {
+      for(j in 1) {
+      process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+      vis <- vis.data
+      hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+      
+      # 1. Combine ct and process data
+      merged.data <- cbind(ct,
+                           xts(process[which(process[,1] %in% index(ct)),-1], order.by=process[which(process[,1] %in% index(ct)),1]))
+      merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+      
+      # 2. Add HRT
+      merged.data <- cbind(merged.data, hrt)
+      
+      # 3. Add vis
+      vis <- na.locf(vis)
+      vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+      merged.data <- cbind(merged.data, vis)
+      
+
+        predict.var <- "ct"
+        predict.col <- which(colnames(merged.data)==predict.var)
+        
+        for(k in c(0.4,0.6,0.8,.9)) {
+          resultsANN.n <- list()
+          for(n in 1:10) {
+            resultsANN.n[[length(resultsANN.n)+1]] <- splitANN(all.data=merged.data,
+                                              predict.col=predict.col, 
+                                              act.function="softsign", 
+                                              n_epoch=100,
+                                              n_nodes=NULL, 
+                                              scale=TRUE,
+                                              train_split=k)
+          }
+          annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.n
+        }
+        resultsANN.n <- list()
+        for(n in 1:10) {
+            resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=merged.data,
+                                              predict.col=predict.col, 
+                                              act.function="softsign", 
+                                              n_epoch=100,
+                                              n_nodes=NULL, 
+                                              scale=TRUE)
+        }
+        annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.n
+
+    }
+    ct.results.ls[[length(ct.results.ls)+1]] <- annual.results.ls
+  }
+
+  
+  save(ct.results.ls, file="results/ct-results-ls-2018-CT.RData")
+  
+# R2
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) y[,1]))))
+
+# AIC
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) y[,4]))))
+
+# BIC
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) y[,5]))))
+
+# RMSE
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) mean((y[,2]-y[,3])^2)^0.5))))
+
+```
+
+
+```{r CT low high split test}
+
+  load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
+  load("data/paa/process-data-ls-lablag.RData")
+  ct.results.ls <- list()
+  # 5. Merge data for testing
+  # for(i in 1:length(all.results.ls)) { # is this 2018 vs 2019?
+  for(i in 1) {
+    ct <- all.results.ls[[i]][,4]
+    annual.results.ls <- list()
+    # for(j in 1:length(process.data.ls)) {
+      for(j in 1) {
+      process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+      vis <- vis.data
+      hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+      
+      # 1. Combine ct and process data
+      merged.data <- cbind(ct,
+                           xts(process[which(process[,1] %in% index(ct)),-1], order.by=process[which(process[,1] %in% index(ct)),1]))
+      merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+      
+      # 2. Add HRT
+      merged.data <- cbind(merged.data, hrt)
+      
+      # 3. Add vis
+      vis <- na.locf(vis)
+      vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+      merged.data <- cbind(merged.data, vis)
+      
+
+        predict.var <- "ct"
+        predict.col <- which(colnames(merged.data)==predict.var)
+        
+        # Low
+          resultsANN.n <- list()
+          for(n in 1:10) {
+            resultsANN.n[[length(resultsANN.n)+1]] <- splitANN(all.data=merged.data,
+                                              predict.col=predict.col, 
+                                              act.function="softsign", 
+                                              n_epoch=100,
+                                              n_nodes=NULL, 
+                                              scale=TRUE,
+                                              test.obs = which(merged.data[,predict.col]<quantile(merged.data[,predict.col],.1)))
+          }
+          annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.n
+          
+                   resultsANN.n <- list()
+          for(n in 1:10) {
+            resultsANN.n[[length(resultsANN.n)+1]] <- splitANN(all.data=merged.data,
+                                              predict.col=predict.col, 
+                                              act.function="softsign", 
+                                              n_epoch=100,
+                                              n_nodes=NULL, 
+                                              scale=TRUE,
+                                              test.obs = which(merged.data[,predict.col]>quantile(merged.data[,predict.col],.9)))
+          }
+          annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.n
+          
+          r <- length(which(merged.data[,predict.col]>quantile(merged.data[,predict.col],.9)))
+          for(n in 1:10) {
+            resultsANN.n[[length(resultsANN.n)+1]] <- splitANN(all.data=merged.data,
+                                              predict.col=predict.col, 
+                                              act.function="softsign", 
+                                              n_epoch=100,
+                                              n_nodes=NULL, 
+                                              scale=TRUE,
+                                              test.obs = sample(1:nrow(merged.data),r))
+          }
+          annual.results.ls[[length(annual.results.ls)+1]] <- resultsANN.n
+
+    }
+    ct.results.ls[[length(ct.results.ls)+1]] <- annual.results.ls
+  }
+  
+    save(ct.results.ls, file="results/ct-results-ls-2018-CT-low-high.RData")
+
+# R2
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) y[,1]))))
+
+# AIC
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) y[,4]))))
+
+# BIC
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) y[,5]))))
+
+# RMSE
+lapply(ct.results.ls[[1]], function(x) mean(unlist(lapply(x, function(y) mean((y[,2]-y[,3])^2)^0.5))))
+
+png("figures/cdf-2018-CT.png", width=860, height=550, pointsize = 24)
+par(mar=c(4,4.5,1,1))
+plot(x=as.numeric(merged.data[,predict.col])[order(merged.data[,predict.col])],y=1:nrow(merged.data)/nrow(merged.data),xlab="CT", ylab=expression(hat(F)[n](x)), type="s")
+abline(v=quantile(merged.data[,predict.col],.9), col="red")
+abline(v=quantile(merged.data[,predict.col],.1),col="red")
+r <- seq(min(merged.data[,predict.col]), max(merged.data[,predict.col]), length=10000)
+s <- pnorm(r, mean=median(merged.data[,predict.col]), sd=sd(merged.data[,predict.col]))
+points(x=r,y=s, type="s", col="blue")
+dev.off()
+```
+
+
+```{r Multicollinearity}
+library("PerformanceAnalytics")
+i <- 1;j<-1
+paa <- paa.data.ls[[i]] # 2018 or 2019
+annual.results.ls <- list()
+# for(j in 1:length(process.data.ls)) {
+
+  process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+  vis <- vis.data
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  
+  # 1. Combine paa and process data
+  merged.data <- cbind(paa,
+                       xts(process[which(process[,1] %in% index(paa)),-1], order.by=process[which(process[,1] %in% index(paa)),1]))
+  merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+  
+  # 2. Add HRT
+  merged.data <- cbind(merged.data, hrt)
+  
+  # 3. Add vis
+  vis <- na.locf(vis)
+  vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+  merged.data <- cbind(merged.data, vis)
+  
+  # 4. Clean
+  merged.data <- merged.data[,which(unlist(apply(merged.data, 2, function(x) length(unique(x))>2)))]
+  cols2keep <- c("X2500.NSEC.Quad.1.MLR.SVI_G", "TSS", "NSEC.INF..FY.F25.", "TI.R3003", "HRT.2018.1", "ASRT_ASRT_N", "North.Flow.to.Dis")
+  cols2keep <- sapply(cols2keep, function(x) which(x==colnames(merged.data)))
+  merged.data <- merged.data[,cols2keep]
+  
+  pdf(file="figures/correlation-2018-paa.pdf", width=11, height=8.5)
+  par(mfrow=c(1,1))
+  chart.Correlation(merged.data, histogram=TRUE, pch=19)
+  dev.off()
+  
+          pdf(file="figures/autocorrelation-2018-paa.pdf", width=11, height=8.5)
+  par(mfrow=c(ceiling(ncol(merged.data)/2),2))
+  for(k in 1:ncol(merged.data)) {
+    acf(merged.data[,k], main=colnames(merged.data)[k])
+  }
+  dev.off()
+
+  
+   load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
+    ct <- all.results.ls[[i]][,4]
+    acf(ct)
+      # process <- process.data.ls[[j]] # Instantaneous process data, Avg, or 24h avg
+      # vis <- vis.data
+      # hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+      # 
+      # # 1. Combine ct and process data
+      # merged.data <- cbind(ct,
+      #                      xts(process[which(process[,1] %in% index(ct)),-1], order.by=process[which(process[,1] %in% index(ct)),1]))
+      # merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+      # 
+      # # 2. Add HRT
+      # merged.data <- cbind(merged.data, hrt)
+      # 
+      # # 3. Add vis
+      # vis <- na.locf(vis)
+      # vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+      # merged.data <- cbind(merged.data, vis)
+      # predict.var <- "ct"
+      # predict.col <- which(colnames(merged.data)==predict.var)
+      
+
+# }
+```
