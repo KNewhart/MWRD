@@ -412,3 +412,100 @@ annual.results.ls <- list()
 
 # }
 ```
+
+
+
+```{r Backward Variable selection ANN CT, eval=FALSE, include=FALSE}
+if(!("results/ct-var-results-ls-n-back.RData" %in% list.files(recursive=TRUE))) {
+  load("results/ct-all-results-ls.RData") # CT is all.results.ls[[1]][,4]
+  ct.ls <- lapply(all.results.ls, function(x) x[,4])
+  load("data/paa/process-data-ls.RData")
+
+all.results.ls <- list()
+
+# for(i in 1:length(all.results.ls)) {
+for(i in 2) {
+  ct <- ct.ls[[i]]
+  process <- process.data.ls[[1]] # Instantaneous process data
+  vis <- vis.data
+  hrt <- hrt.ls[[i]][[1]] # Use only real-time HRT
+  
+  # 1. Combine paa and process data
+  merged.data <- cbind(ct,
+                       xts(process[which(process[,1] %in% index(ct)),-1], order.by=process[which(process[,1] %in% index(ct)),1]))
+  merged.data <- merged.data[,which(apply(merged.data,2,function(x) !anyNA(x)))]
+  
+  # 2. Add HRT
+  merged.data <- cbind(merged.data, hrt)
+  
+  # 3. Add vis
+  vis <- na.locf(vis)
+  vis <- xts(vis[sapply(index(merged.data), function(t) tail(which(index(vis)<t), n=1)),], order.by=index(merged.data))
+  merged.data <- cbind(merged.data, vis)
+  
+  # 4. Remove vars that are constant
+  merged.data <- merged.data[,apply(merged.data, 2, function(x) length(unique(x))>3)]
+  
+  predict.var <- colnames(merged.data)[1]
+  
+  # Initialize loop
+  vars <- which(!(colnames(merged.data) %in% predict.var))
+  vars.key <- data.frame("Name"=colnames(merged.data)[vars],
+                         "Number"=vars)
+  combos <- combn(vars,length(vars)-1) # Initialize
+  previous.rmse <- 100 # Dummy
+  current.rmse <- 90 # Dummy
+  results.ls <- list() # Store all combination results
+  all.combo.results <- list()
+  old.combos <- list()
+  # Loop over RMSE
+  while(previous.rmse >= current.rmse) {
+    combo.results.ls <- list()
+    # Train all combinations n times
+      for(j in 1:ncol(combos)) {
+        t1 <- Sys.time()
+          all.data <- merged.data[,c(which(colnames(merged.data) %in% predict.var), combos[,j])] # Create training data
+          predict.col <- which(colnames(all.data)==predict.var)
+          resultsANN.n <- list()
+          for(n in 1:10) {
+            resultsANN.n[[length(resultsANN.n)+1]] <- randomANN(all.data=all.data,
+                                              predict.col=predict.col, 
+                                              act.function="softsign", 
+                                              n_epoch=250,
+                                              # n_nodes=NULL, 
+                                              scale=TRUE)
+          }
+          combo.results.ls[[length(combo.results.ls)+1]] <- resultsANN.n # n iterations of a combo for a sampling location
+          save(combo.results.ls, file="results-temp-combo-results-ls-ct-back.RData")
+          print(paste(Sys.time(),"Combo", j, "of", ncol(combos), "completed"))
+          t2 <- Sys.time()
+          print(paste("Estimated time to combo completion:", Sys.time()+as.numeric(difftime(t2,t1, units="secs"))*(ncol(combos)-j)))
+      }
+    # Calcaulte performance of each combo
+    rsq <- unlist(lapply(combo.results.ls, function(combo) mean(unlist(lapply(combo, function(trial) trial[,1])) )))
+    rmse <- unlist(lapply(combo.results.ls, function(combo) mean(unlist(lapply(combo, function(trial) (trial[,2]-trial[,3])^2)) )^0.5))
+    
+    # Save results
+    all.combo.results[[length(all.combo.results)+1]] <- combo.results.ls
+    results.ls[[length(results.ls)+1]] <- list(combos, rsq, rmse)
+    save(results.ls, file="results/temp-results-ls-ct-back.RData")
+    # Compare to previous
+    previous.rmse <- current.rmse
+    current.rmse <- min(rmse)
+    
+    # Set new combo
+    old.combos[[length(old.combos)+1]] <- combos
+    combos <- matrix(data=rep(combos[,which(rmse==current.rmse)], ncol(combos)-1), nrow=nrow(combos))
+  }
+  
+  all.results.ls[[length(all.results.ls)+1]] <- results.ls
+  save(all.results.ls, file="results/temp-all-results-ls-ct-back.RData")
+}
+
+
+save(all.results.ls, file="results/ct-var-results-ls-n-back.RData")
+save(old.combos, file="results/ct-var-old-combos-n-back.RData")
+} else {
+  load("results/ct-var-results-ls-back.RData")
+}
+```
