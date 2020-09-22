@@ -509,3 +509,8 @@ save(old.combos, file="results/ct-var-old-combos-n-back.RData")
   load("results/ct-var-results-ls-back.RData")
 }
 ```
+
+```{r}
+load("ct-var-results-ls.RData")
+```
+
